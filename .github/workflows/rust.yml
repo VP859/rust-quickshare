@@ -13,7 +13,7 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Wymagane do auto-commita
+      contents: write 
 
     steps:
     - uses: actions/checkout@v4
@@ -32,7 +32,6 @@ jobs:
 
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
-      # Usunięto 'components', bo rustfmt/clippy są już dostępne
 
     - name: Auto-format code
       run: cargo fmt --all
