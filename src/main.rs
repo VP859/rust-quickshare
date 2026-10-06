@@ -6,7 +6,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, info};
 
 use rust_quickshare::cli::{Cli, Commands};
-use rust_quickshare::node::{load_or_generate_secret_key, NodeEngine, NodeTicket};
+use rust_quickshare::node::{NodeEngine, NodeTicket, load_or_generate_secret_key};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub enum PingPongMsg {
@@ -26,7 +26,10 @@ async fn write_frame<W: AsyncWriteExt + Unpin>(mut writer: W, msg: &PingPongMsg)
 async fn read_frame<R: AsyncReadExt + Unpin>(mut reader: R) -> Result<PingPongMsg> {
     let len = reader.read_u32().await.context("Frame length read error")?;
     let mut buf = vec![0u8; len as usize];
-    reader.read_exact(&mut buf).await.context("Error reading frame content")?;
+    reader
+        .read_exact(&mut buf)
+        .await
+        .context("Error reading frame content")?;
     let msg = postcard::from_bytes(&buf).context("Error decoding Postcard message")?;
     Ok(msg)
 }
@@ -59,7 +62,10 @@ async fn main() -> Result<()> {
             info!("Waiting for an incoming call...");
             let conn = engine.accept().await?;
 
-            let (mut send, mut recv) = conn.accept_bi().await.context("Error opening bidirectional stream")?;
+            let (mut send, mut recv) = conn
+                .accept_bi()
+                .await
+                .context("Error opening bidirectional stream")?;
             debug!("A bidirectional stream has been opened.");
 
             let msg = read_frame(&mut recv).await?;
@@ -78,10 +84,16 @@ async fn main() -> Result<()> {
             let parsed_ticket = NodeTicket::deserialize_from_str(&ticket)
                 .context("Invalid connecting ticket format")?;
 
-            info!("Connecting to the target node: {}", parsed_ticket.addr.node_id);
+            info!(
+                "Connecting to the target node: {}",
+                parsed_ticket.addr.node_id
+            );
             let conn = engine.connect(parsed_ticket.addr).await?;
 
-            let (mut send, mut recv) = conn.open_bi().await.context("Failed to open the bidirectional stream.")?;
+            let (mut send, mut recv) = conn
+                .open_bi()
+                .await
+                .context("Failed to open the bidirectional stream.")?;
             debug!("A bidirectional stream has been opened.");
 
             let start_time = Instant::now();
@@ -98,7 +110,8 @@ async fn main() -> Result<()> {
             } else {
                 anyhow::bail!("Received an incorrect response: {:?}", response);
             }
-        }    }
+        }
+    }
 
     Ok(())
 }

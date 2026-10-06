@@ -10,7 +10,5 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     Send,
-    Receive {
-        ticket: String,
-    },
+    Receive { ticket: String },
 }

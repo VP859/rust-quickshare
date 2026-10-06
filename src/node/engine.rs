@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-use iroh_net::endpoint::{Connection, Endpoint}; 
-use iroh_net::key::SecretKey;
 use iroh_net::NodeAddr;
+use iroh_net::endpoint::{Connection, Endpoint};
+use iroh_net::key::SecretKey;
 use tracing::{debug, info};
 
 pub const ALPN_RQS: &[u8] = b"rqs/v0.1";
