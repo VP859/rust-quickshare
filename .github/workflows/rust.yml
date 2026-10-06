@@ -32,7 +32,7 @@ jobs:
 
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
-      components: rustfmt, clippy
+      # Usunięto 'components', bo rustfmt/clippy są już dostępne
 
     - name: Auto-format code
       run: cargo fmt --all
