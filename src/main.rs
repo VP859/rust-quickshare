@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
                 .accept_bi()
                 .await
                 .context("Error opening bidirectional stream")?;
-            debug!("A bidirectional stream has been opened.");
+             debug!("A bidirectional stream has been opened.");
 
             let msg = read_frame(&mut recv).await?;
             info!("Message received: {:?}", msg);
@@ -86,7 +86,7 @@ async fn main() -> Result<()> {
 
             info!(
                 "Connecting to the target node: {}",
-                parsed_ticket.addr.node_id
+                parsed_ticket.addr.id
             );
             let conn = engine.connect(parsed_ticket.addr).await?;
 
