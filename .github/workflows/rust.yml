@@ -1,0 +1,45 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      # Jeśli używasz nowych feature'ów, dodaj: toolchain: 'nightly-YYYY-MM-DD'
+
+    - name: Build
+      run: cargo build --verbose --all-targets
+
+    - name: Run tests
+      run: cargo test --verbose
+
+    - name: Clippy check
+      run: cargo clippy -- -D warnings
+
+    - name: Check formatting
+      run: cargo fmt --check
