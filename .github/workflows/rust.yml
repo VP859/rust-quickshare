@@ -12,6 +12,8 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Wymagane do auto-commita
 
     steps:
     - uses: actions/checkout@v4
@@ -30,7 +32,22 @@ jobs:
 
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
-      # Jeśli używasz nowych feature'ów, dodaj: toolchain: 'nightly-YYYY-MM-DD'
+      components: rustfmt, clippy
+
+    - name: Auto-format code
+      run: cargo fmt --all
+
+    - name: Check for changes and commit if any
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        if [[ `git status --porcelain` ]]; then
+          git add .
+          git commit -m "chore: auto-format code with cargo fmt"
+          git push
+        else
+          echo "No formatting changes needed."
+        fi
 
     - name: Build
       run: cargo build --verbose --all-targets
@@ -40,6 +57,3 @@ jobs:
 
     - name: Clippy check
       run: cargo clippy -- -D warnings
-
-    - name: Check formatting
-      run: cargo fmt --check
