@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
-use iroh_net::endpoint::{Connection, Endpoint}; 
-use iroh_net::key::SecretKey;
-use iroh_net::NodeAddr;
+use iroh::endpoint::{Connection, presets};
+use iroh::{Endpoint, EndpointAddr, SecretKey};
 use tracing::{debug, info};
 
 pub const ALPN_RQS: &[u8] = b"rqs/v0.1";
@@ -12,46 +11,45 @@ pub struct NodeEngine {
 
 impl NodeEngine {
     pub async fn new(secret_key: SecretKey) -> Result<Self> {
-        let endpoint = Endpoint::builder()
+        let endpoint = Endpoint::builder(presets::N0)
             .secret_key(secret_key)
             .alpns(vec![ALPN_RQS.to_vec()])
             .bind()
             .await
-            .context("Nie udało się utworzyć Endpoint")?;
+            .context("Nie udało się powiązać Iroh Endpoint")?;
 
-        info!("Węzeł P2P uruchomiony. Node ID: {}", endpoint.node_id());
+        info!("Węzeł P2P uruchomiony. Endpoint ID: {}", endpoint.id());
         Ok(Self { endpoint })
     }
 
-    pub async fn node_addr(&self) -> Result<NodeAddr> {
-        self.endpoint
-            .node_addr()
-            .await
-            .context("Nie udało się pobrać NodeAddr")
+    pub async fn node_addr(&self) -> Result<EndpointAddr> {
+        Ok(self.endpoint.addr())
     }
 
     pub async fn accept(&self) -> Result<Connection> {
-        debug!("Oczekiwanie na połączenie QUIC...");
+        debug!("Oczekiwanie na przychodzące połączenie QUIC...");
         let incoming = self
             .endpoint
             .accept()
             .await
-            .ok_or_else(|| anyhow::anyhow!("Endpoint zamknięty"))?;
+            .ok_or_else(|| anyhow::anyhow!("Endpoint został zamknięty"))?;
 
-        let conn = incoming.await.context("Błąd nawiązywania połączenia")?;
-        info!("Połączenie przychodzące od: {}", conn.remote_address());
+        let conn = incoming
+            .await
+            .context("Błąd nawiązywania połączenia wejściowego")?;
+        info!("Nawiązano połączenie wejściowe od: {}", conn.remote_id());
         Ok(conn)
     }
 
-    pub async fn connect(&self, target: NodeAddr) -> Result<Connection> {
-        debug!("Łączenie z węzłem...");
+    pub async fn connect(&self, target: EndpointAddr) -> Result<Connection> {
+        debug!("Nawiązywanie połączenia P2P z węzłem docelowym...");
         let conn = self
             .endpoint
             .connect(target, ALPN_RQS)
             .await
-            .context("Błąd połączenia")?;
+            .context("Nie udało się połączyć z podanym węzłem")?;
 
-        info!("Połączono pomyślnie!");
+        info!("Połączono pomyślnie z podanym EndpointAddr!");
         Ok(conn)
     }
 }
