@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use tokio::fs::OpenOptions;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom};
+use tokio::io::{AsyncSeekExt, AsyncWriteExt, SeekFrom};
 use tracing::info;
 
 use crate::node::{NodeEngine, NodeTicket, load_or_generate_secret_key};
@@ -68,6 +68,7 @@ pub async fn run_receiver(ticket_str: &str, output_path: Option<&Path>) -> Resul
 
     let mut part_file = OpenOptions::new()
         .create(true)
+        .truncate(false)
         .write(true)
         .open(&part_path)
         .await?;
@@ -75,7 +76,7 @@ pub async fn run_receiver(ticket_str: &str, output_path: Option<&Path>) -> Resul
     let start_offset = start_chunk_index * (offer.chunk_size as u64);
     part_file.seek(SeekFrom::Start(start_offset)).await?;
 
-    let total_chunks = (offer.file_size + offer.chunk_size as u64 - 1) / (offer.chunk_size as u64);
+    let total_chunks = offer.file_size.div_ceil(offer.chunk_size as u64);
     let pb = create_progress_bar(offer.file_size, &format!("Pobieranie: {}", offer.file_name));
     pb.set_position(start_offset.min(offer.file_size));
 

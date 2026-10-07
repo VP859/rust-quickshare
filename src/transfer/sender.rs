@@ -80,7 +80,7 @@ pub async fn run_sender(file_path: &Path) -> Result<()> {
         file.seek(SeekFrom::Start(start_offset)).await?;
     }
 
-    let total_chunks = (file_size + DEFAULT_CHUNK_SIZE as u64 - 1) / (DEFAULT_CHUNK_SIZE as u64);
+    let total_chunks = file_size.div_ceil(DEFAULT_CHUNK_SIZE as u64);
     let pb = create_progress_bar(file_size, &format!("Wysyłanie: {}", file_name));
     pb.set_position(start_offset.min(file_size));
 
