@@ -1,9 +1,12 @@
 use anyhow::Result;
 use clap::Parser;
 
-use rust_quickshare::cli::{Cli, Commands};
+use rust_quickshare::cli::args::{Cli, Commands};
+use rust_quickshare::cli::peer_cmd::handle_peer_cmd;
+use rust_quickshare::daemon::run_daemon;
 use rust_quickshare::transfer::receiver::run_receiver;
 use rust_quickshare::transfer::sender::run_sender;
+use rust_quickshare::tui::run_tui;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -25,6 +28,15 @@ async fn main() -> Result<()> {
             output_path,
         } => {
             run_receiver(&ticket, output_path.as_deref()).await?;
+        }
+        Commands::Daemon { downloads_dir } => {
+            run_daemon(downloads_dir).await?;
+        }
+        Commands::Tui => {
+            run_tui().await?;
+        }
+        Commands::Peer { command } => {
+            handle_peer_cmd(command)?;
         }
     }
 
