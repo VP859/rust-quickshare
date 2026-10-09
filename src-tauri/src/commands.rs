@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow};
 use rqs_p2p::config::Config;
-use rqs_p2p::node::{NodeEngine, NodeTicket, load_or_generate_secret_key};
+use rqs_p2p::node::{NodeTicket, load_or_generate_secret_key};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
