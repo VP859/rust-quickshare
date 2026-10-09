@@ -130,7 +130,8 @@ pub async fn run_receiver(ticket_str: &str, output_path: Option<&Path>) -> Resul
 
     write_msg(&mut send, &TransferComplete).await?;
     send.flush().await?;
-    send.finish().context("Błąd zamykania strumienia odbiorcy")?;
+    send.finish()
+        .context("Błąd zamykania strumienia odbiorcy")?;
 
     println!(
         "\n[SUKCES] Plik został odebrany i pomyślnie zweryfikowany: {:?}",
