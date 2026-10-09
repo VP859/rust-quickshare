@@ -1,7 +1,22 @@
+[workspace]
+members = [
+    ".",
+    "src-tauri"
+]
+resolver = "2"
+
 [package]
-name = "rust-quickshare"
+name = "rqs_p2p"
 version = "0.1.0"
 edition = "2024"
+
+[lib]
+name = "rqs_p2p"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rqs"
+path = "src/main.rs"
 
 [dependencies]
 iroh = "1.3.0"
@@ -18,6 +33,7 @@ indicatif = "0.18.6"
 ratatui = "0.30.2"
 crossterm = "0.29.0"
 dirs = "7.0.0"
-toml = "1.1.7+spec-1.1.0"
+toml = "1.1.8"
 chrono = { version = "0.4.45", features = ["serde"] }
 arboard = "3.6.1"
+uuid = { version = "1.27.0", features = ["v4"] }

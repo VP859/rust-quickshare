@@ -1,0 +1,25 @@
+[package]
+name = "rqs-gui"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "rqs_gui_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rqs-gui"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+rqs_p2p = { path = ".." }
+tauri = { version = "2.0", features = ["tray-icon"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.53.2", features = ["full"] }
+anyhow = "1.0.104"
+tracing = "0.1.44"
+uuid = { version = "1.27.0", features = ["v4"] }

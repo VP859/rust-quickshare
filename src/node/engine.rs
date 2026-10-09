@@ -52,7 +52,13 @@ impl NodeEngine {
         info!("Połączono pomyślnie z podanym EndpointAddr!");
         Ok(conn)
     }
+
     pub fn node_id(&self) -> iroh::EndpointId {
         self.endpoint.id()
+    }
+
+    pub async fn close(self) -> Result<()> {
+        self.endpoint.close().await;
+        Ok(())
     }
 }

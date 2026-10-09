@@ -46,10 +46,14 @@ pub async fn run_sender(file_path: &Path) -> Result<()> {
 
     info!("Oczekiwanie na połączenie przychodzące od odbiorcy...");
     let conn = engine.accept().await?;
+    info!("Nawiązano połączenie wejściowe z odbiorcą.");
+
     let (mut send, mut recv) = conn
-        .accept_bi()
+        .open_bi()
         .await
         .context("Nie udało się otworzyć strumienia dwukierunkowego")?;
+
+    info!("Zaakceptowano strumień dwukierunkowy.");
 
     let offer = TransferOffer {
         file_name: file_name.clone(),
@@ -58,6 +62,9 @@ pub async fn run_sender(file_path: &Path) -> Result<()> {
         file_hash,
     };
     write_msg(&mut send, &offer).await?;
+    send.flush()
+        .await
+        .context("Błąd spłukiwania strumienia oferty")?;
     info!("Wysłano ofertę transferu pliku.");
 
     let decision: TransferDecision = read_msg(&mut recv).await?;
@@ -118,8 +125,13 @@ pub async fn run_sender(file_path: &Path) -> Result<()> {
 
     pb.finish_with_message("Przesyłanie bajtów zakończone. Oczekiwanie na weryfikację...");
 
+    send.finish().context("Błąd zamykania strumienia nadawcy")?;
+
+    info!("Oczekiwanie na potwierdzenie TransferComplete od odbiorcy...");
     let _complete: TransferComplete = read_msg(&mut recv).await?;
     println!("\n[SUKCES] Plik został pomyślnie odebrany i zweryfikowany przez odbiorcę!");
+
+    engine.close().await?;
 
     Ok(())
 }

@@ -1,12 +1,12 @@
 use anyhow::Result;
 use clap::Parser;
 
-use rust_quickshare::cli::args::{Cli, Commands};
-use rust_quickshare::cli::peer_cmd::handle_peer_cmd;
-use rust_quickshare::daemon::run_daemon;
-use rust_quickshare::transfer::receiver::run_receiver;
-use rust_quickshare::transfer::sender::run_sender;
-use rust_quickshare::tui::run_tui;
+use rqs_p2p::cli::args::{Cli, Commands};
+use rqs_p2p::cli::peer_cmd::handle_peer_cmd;
+use rqs_p2p::daemon::run_daemon;
+use rqs_p2p::transfer::receiver::run_receiver;
+use rqs_p2p::transfer::sender::run_sender;
+use rqs_p2p::tui::run_tui;
 
 #[tokio::main]
 async fn main() -> Result<()> {

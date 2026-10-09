@@ -19,10 +19,14 @@ pub async fn run_receiver(ticket_str: &str, output_path: Option<&Path>) -> Resul
 
     info!("Nawiązywanie połączenia z nadawcą...");
     let conn = engine.connect(ticket.addr).await?;
+    info!("Połączono pomyślnie z nadawcą.");
+
     let (mut send, mut recv) = conn
-        .open_bi()
+        .accept_bi()
         .await
         .context("Nie udało się otworzyć strumienia dwukierunkowego")?;
+
+    info!("Otwarto strumień dwukierunkowy.");
 
     let offer: TransferOffer = read_msg(&mut recv).await?;
     info!(
@@ -65,6 +69,9 @@ pub async fn run_receiver(ticket_str: &str, output_path: Option<&Path>) -> Resul
 
     let decision = TransferDecision::Accept { start_chunk_index };
     write_msg(&mut send, &decision).await?;
+    send.flush()
+        .await
+        .context("Błąd spłukiwania strumienia decyzji")?;
 
     let mut part_file = OpenOptions::new()
         .create(true)
@@ -122,11 +129,15 @@ pub async fn run_receiver(ticket_str: &str, output_path: Option<&Path>) -> Resul
         .context("Błąd podczas zmiany nazwy pliku .part na docelową")?;
 
     write_msg(&mut send, &TransferComplete).await?;
+    send.flush().await?;
+    send.finish().context("Błąd zamykania strumienia odbiorcy")?;
 
     println!(
         "\n[SUKCES] Plik został odebrany i pomyślnie zweryfikowany: {:?}",
         dest_path
     );
+
+    engine.close().await?;
 
     Ok(())
 }

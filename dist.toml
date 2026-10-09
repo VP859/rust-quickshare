@@ -1,0 +1,15 @@
+[dist]
+cargo-dist-version = "0.28.0"
+rust-toolchain-version = "1.85.0"
+ci = ["github"]
+installers = ["shell", "powershell", "msi", "nsis", "deb", "rpm"]
+
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin"
+]
+
+[dist.github]
+auto-includes = true

@@ -1,0 +1,19 @@
+[Unit]
+Description=RQS P2P File Sharing Background Daemon
+Documentation=https://github.com/user/rust-quickshare
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/rqs daemon
+Restart=on-failure
+RestartSec=5s
+
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=%h/Downloads %h/.config/rqs
+
+[Install]
+WantedBy=default.target

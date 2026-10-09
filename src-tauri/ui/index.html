@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RQS Quick Share</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --accent: #38bdf8;
+            --text: #f8fafc;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: system-ui, sans-serif;
+            margin: 0;
+            padding: 24px;
+            user-select: none;
+        }
+
+        .header {
+            background: var(--card);
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #334155;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--accent);
+            border-radius: 16px;
+            padding: 48px;
+            text-align: center;
+            background: #1e293b80;
+            transition: all 0.2s;
+        }
+
+        .drop-zone.active {
+            background: #38bdf822;
+            border-color: #7dd3fc;
+            transform: scale(1.02);
+        }
+
+        .peer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .peer-card {
+            background: var(--card);
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #334155;
+        }
+
+        .badge {
+            background: #0284c7;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+        }
+
+        #statusMsg {
+            margin-top: 16px;
+            font-weight: 500;
+            color: #38bdf8;
+            word-break: break-all;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h3 style="margin:0 0 8px 0;">Twój Węzeł RQS</h3>
+        <div id="nodeInfo">Wczytywanie informacji o węźle...</div>
+    </div>
+
+    <div class="drop-zone" id="dropZone">
+        <p style="margin:0; font-weight:500;" id="dropText">Przeciągnij i upuść plik tutaj, aby przesłać</p>
+        <small style="color: #94a3b8;">Wymiana P2P przez protokół IROH z szyfrowaniem BLAKE3</small>
+    </div>
+    <div id="statusMsg"></div>
+
+    <h3 style="margin-top:28px;">Zaufane Urządzenia</h3>
+    <div class="peer-grid" id="peerGrid">
+        <div class="peer-card">
+            <strong>Laptop Biurowy</strong><br />
+            <span class="badge">Auto-Accept</span>
+        </div>
+    </div>
+
+    <script>
+        function invoke(cmd, args = {}) {
+            if (window.__TAURI__ && window.__TAURI__.core) {
+                return window.__TAURI__.core.invoke(cmd, args);
+            } else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                return window.__TAURI_INTERNALS__.invoke(cmd, args);
+            }
+            return Promise.reject("Brak API Tauri");
+        }
+
+        async function initNodeInfo() {
+            try {
+                const info = await invoke('get_node_info');
+                document.getElementById('nodeInfo').innerHTML = `
+          <strong>Node ID:</strong> ${info.node_id.substring(0, 28)}...<br/>
+          <strong>Status Relay:</strong> <span style="color:#22c55e;">${info.relay_status}</span>
+        `;
+            } catch (err) {
+                document.getElementById('nodeInfo').innerHTML = `<span style="color:#ef4444;">Błąd: ${err}</span>`;
+            }
+        }
+
+        function listenTauriEvents() {
+            const dropZone = document.getElementById('dropZone');
+            const statusMsg = document.getElementById('statusMsg');
+
+            if (window.__TAURI__ && window.__TAURI__.event) {
+                window.__TAURI__.event.listen('tauri://drag-enter', () => {
+                    dropZone.classList.add('active');
+                });
+                window.__TAURI__.event.listen('tauri://drag-leave', () => {
+                    dropZone.classList.remove('active');
+                });
+                window.__TAURI__.event.listen('tauri://drag-drop', (event) => {
+                    dropZone.classList.remove('active');
+                    const paths = event.payload.paths;
+                    if (paths && paths.length > 0) {
+                        const filePath = paths[0];
+                        statusMsg.innerHTML = `[OK] Wybrano plik do wysłania:<br/><code>${filePath}</code>`;
+                        invoke('send_file_offer', { filepath: filePath, targetTicket: "" });
+                    }
+                });
+            }
+
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('active'); });
+            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('active'));
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('active');
+                if (e.dataTransfer.files.length > 0) {
+                    const file = e.dataTransfer.files[0];
+                    statusMsg.innerHTML = `[OK] Wybrano plik: <code>${file.name}</code>`;
+                }
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initNodeInfo();
+            listenTauriEvents();
+        });
+    </script>
+</body>
+
+</html>
