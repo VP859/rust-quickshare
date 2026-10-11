@@ -36,4 +36,8 @@ dirs = "7.0.0"
 toml = "1.1.8"
 chrono = { version = "0.4.45", features = ["serde"] }
 arboard = "3.6.1"
-uuid = { version = "1.27.0", features = ["v4"] }
+uuid = { version = "1.28.0", features = ["v4"] }
+memmap2 = "0.9.11"
+network-interface = "2.0.5"
+thiserror = "2.0.21"
+tempfile = "3.27.0"

@@ -23,7 +23,10 @@ impl NodeEngine {
     }
 
     pub async fn node_addr(&self) -> Result<EndpointAddr> {
-        Ok(self.endpoint.addr())
+        Ok(EndpointAddr {
+            id: self.endpoint.id(),
+            addrs: std::collections::BTreeSet::new(),
+        })
     }
 
     pub async fn accept(&self) -> Result<Connection> {
