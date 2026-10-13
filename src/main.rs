@@ -7,6 +7,7 @@ use rqs_p2p::daemon::run_daemon;
 use rqs_p2p::transfer::receiver::run_receiver;
 use rqs_p2p::transfer::sender::run_sender;
 use rqs_p2p::tui::run_tui;
+use rqs_p2p::telemetry::doctor::run_doctor;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -37,7 +38,10 @@ async fn main() -> Result<()> {
         }
         Commands::Peer { command } => {
             handle_peer_cmd(command)?;
-        }
+        },
+        Commands::Doctor => {
+            run_doctor().await?;
+        },
     }
 
     Ok(())

@@ -26,6 +26,7 @@ pub enum Commands {
         #[command(subcommand)]
         command: PeerCommands,
     },
+    Doctor,
 }
 
 #[derive(Subcommand, Debug)]
@@ -42,3 +43,4 @@ pub enum PeerCommands {
         target: String,
     },
 }
+
