@@ -51,8 +51,7 @@ async fn test_resume_on_connection_break() -> Result<()> {
 
     let full_bytes_clone = full_bytes.clone();
 
-    // Wątek nadawcy
-    let tx_handle = tokio::spawn(async move {
+    let mut tx_handle = tokio::spawn(async move {
         let conn = sender_engine
             .accept()
             .await
@@ -121,8 +120,7 @@ async fn test_resume_on_connection_break() -> Result<()> {
         Ok::<(), anyhow::Error>(())
     });
 
-    // Wątek odbiorcy z pętlą ponowień połączenia (daje czas aktorom Relay w Iroh)
-    let rx_handle = tokio::spawn(async move {
+    let mut rx_handle = tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(300)).await;
 
         let mut conn = None;
@@ -220,9 +218,10 @@ async fn test_resume_on_connection_break() -> Result<()> {
     });
 
     let test_future = async {
-        let (res_rx, res_tx) = tokio::join!(rx_handle, tx_handle);
-        res_rx.context("Zadanie odbiorcy (rx_handle) zakończyło się błędem")??;
-        res_tx.context("Zadanie nadawcy (tx_handle) zakończyło się błędem")??;
+        tokio::select! {
+            res = &mut rx_handle => res.context("rx_handle error")??,
+            res = &mut tx_handle => res.context("tx_handle error")??,
+        }
         Ok::<(), anyhow::Error>(())
     };
 
