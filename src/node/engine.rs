@@ -23,7 +23,11 @@ impl NodeEngine {
     }
 
     pub async fn node_addr(&self) -> Result<EndpointAddr> {
-        Ok(self.endpoint.addr())
+        let _ =
+            tokio::time::timeout(std::time::Duration::from_secs(5), self.endpoint.online()).await;
+
+        let addr = self.endpoint.addr();
+        Ok(addr)
     }
 
     pub async fn accept(&self) -> Result<Connection> {
