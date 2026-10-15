@@ -1,4 +1,4 @@
-mod commands;
+pub mod commands;
 
 use commands::*;
 use rqs_p2p::config::Config;
@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let quit_i = MenuItem::with_id(app, "quit", "Zakończ RQS", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "Pokaż Okno", true, None::<&str>)?;
@@ -45,7 +46,9 @@ pub fn run() {
             respond_to_offer,
             get_trusted_peers,
             add_trusted_peer,
-            remove_trusted_peer
+            remove_trusted_peer,
+            pick_file_dialog,
+            discover_devices,
         ])
         .run(tauri::generate_context!())
         .expect("Błąd podczas uruchamiania aplikacji Tauri v2");

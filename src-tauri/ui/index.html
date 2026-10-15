@@ -2,160 +2,455 @@
 <html lang="pl">
 
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RQS Quick Share</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RQS P2P Quick Share</title>
     <style>
         :root {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --accent: #38bdf8;
-            --text: #f8fafc;
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-color: #38bdf8;
+            --accent-hover: #0284c7;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --border-color: #334155;
+            --green-color: #22c55e;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
         }
 
         body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: system-ui, sans-serif;
-            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
             padding: 24px;
             user-select: none;
         }
 
-        .header {
-            background: var(--card);
-            padding: 16px;
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
+        }
+
+        .dropzone {
+            border: 2px dashed var(--border-color);
+            background: var(--card-bg);
             border-radius: 12px;
-            margin-bottom: 20px;
-            border: 1px solid #334155;
-        }
-
-        .drop-zone {
-            border: 2px dashed var(--accent);
-            border-radius: 16px;
-            padding: 48px;
+            padding: 32px 20px;
             text-align: center;
-            background: #1e293b80;
-            transition: all 0.2s;
+            transition: all 0.2s ease;
+            cursor: pointer;
         }
 
-        .drop-zone.active {
-            background: #38bdf822;
-            border-color: #7dd3fc;
-            transform: scale(1.02);
+        .dropzone.drag-over {
+            border-color: var(--accent-color);
+            background: rgba(56, 189, 248, 0.1);
         }
 
-        .peer-grid {
+        .btn-browse {
+            background: var(--accent-color);
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .btn-add {
+            background: #334155;
+            color: var(--text-main);
+            border: none;
+            padding: 8px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .peers-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            gap: 16px;
-            margin-top: 16px;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 12px;
         }
 
         .peer-card {
-            background: var(--card);
-            padding: 16px;
-            border-radius: 12px;
-            text-align: center;
-            border: 1px solid #334155;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px;
+            position: relative;
+            cursor: pointer;
+            transition: border-color 0.2s;
         }
 
-        .badge {
-            background: #0284c7;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 999px;
-            font-size: 11px;
+        .peer-card:hover {
+            border-color: var(--accent-color);
         }
 
-        #statusMsg {
-            margin-top: 16px;
-            font-weight: 500;
-            color: #38bdf8;
+        .peer-card .node-id {
+            font-size: 0.75rem;
+            color: var(--text-sub);
             word-break: break-all;
+            margin-top: 4px;
+        }
+
+        .peer-card .card-menu {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+            padding: 4px;
+            color: var(--text-sub);
+        }
+
+        .peer-card .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green-color);
+            margin-right: 6px;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 100;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 460px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-group label {
+            font-size: 0.85rem;
+            color: var(--text-sub);
+        }
+
+        .form-group input {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: #fff;
+            padding: 10px;
+            border-radius: 6px;
+            outline: none;
+        }
+
+        .ticket-box {
+            background: var(--bg-color);
+            border: 1px solid var(--accent-color);
+            padding: 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            word-break: break-all;
+            color: var(--accent-color);
+            font-size: 0.85rem;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--card-bg);
+            border: 1px solid var(--accent-color);
+            padding: 14px 20px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+        }
+
+        .loading-overlay.visible {
+            transform: translateY(0);
+            opacity: 1;
         }
     </style>
 </head>
 
 <body>
-    <div class="header">
-        <h3 style="margin:0 0 8px 0;">Twój Węzeł RQS</h3>
-        <div id="nodeInfo">Wczytywanie informacji o węźle...</div>
+    <div class="container">
+        <header>
+            <h2>RQS P2P Quick Share</h2>
+            <span id="local-status" style="color: var(--accent-color); font-size: 0.9rem;">● Gotowy</span>
+        </header>
+
+        <!-- Dropzone -->
+        <div class="dropzone" id="dropzone">
+            <h3>Przeciągnij i upuść plik tutaj</h3>
+            <p style="color: var(--text-sub); margin-top: 6px; font-size: 0.85rem;">Wygeneruje Bilet Udostępniania lub
+                kliknij w urządzenie poniżej, aby wysłać bezpośrednio</p>
+            <button class="btn-browse" id="btn-select-file">Wybierz plik z dysku</button>
+        </div>
+
+        <!-- Wykryte w LAN -->
+        <section>
+            <div class="section-header">
+                <h3>Wykryte w sieci lokalnej (LAN)</h3>
+                <span style="font-size: 0.8rem; color: var(--text-sub);" id="scan-status">Skanowanie mDNS...</span>
+            </div>
+            <div class="peers-grid" id="discovered-container"></div>
+        </section>
+
+        <!-- Zaufane Urządzenia -->
+        <section>
+            <div class="section-header">
+                <h3>Zaufane Urządzenia</h3>
+                <button class="btn-add" id="btn-open-modal">+ Dodaj Urządzenie</button>
+            </div>
+            <div class="peers-grid" id="peers-container"></div>
+        </section>
     </div>
 
-    <div class="drop-zone" id="dropZone">
-        <p style="margin:0; font-weight:500;" id="dropText">Przeciągnij i upuść plik tutaj, aby przesłać</p>
-        <small style="color: #94a3b8;">Wymiana P2P przez protokół IROH z szyfrowaniem BLAKE3</small>
-    </div>
-    <div id="statusMsg"></div>
-
-    <h3 style="margin-top:28px;">Zaufane Urządzenia</h3>
-    <div class="peer-grid" id="peerGrid">
-        <div class="peer-card">
-            <strong>Laptop Biurowy</strong><br />
-            <span class="badge">Auto-Accept</span>
+    <!-- Modal Dodawania Urządzenia -->
+    <div class="modal-overlay" id="modal-add-peer">
+        <div class="modal-content">
+            <h3>Dodaj Nowe Urządzenie</h3>
+            <div class="form-group">
+                <label>Ticket lub Node ID</label>
+                <input type="text" id="input-peer-ticket" placeholder="Wklej ticket połączeniowy...">
+            </div>
+            <div class="form-group">
+                <label>Nazwa Własna (Alias)</label>
+                <input type="text" id="input-peer-alias" placeholder="np. Telefon, Laptop">
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
+                <button class="btn-add" id="btn-close-modal">Anuluj</button>
+                <button class="btn-browse" id="btn-save-peer">Zapisz Urządzenie</button>
+            </div>
         </div>
     </div>
 
+    <!-- Modal Wygenerowanego Ticketu -->
+    <div class="modal-overlay" id="modal-ticket-share">
+        <div class="modal-content">
+            <h3>Wygenerowano Bilet Udostępniania</h3>
+            <p style="font-size: 0.85rem; color: var(--text-sub);">Przekaż poniższy bilet odbiorcy, aby mógł pobrać twój
+                plik:</p>
+            <div class="ticket-box" id="generated-ticket-text">rqs://ticket-...</div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn-browse" id="btn-copy-ticket">Kopiuj Bilet</button>
+                <button class="btn-add" id="btn-close-ticket-modal">Zamknij</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="loading-overlay" id="progress-toast">
+        <span id="toast-message">Gotowy</span>
+    </div>
+
     <script>
-        function invoke(cmd, args = {}) {
-            if (window.__TAURI__ && window.__TAURI__.core) {
-                return window.__TAURI__.core.invoke(cmd, args);
-            } else if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
-                return window.__TAURI_INTERNALS__.invoke(cmd, args);
+        document.addEventListener('DOMContentLoaded', async () => {
+            const invoke = window.__TAURI__?.core?.invoke;
+
+            const dropzone = document.getElementById('dropzone');
+            const btnSelectFile = document.getElementById('btn-select-file');
+            const btnOpenModal = document.getElementById('btn-open-modal');
+            const btnCloseModal = document.getElementById('btn-close-modal');
+            const btnSavePeer = document.getElementById('btn-save-peer');
+            const modalAddPeer = document.getElementById('modal-add-peer');
+            const peersContainer = document.getElementById('peers-container');
+            const discoveredContainer = document.getElementById('discovered-container');
+            const modalTicketShare = document.getElementById('modal-ticket-share');
+            const generatedTicketText = document.getElementById('generated-ticket-text');
+            const btnCopyTicket = document.getElementById('btn-copy-ticket');
+            const btnCloseTicketModal = document.getElementById('btn-close-ticket-modal');
+
+            async function refreshAllPeers() {
+                if (!invoke) return;
+                try {
+                    const trusted = await invoke('get_trusted_peers');
+                    renderPeers(trusted, peersContainer, true);
+
+                    const discovered = await invoke('discover_devices');
+                    renderPeers(discovered, discoveredContainer, false);
+                } catch (err) {
+                    console.error("Błąd ładowania urządzeń:", err);
+                }
             }
-            return Promise.reject("Brak API Tauri");
-        }
 
-        async function initNodeInfo() {
-            try {
-                const info = await invoke('get_node_info');
-                document.getElementById('nodeInfo').innerHTML = `
-          <strong>Node ID:</strong> ${info.node_id.substring(0, 28)}...<br/>
-          <strong>Status Relay:</strong> <span style="color:#22c55e;">${info.relay_status}</span>
-        `;
-            } catch (err) {
-                document.getElementById('nodeInfo').innerHTML = `<span style="color:#ef4444;">Błąd: ${err}</span>`;
+            function renderPeers(peers, container, isTrusted) {
+                container.innerHTML = '';
+                if (!peers || peers.length === 0) {
+                    container.innerHTML = `<p style="color: var(--text-sub); font-size: 0.85rem;">Brak ${isTrusted ? 'zaufanych' : 'wykrytych'} urządzeń.</p>`;
+                    return;
+                }
+                peers.forEach(peer => {
+                    const card = document.createElement('div');
+                    card.className = 'peer-card';
+                    card.innerHTML = `
+                        ${isTrusted ? `<div class="card-menu" onclick="event.stopPropagation(); window.deletePeer('${peer.node_id}')">✕</div>` : ''}
+                        <strong><span class="status-dot"></span>${peer.alias}</strong>
+                        <div class="node-id">${peer.node_id}</div>
+                        <span style="font-size: 0.75rem; color: var(--accent-color); margin-top: 8px; display: block;">Kliknij, aby wysłać do tego urządzenia</span>
+                    `;
+                    card.addEventListener('click', () => triggerFileSelection(peer.node_id, peer.alias));
+                    container.appendChild(card);
+                });
             }
-        }
 
-        function listenTauriEvents() {
-            const dropZone = document.getElementById('dropZone');
-            const statusMsg = document.getElementById('statusMsg');
+            window.deletePeer = async (nodeId) => {
+                if (invoke) {
+                    await invoke('remove_trusted_peer', { nodeId });
+                    await refreshAllPeers();
+                    showToast("Usunięto urządzenie");
+                }
+            };
 
-            if (window.__TAURI__ && window.__TAURI__.event) {
-                window.__TAURI__.event.listen('tauri://drag-enter', () => {
-                    dropZone.classList.add('active');
-                });
-                window.__TAURI__.event.listen('tauri://drag-leave', () => {
-                    dropZone.classList.remove('active');
-                });
-                window.__TAURI__.event.listen('tauri://drag-drop', (event) => {
-                    dropZone.classList.remove('active');
-                    const paths = event.payload.paths;
-                    if (paths && paths.length > 0) {
-                        const filePath = paths[0];
-                        statusMsg.innerHTML = `[OK] Wybrano plik do wysłania:<br/><code>${filePath}</code>`;
-                        invoke('send_file_offer', { filepath: filePath, targetTicket: "" });
+            async function triggerFileSelection(targetNodeId = null, targetAlias = null) {
+                if (!invoke) return;
+                try {
+                    const selectedFile = await invoke('pick_file_dialog');
+                    if (selectedFile) {
+                        if (targetNodeId) {
+                            showToast(`Wysyłanie oferty pliku do: ${targetAlias}...`);
+                        } else {
+                            showToast("Przygotowywanie pliku...");
+                        }
+
+                        const res = await invoke('send_file_offer', {
+                            filePath: selectedFile,
+                            targetNodeId: targetNodeId
+                        });
+
+                        if (res.ticket) {
+                            generatedTicketText.textContent = res.ticket;
+                            modalTicketShare.classList.add('active');
+                            showToast("Wygenerowano bilet udostępniania!");
+                        } else {
+                            showToast(res.message);
+                        }
                     }
-                });
+                } catch (err) {
+                    showToast("Błąd: " + err);
+                }
             }
 
-            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('active'); });
-            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('active'));
-            dropZone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropZone.classList.remove('active');
-                if (e.dataTransfer.files.length > 0) {
-                    const file = e.dataTransfer.files[0];
-                    statusMsg.innerHTML = `[OK] Wybrano plik: <code>${file.name}</code>`;
+            btnSelectFile.addEventListener('click', (e) => {
+                e.stopPropagation();
+                triggerFileSelection(null);
+            });
+
+            dropzone.addEventListener('click', () => triggerFileSelection(null));
+
+            // Drag & Drop
+            ['dragenter', 'dragover'].forEach(evt => {
+                dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+            });
+            ['dragleave', 'drop'].forEach(evt => {
+                dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('drag-over'); });
+            });
+            dropzone.addEventListener('drop', async (e) => {
+                const files = e.dataTransfer?.files;
+                if (files && files.length > 0 && invoke) {
+                    const path = files[0].path || files[0].name;
+                    showToast("Przetwarzanie pliku...");
+                    const res = await invoke('send_file_offer', { filePath: path, targetNodeId: null });
+                    if (res.ticket) {
+                        generatedTicketText.textContent = res.ticket;
+                        modalTicketShare.classList.add('active');
+                    }
                 }
             });
-        }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            initNodeInfo();
-            listenTauriEvents();
+            btnOpenModal.addEventListener('click', () => modalAddPeer.classList.add('active'));
+            btnCloseModal.addEventListener('click', () => modalAddPeer.classList.remove('active'));
+            btnCloseTicketModal.addEventListener('click', () => modalTicketShare.classList.remove('active'));
+
+            btnCopyTicket.addEventListener('click', () => {
+                navigator.clipboard.writeText(generatedTicketText.textContent);
+                showToast("Skopiowano bilet do schowka!");
+                modalTicketShare.classList.remove('active');
+            });
+
+            btnSavePeer.addEventListener('click', async () => {
+                const ticket = document.getElementById('input-peer-ticket').value;
+                const alias = document.getElementById('input-peer-alias').value;
+
+                if (!ticket.trim()) {
+                    alert("Wprowadź ticket lub Node ID!");
+                    return;
+                }
+
+                if (invoke) {
+                    try {
+                        await invoke('add_trusted_peer', {
+                            ticketOrId: ticket,
+                            alias: alias,
+                            autoAccept: false
+                        });
+                        await refreshAllPeers();
+                        modalAddPeer.classList.remove('active');
+                        document.getElementById('input-peer-ticket').value = '';
+                        document.getElementById('input-peer-alias').value = '';
+                        showToast("Dodano urządzenie!");
+                    } catch (err) {
+                        alert(err);
+                    }
+                }
+            });
+
+            function showToast(msg) {
+                const toast = document.getElementById('progress-toast');
+                document.getElementById('toast-message').textContent = msg;
+                toast.classList.add('visible');
+                setTimeout(() => toast.classList.remove('visible'), 3000);
+            }
+
+            await refreshAllPeers();
         });
     </script>
 </body>

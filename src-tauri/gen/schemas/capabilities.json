@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Domyślne uprawnienia dla aplikacji RQS GUI","local":true,"windows":["main"],"permissions":["core:default","core:event:default","core:window:default"]}}
+{"default":{"identifier":"default","description":"Domyślne uprawnienia dla aplikacji RQS GUI","local":true,"windows":["main"],"permissions":["core:default","core:event:default","dialog:default","dialog:allow-open"]}}
