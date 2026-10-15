@@ -1,10 +1,9 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rqs_p2p::protocol::codec::{read_msg, write_msg};
-use rqs_p2p::protocol::messages::{ChunkHeader, TransferOffer, DEFAULT_CHUNK_SIZE};
-use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt};
-use tokio::runtime::Runtime;
+use rqs_p2p::protocol::messages::{ChunkHeader, DEFAULT_CHUNK_SIZE, TransferOffer};
 use std::hint::black_box;
-
+use tokio::io::{AsyncReadExt, AsyncWriteExt, duplex};
+use tokio::runtime::Runtime;
 
 fn bench_blake3_hashing(c: &mut Criterion) {
     let mut group = c.benchmark_group("blake3_hashing");
@@ -105,7 +104,8 @@ fn bench_duplex_stream_transfer(c: &mut Criterion) {
                     let receiver_task = tokio::spawn(async move {
                         let mut buf = vec![0u8; DEFAULT_CHUNK_SIZE as usize];
                         for _ in 0..total_chunks {
-                            let _header: ChunkHeader = read_msg(&mut receiver_stream).await.unwrap();
+                            let _header: ChunkHeader =
+                                read_msg(&mut receiver_stream).await.unwrap();
                             receiver_stream.read_exact(&mut buf).await.unwrap();
                             black_box(&buf);
                         }

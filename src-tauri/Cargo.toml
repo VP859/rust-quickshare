@@ -15,15 +15,15 @@ path = "src/main.rs"
 tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
-rqs_p2p = { path = ".." }
-tauri = { version = "2.0", features = ["tray-icon"] }
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0"
-tokio = { version = "1.53.2", features = ["full"] }
-anyhow = "1.0.104"
-tracing = "0.1.44"
-uuid = { version = "1.28.0", features = ["v4"] }
-tauri-plugin-dialog = "2.8.2"
-chrono = "0.4.45"
-blake3 = "1.8.7"
-iroh = "1.3.0"
+rqs_p2p = { path = ".." } 
+tauri = { version = "2.12.4", features = ["tray-icon"] }
+tauri-plugin-dialog = "2.8.3"
+serde_json = "1.0.154"
+blake3 = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+iroh = { workspace = true }
