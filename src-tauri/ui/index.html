@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="pl">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,38 +14,15 @@
             --text-sub: #94a3b8;
             --border-color: #334155;
             --green-color: #22c55e;
+            --red-color: #ef4444;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: system-ui, -apple-system, sans-serif;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding: 24px; user-select: none; }
 
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            padding: 24px;
-            user-select: none;
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 16px;
-        }
-
+        .container { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 16px; }
+        
         .dropzone {
             border: 2px dashed var(--border-color);
             background: var(--card-bg);
@@ -56,12 +32,10 @@
             transition: all 0.2s ease;
             cursor: pointer;
         }
-
         .dropzone.drag-over {
             border-color: var(--accent-color);
             background: rgba(56, 189, 248, 0.1);
         }
-
         .btn-browse {
             background: var(--accent-color);
             color: #000;
@@ -73,28 +47,10 @@
             margin-top: 12px;
         }
 
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .btn-add { background: #334155; color: var(--text-main); border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
 
-        .btn-add {
-            background: #334155;
-            color: var(--text-main);
-            border: none;
-            padding: 8px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-
-        .peers-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-            gap: 12px;
-        }
-
+        .peers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
         .peer-card {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
@@ -104,148 +60,66 @@
             cursor: pointer;
             transition: border-color 0.2s;
         }
-
-        .peer-card:hover {
-            border-color: var(--accent-color);
-        }
-
-        .peer-card .node-id {
-            font-size: 0.75rem;
-            color: var(--text-sub);
-            word-break: break-all;
-            margin-top: 4px;
-        }
-
-        .peer-card .card-menu {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            cursor: pointer;
-            padding: 4px;
-            color: var(--text-sub);
-        }
-
-        .peer-card .status-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--green-color);
-            margin-right: 6px;
-        }
+        .peer-card:hover { border-color: var(--accent-color); }
+        .peer-card.offline { opacity: 0.5; cursor: not-allowed; }
+        .peer-card .node-id { font-size: 0.75rem; color: var(--text-sub); word-break: break-all; margin-top: 4px; }
+        .peer-card .card-menu { position: absolute; top: 10px; right: 10px; cursor: pointer; padding: 4px; color: var(--text-sub); }
+        .peer-card .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+        .peer-card .status-dot.online { background: var(--green-color); }
+        .peer-card .status-dot.offline { background: var(--red-color); }
 
         .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.7);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s;
-            z-index: 100;
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 100;
         }
-
-        .modal-overlay.active {
-            opacity: 1;
-            pointer-events: all;
-        }
-
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
         .modal-content {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            width: 100%;
-            max-width: 460px;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
+            background: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 12px; width: 100%; max-width: 460px; padding: 24px; display: flex; flex-direction: column; gap: 16px;
         }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .form-group label {
-            font-size: 0.85rem;
-            color: var(--text-sub);
-        }
-
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 0.85rem; color: var(--text-sub); }
         .form-group input {
-            background: var(--bg-color);
-            border: 1px solid var(--border-color);
-            color: #fff;
-            padding: 10px;
-            border-radius: 6px;
-            outline: none;
+            background: var(--bg-color); border: 1px solid var(--border-color);
+            color: #fff; padding: 10px; border-radius: 6px; outline: none;
         }
 
         .ticket-box {
-            background: var(--bg-color);
-            border: 1px solid var(--accent-color);
-            padding: 12px;
-            border-radius: 6px;
-            font-family: monospace;
-            word-break: break-all;
-            color: var(--accent-color);
-            font-size: 0.85rem;
+            background: var(--bg-color); border: 1px solid var(--accent-color);
+            padding: 12px; border-radius: 6px; font-family: monospace; word-break: break-all; color: var(--accent-color); font-size: 0.85rem;
         }
 
         .loading-overlay {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            background: var(--card-bg);
-            border: 1px solid var(--accent-color);
-            padding: 14px 20px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            transform: translateY(100px);
-            opacity: 0;
-            transition: all 0.3s;
+            position: fixed; bottom: 24px; right: 24px;
+            background: var(--card-bg); border: 1px solid var(--accent-color);
+            padding: 14px 20px; border-radius: 8px; display: flex; align-items: center; gap: 12px;
+            transform: translateY(100px); opacity: 0; transition: all 0.3s;
         }
-
-        .loading-overlay.visible {
-            transform: translateY(0);
-            opacity: 1;
-        }
+        .loading-overlay.visible { transform: translateY(0); opacity: 1; }
     </style>
 </head>
-
 <body>
     <div class="container">
         <header>
             <h2>RQS P2P Quick Share</h2>
-            <span id="local-status" style="color: var(--accent-color); font-size: 0.9rem;">● Gotowy</span>
+            <span id="local-status" style="color: var(--accent-color); font-size: 0.9rem;">● Działający węzeł RQS</span>
         </header>
 
-        <!-- Dropzone -->
         <div class="dropzone" id="dropzone">
             <h3>Przeciągnij i upuść plik tutaj</h3>
-            <p style="color: var(--text-sub); margin-top: 6px; font-size: 0.85rem;">Wygeneruje Bilet Udostępniania lub
-                kliknij w urządzenie poniżej, aby wysłać bezpośrednio</p>
+            <p style="color: var(--text-sub); margin-top: 6px; font-size: 0.85rem;">Wygeneruje Bilet Udostępniania lub kliknij w aktywne urządzenie poniżej</p>
             <button class="btn-browse" id="btn-select-file">Wybierz plik z dysku</button>
         </div>
 
-        <!-- Wykryte w LAN -->
         <section>
             <div class="section-header">
-                <h3>Wykryte w sieci lokalnej (LAN)</h3>
-                <span style="font-size: 0.8rem; color: var(--text-sub);" id="scan-status">Skanowanie mDNS...</span>
+                <h3>Aktywne Aplikacje RQS w Sieci Lokalnej</h3>
+                <button class="btn-add" id="btn-refresh-scan">↻ Odśwież Skanowanie</button>
             </div>
             <div class="peers-grid" id="discovered-container"></div>
         </section>
 
-        <!-- Zaufane Urządzenia -->
         <section>
             <div class="section-header">
                 <h3>Zaufane Urządzenia</h3>
@@ -255,12 +129,11 @@
         </section>
     </div>
 
-    <!-- Modal Dodawania Urządzenia -->
     <div class="modal-overlay" id="modal-add-peer">
         <div class="modal-content">
             <h3>Dodaj Nowe Urządzenie</h3>
             <div class="form-group">
-                <label>Ticket lub Node ID</label>
+                <label>Ticket lub Node ID (aktywnego urządzenia)</label>
                 <input type="text" id="input-peer-ticket" placeholder="Wklej ticket połączeniowy...">
             </div>
             <div class="form-group">
@@ -274,12 +147,11 @@
         </div>
     </div>
 
-    <!-- Modal Wygenerowanego Ticketu -->
+    
     <div class="modal-overlay" id="modal-ticket-share">
         <div class="modal-content">
             <h3>Wygenerowano Bilet Udostępniania</h3>
-            <p style="font-size: 0.85rem; color: var(--text-sub);">Przekaż poniższy bilet odbiorcy, aby mógł pobrać twój
-                plik:</p>
+            <p style="font-size: 0.85rem; color: var(--text-sub);">Przekaż poniższy bilet dowolnej osobie z zainstalowaną aplikacją RQS:</p>
             <div class="ticket-box" id="generated-ticket-text">rqs://ticket-...</div>
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button class="btn-browse" id="btn-copy-ticket">Kopiuj Bilet</button>
@@ -301,6 +173,7 @@
             const btnOpenModal = document.getElementById('btn-open-modal');
             const btnCloseModal = document.getElementById('btn-close-modal');
             const btnSavePeer = document.getElementById('btn-save-peer');
+            const btnRefreshScan = document.getElementById('btn-refresh-scan');
             const modalAddPeer = document.getElementById('modal-add-peer');
             const peersContainer = document.getElementById('peers-container');
             const discoveredContainer = document.getElementById('discovered-container');
@@ -309,6 +182,7 @@
             const btnCopyTicket = document.getElementById('btn-copy-ticket');
             const btnCloseTicketModal = document.getElementById('btn-close-ticket-modal');
 
+            // Refresh skanowania obecności RQS
             async function refreshAllPeers() {
                 if (!invoke) return;
                 try {
@@ -325,19 +199,26 @@
             function renderPeers(peers, container, isTrusted) {
                 container.innerHTML = '';
                 if (!peers || peers.length === 0) {
-                    container.innerHTML = `<p style="color: var(--text-sub); font-size: 0.85rem;">Brak ${isTrusted ? 'zaufanych' : 'wykrytych'} urządzeń.</p>`;
+                    container.innerHTML = `<p style="color: var(--text-sub); font-size: 0.85rem;">Brak aktywne aplikacji RQS w tej sekcji.</p>`;
                     return;
                 }
                 peers.forEach(peer => {
                     const card = document.createElement('div');
-                    card.className = 'peer-card';
+                    card.className = `peer-card ${peer.is_online ? '' : 'offline'}`;
                     card.innerHTML = `
                         ${isTrusted ? `<div class="card-menu" onclick="event.stopPropagation(); window.deletePeer('${peer.node_id}')">✕</div>` : ''}
-                        <strong><span class="status-dot"></span>${peer.alias}</strong>
+                        <strong><span class="status-dot ${peer.is_online ? 'online' : 'offline'}"></span>${peer.alias}</strong>
                         <div class="node-id">${peer.node_id}</div>
-                        <span style="font-size: 0.75rem; color: var(--accent-color); margin-top: 8px; display: block;">Kliknij, aby wysłać do tego urządzenia</span>
+                        <span style="font-size: 0.75rem; color: ${peer.is_online ? 'var(--accent-color)' : 'var(--text-sub)'}; margin-top: 8px; display: block;">
+                            ${peer.is_online ? 'Aplikacja RQS Aktywna (Kliknij, aby wysłać)' : 'Aplikacja Nieaktywna / Wyłączona'}
+                        </span>
                     `;
-                    card.addEventListener('click', () => triggerFileSelection(peer.node_id, peer.alias));
+                    
+                    if (peer.is_online) {
+                        card.addEventListener('click', () => triggerFileSelection(peer.node_id, peer.alias));
+                    } else {
+                        card.addEventListener('click', () => alert("Urządzenie jest niedostępne lub nie ma uruchomionej aplikacji RQS!"));
+                    }
                     container.appendChild(card);
                 });
             }
@@ -356,9 +237,9 @@
                     const selectedFile = await invoke('pick_file_dialog');
                     if (selectedFile) {
                         if (targetNodeId) {
-                            showToast(`Wysyłanie oferty pliku do: ${targetAlias}...`);
+                            showToast(`Nawiązywanie połączenia RQS do: ${targetAlias}...`);
                         } else {
-                            showToast("Przygotowywanie pliku...");
+                            showToast("Przetwarzanie pliku...");
                         }
 
                         const res = await invoke('send_file_offer', {
@@ -369,12 +250,13 @@
                         if (res.ticket) {
                             generatedTicketText.textContent = res.ticket;
                             modalTicketShare.classList.add('active');
-                            showToast("Wygenerowano bilet udostępniania!");
+                            showToast("Wygenerowano bilet!");
                         } else {
                             showToast(res.message);
                         }
                     }
                 } catch (err) {
+                    alert("Błąd wysyłania: " + err);
                     showToast("Błąd: " + err);
                 }
             }
@@ -385,8 +267,8 @@
             });
 
             dropzone.addEventListener('click', () => triggerFileSelection(null));
+            btnRefreshScan.addEventListener('click', () => refreshAllPeers());
 
-            // Drag & Drop
             ['dragenter', 'dragover'].forEach(evt => {
                 dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); });
             });
@@ -454,5 +336,4 @@
         });
     </script>
 </body>
-
 </html>

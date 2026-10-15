@@ -4828,6 +4828,7 @@ dependencies = [
  "anyhow",
  "blake3",
  "chrono",
+ "iroh",
  "rqs_p2p",
  "serde",
  "serde_json",
