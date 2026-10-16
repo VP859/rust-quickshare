@@ -2,11 +2,18 @@
   "$schema": "../gen/schemas/desktop-capability.json",
   "identifier": "default",
   "description": "Domyślne uprawnienia dla aplikacji RQS GUI",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "core:event:default",
     "dialog:default",
     "dialog:allow-open"
+  ],
+  "platforms": [
+    "linux",
+    "windows",
+    "macOS"
   ]
 }
