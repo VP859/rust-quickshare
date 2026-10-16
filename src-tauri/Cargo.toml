@@ -45,6 +45,11 @@ futures-util = "0.3"
 tauri = { version = "2.12.4", features = ["tray-icon"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
+# Pluginy mobilne używane w lib.rs wyłącznie za `#[cfg(mobile)]`:
+# powiadomienia systemowe, skaner QR (parowanie peerów) i schowek.
+tauri-plugin-notification = "2"
+tauri-plugin-barcode-scanner = "2"
+tauri-plugin-clipboard-manager = "2"
 # JNI do wywołań natywnych: ContentResolver, NotificationManager, WifiManager
 jni = "0.21"
 ndk-context = "0.1"

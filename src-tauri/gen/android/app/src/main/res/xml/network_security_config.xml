@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    RQS Quick Share jest aplikacją czysto P2P (QUIC/Iroh) – nie używa HTTP(S).
+    Wyłączamy cleartext w sieci, ale zezwalamy na localhost (devServer / adb reverse).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Tauri dev server + `adb reverse tcp:1420 tcp:1420` podczas programowania -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

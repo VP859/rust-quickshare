@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ścieżki udostępniane przez FileProvider (pobrane pliki -> inne aplikacje) -->
+<paths>
+    <!-- getExternalFilesDir(null)  ==  /sdcard/Android/data/com.rqs.quickshare/files -->
+    <external-files-path name="rqs_downloads" path="Download/" />
+    <!-- catalog cache (pliki tymczasowe *.part transferu) -->
+    <external-cache-path name="rqs_cache" path="." />
+    <cache-path name="rqs_internal_cache" path="." />
+    <files-path name="rqs_internal_files" path="." />
+</paths>

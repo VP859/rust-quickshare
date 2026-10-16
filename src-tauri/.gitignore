@@ -7,6 +7,28 @@ gen/android/**/*
 !gen/android/.gitkeep
 !gen/android/app/
 gen/android/app/**/*
+# Pliki projektu Gradle generowane przez `cargo tauri android init` musimy
+# wersjonować – bez nich klon repozytorium nie zbuduje się na innym machine.
+!gen/android/settings.gradle.kts
+!gen/android/build.gradle.kts
+!gen/android/gradle.properties
+!gen/android/gradle/
+!gen/android/gradle/**/*
+!gen/android/buildSrc/
+gen/android/buildSrc/**/*
+!gen/android/buildSrc/build.gradle.kts
+!gen/android/buildSrc/src/
+gen/android/buildSrc/src/**/*
+!gen/android/buildSrc/src/main/
+gen/android/buildSrc/src/main/**/*
+!gen/android/buildSrc/src/main/java/
+gen/android/buildSrc/src/main/java/**/*
+!gen/android/buildSrc/src/main/java/com/
+gen/android/buildSrc/src/main/java/com/**/*
+!gen/android/buildSrc/src/main/java/com/rqs/
+gen/android/buildSrc/src/main/java/com/rqs/**/*
+!gen/android/buildSrc/src/main/java/com/rqs/quickshare/
+!gen/android/buildSrc/src/main/java/com/rqs/quickshare/*.kt
 !gen/android/app/build.gradle.kts
 !gen/android/app/src/
 gen/android/app/src/**/*

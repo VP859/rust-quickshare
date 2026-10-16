@@ -1,4 +1,5 @@
 use anyhow::Result;
+#[cfg(not(target_os = "android"))]
 use arboard::Clipboard;
 use std::collections::HashMap;
 
@@ -49,13 +50,24 @@ impl App {
     }
 
     pub fn copy_ticket_to_clipboard(&mut self) {
-        if let Ok(mut clipboard) = Clipboard::new()
-            && clipboard.set_text(&self.ticket_str).is_ok()
+        #[cfg(not(target_os = "android"))]
         {
-            self.status_msg = "Skopiowano TICKET do schowka!".to_string();
-            return;
+            if let Ok(mut clipboard) = Clipboard::new()
+                && clipboard.set_text(&self.ticket_str).is_ok()
+            {
+                self.status_msg = "Skopiowano TICKET do schowka!".to_string();
+                return;
+            }
+            self.status_msg = "Błąd kopiowania do schowka.".to_string();
         }
-        self.status_msg = "Błąd kopiowania do schowka.".to_string();
+
+        // Na Androidzie TUI nie działa – schowek obsługuje frontend WebView
+        // (navigator.clipboard / tauri-plugin-clipboard-manager).
+        #[cfg(target_os = "android")]
+        {
+            self.status_msg = "Schowek niedostępny w trybie tekstowym na Androidzie."
+                .to_string();
+        }
     }
 
     pub fn accept_pending_offer(&mut self) {

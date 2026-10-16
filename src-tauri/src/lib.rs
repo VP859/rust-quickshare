@@ -12,6 +12,15 @@ use tokio::sync::Mutex;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Pluginy mobilne rejestrowane wyłącznie na Androidzie/iOS –
+        // na desktopie zbiera je osobna gałąź cfg poniżej, dzięki czemu
+        // `cargo build` na Linuksie/Windows/macOS nie wymaga tych crate'ów.
+        #[cfg(mobile)]
+        .plugin(tauri_plugin_notification::init())
+        #[cfg(mobile)]
+        .plugin(tauri_plugin_barcode_scanner::init())
+        #[cfg(mobile)]
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let quit_i = MenuItem::with_id(app, "quit", "Zakończ RQS", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "Pokaż Okno", true, None::<&str>)?;
