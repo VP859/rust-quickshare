@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    =========================================================================
+     RQS Quick Share – AndroidManifest.xml
+     Plik nadpisany przez nakładkę wygenerowaną `cargo tauri android init`.
+     Zachowane zostały wszystkie wpisy wymagane przez Tauri v2
+     (@string/TauriFileName, TauriActivity, TAURI_KOTLIN_CLASS), a dodatkowo
+     skonfigurowano: uprawnienia sieciowe, Share Sheet (ACTION_SEND),
+     Foreground Service z powiadomieniem ciągłym oraz zapis do katalogu
+     Pobrane przez MediaStore / SAF.
+    =========================================================================
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ========================== UPRAWNIENIA ========================== -->
+
+    <!-- Niezbędne do działania węzła iroh (QUIC over UDP) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Detekcja peersów w sieci lokalnej (mDNS/broadcast + Mulicast Lock) -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+    <!-- Foreground Service: utrzymuje żywy proces węzła podczas dużych transferów -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Powiadomienia systemowe (Android 13+ wymaga jawnej zgody użytkownika) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Odbieranie intencji z Share Sheet nawet gdy aplikacja jest zamknięta -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+        Dostęp do pamięci masowej.
+        Android <=12 : klasyczne uprawnienia READ/WRITE_EXTERNAL_STORAGE
+        Android >=13 : zastąpione przez czytelniejsze READ_MEDIA_*
+        (maxSdkVersion gwarantuje, że Google Play nie odrzuci zgłoszenia).
+    -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+    <!-- Aparat używany wyłącznie przez wbudowany skaner kodów QR (niewymagany) -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <!-- ======================== GŁÓWNA APLIKACJA ======================== -->
+    <application
+        android:name="RqsApplication"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/appName"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:requestLegacyExternalStorage="true"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Tauri.Starting"
+        android:usesCleartextTraffic="false">
+
+        <!--
+            Nazwa klasy Kotlin z funkcją onNewIntent(), którą wywołuje TauriActivity.
+            Wartość musi być zgodna z TAURI_KOTLIN_CLASS w gen/android/app/build.gradle.kts
+        -->
+        <meta-data
+            android:name="TAURI_KOTLIN_CLASS"
+            android:value="com.rqs.quickshare.MainActivity" />
+
+        <!-- Aktywność WebView generowana przez Tauri v2 -->
+        <activity
+            android:name="tauri.android.TauriActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|densityDpi"
+            android:exported="true"
+            android:hardwareAccelerated="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Tauri.Starting"
+            android:windowSoftInputMode="adjustResize">
+
+            <!-- Uruchomienie ikoną launcher -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+                === SEND VIA SHARE MENU ===
+                Akcje ACTION_SEND / ACTION_SEND_MULTIPLE z dowolnym typem MIME.
+                Po wyborze naszej aplikacji URI pliku trafia do MainActivity.onNewIntent,
+                skąd jest przekazywane do frontendu (event `shared-file`) i dalej
+                do backendu Rust jako strumień bajtów (content:// -> ContentResolver).
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+            <!-- Otwieranie linków połączeniowych rqs:// (deep link do TICKETU) -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="rqs" android:host="ticket" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Foreground Service chroniący węzeł iroh przed kill-em baterii.
+            type=dataSync => Android 14+ wymaga FOREGROUND_SERVICE_DATA_SYNC.
+        -->
+        <service
+            android:name=".TransferForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- Dostarcza pliki wysyłane/zapisywane przez aplikację innym aplikacjom -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Reakcja na przyciski Odbrać / Odrzucić w powiadomieniu transferu -->
+        <receiver
+            android:name=".TransferActionReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+    </application>
+
+</manifest>

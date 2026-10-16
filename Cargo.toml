@@ -40,9 +40,7 @@ ratatui = "0.30.2"
 crossterm = "0.29.0"
 dirs = "7.0.0"
 toml = "1.1.8"
-arboard = "3.7.0"
 memmap2 = "0.9.11"
-network-interface = "2.0.5"
 thiserror = "2.0.21"
 tempfile = "3.27.0"
 tokio = { workspace = true }
@@ -52,6 +50,16 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 iroh = { workspace = true }
+
+# ---------------------------------------------------------------------------
+# Zależności specyficzne dla platformy (Android NDK nie obsługuje X11/Wayland
+# ani surowych gniazd netlink – stąd warunkowa kompilacja poniższych crate'ów)
+# ---------------------------------------------------------------------------
+[target.'cfg(not(target_os = "android"))'.dependencies]
+# Schowek systemowy (TICKET -> clipboard w TUI) – tylko desktop
+arboard = "3.7.0"
+# Wykrywanie interfejsów sieciowych przez getifaddrs/netlink – tylko desktop
+network-interface = "2.0.5"
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="appName">RQS Quick Share</string>
+
+    <!-- Foreground Service / powiadomienie ciągłe -->
+    <string name="notif_channel_transfer_name">Transfery plików</string>
+    <string name="notif_channel_transfer_desc">Postęp wysyłania i odbierania plików P2P</string>
+    <string name="notif_channel_node_name">Węzeł RQS</string>
+    <string name="notif_channel_node_desc">Utrzymuje aktywny węzeł iroh, aby sieć nie usypiała procesu</string>
+
+    <string name="notif_node_title">RQS Quick Share działa w tle</string>
+    <string name="notif_node_text">Węzeł P2P nasłuchuje – możesz odbierać pliki</string>
+    <string name="notif_transfer_incoming_title">Przychodzący plik</string>
+    <string name="notif_progress_format">%1$s · %2$d%%</string>
+    <string name="notif_action_accept">Odebrać</string>
+    <string name="notif_action_reject">Odrzucić</string>
+    <string name="notif_done_title">Plik zapisany</string>
+    <string name="notif_failed_title">Transfer przerwany</string>
+
+    <string name="share_chooser_title">Wyślij przez RQS Quick Share</string>
+    <string name="perm_notifications_rationale">Powiadomienia są potrzebne, aby pokazywać postęp pobierania w tle.</string>
+</resources>

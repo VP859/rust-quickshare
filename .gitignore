@@ -1,25 +1,9 @@
 /target/
-**/*.rs.bk
 Cargo.lock
-
-todo.md
-*.tmp
-*.log
-
-*.part
-*.bin
-photo.jpg
-
-.vscode/
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/settings.json
-
-.idea/
-*.iml
-
-*.swp
-*~
-
-.DS_Store
-Thumbs.db
+# Wyjątek: ręcznie dostosowane pliki projektu Androida (gradle/buildSrc) są
+# wersjonowane – szczegóły w src-tauri/.gitignore. Zignorowany katalog nie
+# pozwalał gitowi zauważyć żadnych plików w src-tauri/gen/android/.
+!src-tauri/gen/
+src-tauri/gen/*
+!src-tauri/gen/android/
+src-tauri/gen/android/*

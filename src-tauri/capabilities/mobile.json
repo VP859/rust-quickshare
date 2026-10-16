@@ -1,0 +1,53 @@
+{
+  "$schema": "../gen/schemas/android-schema.json",
+  "identifier": "mobile",
+  "description": "Uprawnienia nakładki Android: ekran dotykowy, Share Sheet (content://), skaner QR, zapis do katalogu Pobrane",
+  "windows": ["main"],
+  "platforms": ["android", "iOS"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:webview:default",
+    "core:window:default",
+    "core:app:default",
+    "core:path:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-ask",
+    "dialog:allow-confirm",
+    "notification:default",
+    "barcode-scanner:default",
+    "clipboard-manager:allow-write-text",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        "$APPDATA/**",
+        "$APPCACHE/**",
+        "$DOWNLOAD/**",
+        "$DOCUMENT/**"
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-dir"
+    },
+    {
+      "identifier": "fs:allow-read-file"
+    },
+    {
+      "identifier": "fs:allow-write-file"
+    },
+    {
+      "identifier": "fs:allow-mkdir"
+    },
+    {
+      "identifier": "fs:allow-exists"
+    },
+    {
+      "identifier": "fs:allow-stat"
+    },
+    {
+      "identifier": "fs:allow-remove"
+    }
+  ]
+}

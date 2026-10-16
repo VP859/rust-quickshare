@@ -1,4 +1,5 @@
 use anyhow::Result;
+#[cfg(not(target_os = "android"))]
 use network_interface::NetworkInterfaceConfig;
 use std::net::UdpSocket;
 use tracing::info;
@@ -60,19 +61,32 @@ async fn check_stun_reachability() -> bool {
     }
 }
 fn check_vpn_interfaces() -> bool {
-    if let Ok(interfaces) = network_interface::NetworkInterface::show() {
-        for iface in interfaces {
-            let name = iface.name.to_lowercase();
-            if name.contains("tun")
-                || name.contains("tap")
-                || name.contains("nord")
-                || name.contains("wireguard")
-                || name.contains("tailscale")
-            {
-                info!("Wykryto interfejs VPN: {}", iface.name);
-                return true;
+    #[cfg(not(target_os = "android"))]
+    {
+        if let Ok(interfaces) = network_interface::NetworkInterface::show() {
+            for iface in interfaces {
+                let name = iface.name.to_lowercase();
+                if name.contains("tun")
+                    || name.contains("tap")
+                    || name.contains("nord")
+                    || name.contains("wireguard")
+                    || name.contains("tailscale")
+                {
+                    info!("Wykryto interfejs VPN: {}", iface.name);
+                    return true;
+                }
             }
         }
+        false
     }
-    false
+
+    #[cfg(target_os = "android")]
+    {
+        // Na Androidzie aplikacja nie ma dostępu do listy interfejsów przez
+        // netlink/getifaddrs w sandboxie NDK. Wykrywaniem VPN zajmuje się
+        // warstwa natywna (ConnectivityManager → plugin JNI `is_vpn_active`),
+        // a iroh i tak korzysta z Connection Migration (QUIC) przy zmianie sieci.
+        info!("Android: wykrywanie VPN delegowane do ConnectivityManager (JNI).");
+        false
+    }
 }

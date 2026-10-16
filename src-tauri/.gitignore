@@ -1,0 +1,55 @@
+# ------------------------------------------------------------------
+# Nakładka Androida generowana przez `cargo tauri android init`
+# Przechowujemy w VCS wyłącznie pliki, które ręcznie dostosowaliśmy.
+# ------------------------------------------------------------------
+gen/android/**/*
+
+!gen/android/.gitkeep
+!gen/android/app/
+gen/android/app/**/*
+# Pliki projektu Gradle generowane przez `cargo tauri android init` musimy
+# wersjonować – bez nich klon repozytorium nie zbuduje się na innym machine.
+!gen/android/settings.gradle.kts
+!gen/android/build.gradle.kts
+!gen/android/gradle.properties
+!gen/android/gradle/
+!gen/android/gradle/**/*
+!gen/android/buildSrc/
+gen/android/buildSrc/**/*
+!gen/android/buildSrc/build.gradle.kts
+!gen/android/buildSrc/src/
+gen/android/buildSrc/src/**/*
+!gen/android/buildSrc/src/main/
+gen/android/buildSrc/src/main/**/*
+!gen/android/buildSrc/src/main/java/
+gen/android/buildSrc/src/main/java/**/*
+!gen/android/buildSrc/src/main/java/com/
+gen/android/buildSrc/src/main/java/com/**/*
+!gen/android/buildSrc/src/main/java/com/rqs/
+gen/android/buildSrc/src/main/java/com/rqs/**/*
+!gen/android/buildSrc/src/main/java/com/rqs/quickshare/
+!gen/android/buildSrc/src/main/java/com/rqs/quickshare/*.kt
+!gen/android/app/build.gradle.kts
+!gen/android/app/src/
+gen/android/app/src/**/*
+!gen/android/app/src/main/
+gen/android/app/src/main/**/*
+!gen/android/app/src/main/AndroidManifest.xml
+!gen/android/app/src/main/java/
+gen/android/app/src/main/java/**/*
+!gen/android/app/src/main/java/com/
+gen/android/app/src/main/java/com/**/*
+!gen/android/app/src/main/java/com/rqs/
+gen/android/app/src/main/java/com/rqs/**/*
+!gen/android/app/src/main/java/com/rqs/quickshare/
+gen/android/app/src/main/java/com/rqs/quickshare/*.kt
+!gen/android/app/src/main/res/
+gen/android/app/src/main/res/**/*
+!gen/android/app/src/main/res/xml/
+gen/android/app/src/main/res/xml/*
+!gen/android/app/src/main/res/xml/network_security_config.xml
+!gen/android/app/src/main/res/xml/file_paths.xml
+!gen/android/app/src/main/res/values/
+gen/android/app/src/main/res/values/*
+!gen/android/app/src/main/res/values/strings.xml
+!gen/android/app/src/main/res/values/themes.xml

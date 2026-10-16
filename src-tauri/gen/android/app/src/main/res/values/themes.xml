@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Motyw startowy wymagany przez Tauri v2 (gen/android/.../themes.xml) -->
+    <style name="Theme.Tauri.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/purple_500</item>
+        <item name="postSplashScreenTheme">@style/Theme.AppCompat.NoActionBar</item>
+    </style>
+
+    <style name="Theme.RqsQuickShare" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#0f172a</item>
+        <item name="android:navigationBarColor">#0f172a</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
