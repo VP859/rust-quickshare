@@ -79,6 +79,12 @@ pub fn run() {
             inspect_ticket,
             receive_from_ticket,
             respond_to_offer,
+            list_nearby,
+            refresh_nearby,
+            pair_code,
+            pair_device,
+            get_device_name,
+            set_device_name,
             set_download_dir,
             take_shared_files,
         ])

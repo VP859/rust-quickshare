@@ -2,7 +2,9 @@
 
 use anyhow::{Context, Result};
 use iroh::EndpointId;
+use rqs_p2p::discovery::{Discovery, DiscoveryOptions};
 use rqs_p2p::node::{NodeEngine, NodeTicket, load_or_generate_secret_key};
+use rqs_p2p::pairing::{PairOutcome, PairRequest, pairing_code, request_pairing};
 use rqs_p2p::protocol::codec::{read_msg, write_msg};
 use rqs_p2p::protocol::messages::{
     DEFAULT_CHUNK_SIZE, Hello, ShareToken, TransferDecision, TransferOffer,
@@ -26,6 +28,7 @@ struct TestHandler {
     dest_dir: PathBuf,
     share: Option<(ShareToken, PreparedFile)>,
     events: Mutex<Vec<TransferEvent>>,
+    pair_requests: Mutex<Vec<PairRequest>>,
 }
 
 impl TestHandler {
@@ -35,6 +38,7 @@ impl TestHandler {
             dest_dir: dest_dir.to_path_buf(),
             share: None,
             events: Mutex::new(Vec::new()),
+            pair_requests: Mutex::new(Vec::new()),
         }
     }
 
@@ -70,6 +74,15 @@ impl TransferHandler for TestHandler {
 
     fn on_event(&self, event: TransferEvent) {
         self.events.lock().unwrap().push(event);
+    }
+
+    fn device_name(&self) -> String {
+        "Odbiorca Testowy".into()
+    }
+
+    async fn confirm_pair(&self, request: PairRequest) -> bool {
+        self.pair_requests.lock().unwrap().push(request);
+        self.accept
     }
 }
 
@@ -304,6 +317,86 @@ async fn malicious_offers_are_refused() -> Result<()> {
         Ok(())
     })
     .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn discovery_finds_peer_on_local_network() -> Result<()> {
+    with_timeout(async {
+        let a = engine().await?;
+        let b = engine().await?;
+        // Osobne porty na localhost zamiast broadcastu – test nie zależy od sieci.
+        let (pa, pb) = (free_udp_port()?, free_udp_port()?);
+        let opts = |listen: u16, to: u16| DiscoveryOptions {
+            port: listen,
+            targets: Some(vec![([127, 0, 0, 1], to).into()]),
+        };
+        let da = Discovery::start(a.clone(), "Laptop A", opts(pa, pb))?;
+        let db = Discovery::start(b.clone(), "Telefon B", opts(pb, pa))?;
+
+        let seen_by_a = da
+            .wait_for("telefon b", Duration::from_secs(10))
+            .await
+            .context("A nie wykrył B")?;
+        assert_eq!(seen_by_a.id, b.node_id());
+        assert!(
+            seen_by_a.addr.ip_addrs().next().is_some(),
+            "brak adresu LAN"
+        );
+        let seen_by_b = db
+            .wait_for(&a.node_id().to_string(), Duration::from_secs(10))
+            .await
+            .context("B nie wykrył A")?;
+        assert_eq!(seen_by_b.name, "Laptop A");
+
+        // Zmiana nazwy jest rozgłaszana od razu.
+        da.set_name("Laptop Biurowy");
+        assert!(
+            db.wait_for("Laptop Biurowy", Duration::from_secs(10))
+                .await
+                .is_some()
+        );
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pairing_with_one_button_accept_and_reject() -> Result<()> {
+    with_timeout(async {
+        let dir = tempdir()?;
+        for accept in [true, false] {
+            let handler = Arc::new(TestHandler::new(accept, dir.path()));
+            let (rx, addr) = start_receiver(handler.clone()).await?;
+            let initiator = engine().await?;
+
+            let outcome = request_pairing(&initiator, addr, "Laptop\nA").await?;
+            let requests = handler.pair_requests.lock().unwrap().clone();
+            assert_eq!(requests.len(), 1);
+            let req = &requests[0];
+            assert_eq!(req.peer, initiator.node_id());
+            assert_eq!(req.name, "Laptop A");
+            assert_eq!(req.addr.as_ref().map(|a| a.id), Some(initiator.node_id()));
+            // Obie strony widzą ten sam kod weryfikacyjny.
+            assert_eq!(req.code, pairing_code(&initiator.node_id(), &rx.node_id()));
+
+            match outcome {
+                PairOutcome::Accepted { name, addr } => {
+                    assert!(accept);
+                    assert_eq!(name, "Odbiorca Testowy");
+                    assert_eq!(addr.map(|a| a.id), Some(rx.node_id()));
+                }
+                PairOutcome::Rejected => assert!(!accept),
+            }
+        }
+        Ok(())
+    })
+    .await
+}
+
+fn free_udp_port() -> Result<u16> {
+    Ok(std::net::UdpSocket::bind("127.0.0.1:0")?
+        .local_addr()?
+        .port())
 }
 
 #[tokio::test]

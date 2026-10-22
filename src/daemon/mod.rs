@@ -6,7 +6,9 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 use crate::config::Config;
+use crate::discovery::{Discovery, DiscoveryOptions};
 use crate::node::NodeEngine;
+use crate::pairing::PairRequest;
 use crate::protocol::messages::TransferOffer;
 use crate::transfer::service::{
     self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
@@ -78,6 +80,36 @@ impl TransferHandler for DaemonHandler {
         }
     }
 
+    async fn confirm_pair(&self, req: PairRequest) -> bool {
+        if !self.interactive {
+            info!("Odrzucono parowanie z '{}' – demon bez terminala", req.name);
+            return false;
+        }
+        let question = format!(
+            "\n[PAROWANIE] '{}' ({}) chce się sparować.\nKod weryfikacyjny: {} – czy jest taki sam na drugim urządzeniu?",
+            req.name,
+            req.peer.fmt_short(),
+            req.code
+        );
+        if !self.ask_user(question).await {
+            return false;
+        }
+        let saved = Config::load().and_then(|mut c| {
+            c.add_paired(req.peer, &req.name, req.addr, false)?;
+            c.save()
+        });
+        match saved {
+            Ok(()) => {
+                info!("Sparowano z '{}'", req.name);
+                true
+            }
+            Err(e) => {
+                warn!("Nie udało się zapisać sparowanego urządzenia: {e:#}");
+                false
+            }
+        }
+    }
+
     fn on_event(&self, ev: TransferEvent) {
         match ev.status {
             TransferStatus::Completed { path } => info!(
@@ -114,6 +146,17 @@ pub async fn run_daemon(downloads_dir: Option<PathBuf>) -> Result<()> {
         interactive: std::io::stdin().is_terminal(),
         prompt_lock: tokio::sync::Mutex::new(()),
     });
+
+    // Ogłaszanie w sieci lokalnej – inne urządzenia widzą demona i mogą się sparować.
+    let config = Config::load().unwrap_or_default();
+    let _discovery = Discovery::start(
+        engine.clone(),
+        &config.device_name(),
+        DiscoveryOptions::default(),
+    )
+    .inspect_err(|e| warn!("Wykrywanie w sieci lokalnej wyłączone: {e:#}"))
+    .ok();
+    println!(" Nazwa w sieci: {}\n", config.device_name());
 
     tokio::select! {
         _ = service::serve(engine.clone(), handler) => {}

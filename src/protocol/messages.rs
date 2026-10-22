@@ -1,3 +1,4 @@
+use iroh::EndpointAddr;
 use serde::{Deserialize, Serialize};
 
 /// Domyślny rozmiar chunka (1 MiB).
@@ -8,6 +9,8 @@ pub const MAX_CHUNK_SIZE: u32 = 16 * 1024 * 1024;
 pub const MAX_FRAME_LEN: u32 = 64 * 1024;
 /// Maksymalna długość nazwy pliku w bajtach (limit większości systemów plików).
 pub const MAX_FILE_NAME_LEN: usize = 255;
+/// Maksymalna długość nazwy urządzenia (parowanie, wykrywanie w sieci).
+pub const MAX_DEVICE_NAME_LEN: usize = 64;
 /// Liczba strumieni chunków przesyłanych równolegle.
 pub const CHUNK_WINDOW: usize = 8;
 
@@ -21,6 +24,17 @@ pub enum Hello {
     Push,
     /// Strona łącząca się pobiera plik udostępniony pod tokenem z TICKETU.
     Pull { token: ShareToken },
+    /// Prośba o wzajemne sparowanie (dodanie do zaufanych urządzeń).
+    /// `addr` – aktualny adres proszącego, zapamiętywany przez drugą stronę.
+    Pair { name: String, addr: EndpointAddr },
+}
+
+/// Odpowiedź na [`Hello::Pair`] po decyzji użytkownika.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PairResponse {
+    pub accepted: bool,
+    pub name: String,
+    pub addr: Option<EndpointAddr>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Gauge, List, ListItem, Paragraph},
 };
 
-use super::app::App;
+use super::app::{App, PendingKind};
 use crate::transfer::service::{Direction as TransferDirection, TransferStatus};
 
 pub fn render(f: &mut Frame, app: &App) {
@@ -14,7 +14,7 @@ pub fn render(f: &mut Frame, app: &App) {
         .constraints([
             Constraint::Length(4),
             Constraint::Min(8),
-            Constraint::Length(8),
+            Constraint::Length(9),
         ])
         .split(f.area());
 
@@ -29,7 +29,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
         app.node_id, app.ticket_str, app.status_msg
     );
     let block = Block::default()
-        .title(" RQS P2P Node Status [c: Kopiuj Ticket | q: Wyjście] ")
+        .title(" RQS P2P [↑↓ wybór | p: sparuj | r: szukaj | c: kopiuj TICKET | q: wyjście] ")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
     let paragraph = Paragraph::new(text).block(block);
@@ -97,7 +97,11 @@ fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .constraints([
+            Constraint::Percentage(30),
+            Constraint::Percentage(35),
+            Constraint::Percentage(35),
+        ])
         .split(area);
 
     let peer_items: Vec<ListItem> = app
@@ -127,16 +131,52 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     );
     f.render_widget(peers_list, chunks[0]);
 
-    let prompt_text = if let Some(offer) = app.pending.front() {
-        format!(
-            "Otrzymano ofertę pliku! (w kolejce: {})\nPlik: {}\nRozmiar: {:.2} MB\nOd: {}\n\nCzy akceptujesz? [y / n]",
-            app.pending.len(),
-            offer.file_name,
-            offer.file_size as f64 / 1_048_576.0,
-            offer.peer_label
-        )
+    let nearby_items: Vec<ListItem> = if app.nearby.is_empty() {
+        vec![ListItem::new("Szukanie… [r] odśwież")]
     } else {
-        "Brak oczekujących prośb transferu.".to_string()
+        app.nearby
+            .iter()
+            .enumerate()
+            .map(|(i, d)| {
+                let paired = app.config.find_peer(&d.node_id).is_some();
+                let marker = if i == app.selected { "▶" } else { " " };
+                let state = if paired { " ✓" } else { "" };
+                let style = if i == app.selected {
+                    Style::default().fg(Color::Black).bg(Color::Cyan)
+                } else {
+                    Style::default()
+                };
+                ListItem::new(format!("{marker} {} ({}){state}", d.name, d.platform)).style(style)
+            })
+            .collect()
+    };
+    let nearby_list = List::new(nearby_items).block(
+        Block::default()
+            .title(" W pobliżu [p: sparuj] ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
+    f.render_widget(nearby_list, chunks[1]);
+
+    let prompt_text = match app.pending.front().map(|p| &p.kind) {
+        Some(PendingKind::File {
+            peer_label,
+            file_name,
+            file_size,
+        }) => format!(
+            "Oferta pliku (w kolejce: {})\nPlik: {}\nRozmiar: {:.2} MB\nOd: {}\n\nAkceptujesz? [y / n]",
+            app.pending.len(),
+            file_name,
+            *file_size as f64 / 1_048_576.0,
+            peer_label
+        ),
+        Some(PendingKind::Pair { name, code }) => format!(
+            "Prośba o sparowanie (w kolejce: {})\nUrządzenie: {}\nKod: {}\n\nCzy kod zgadza się z drugim\nurządzeniem? [y / n]",
+            app.pending.len(),
+            name,
+            code
+        ),
+        None => "Brak oczekujących decyzji.".to_string(),
     };
 
     let prompt = Paragraph::new(prompt_text).block(
@@ -145,5 +185,5 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Yellow)),
     );
-    f.render_widget(prompt, chunks[1]);
+    f.render_widget(prompt, chunks[2]);
 }

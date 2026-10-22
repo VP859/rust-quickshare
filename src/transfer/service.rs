@@ -1,6 +1,7 @@
 //! Wspólna logika węzła dla wszystkich interfejsów (demon, TUI, GUI Tauri):
 //! pętla przyjmowania połączeń, decyzja o ofercie, wysyłka do urządzeń i
-//! pobieranie plików udostępnionych przez TICKET. Interfejsy dostarczają
+//! pobieranie plików udostępnionych przez TICKET oraz odpowiedź na prośby
+//! o sparowanie. Interfejsy dostarczają
 //! jedynie [`TransferHandler`] i reagują na [`TransferEvent`].
 
 use anyhow::{Context, Result};
@@ -16,7 +17,9 @@ use super::Channel;
 use super::receiver::{read_offer, receive_on_channel, reject};
 use super::sender::{PreparedFile, SendOutcome, prepare_file, push_file, send_on_channel};
 use crate::node::{NodeEngine, NodeTicket};
-use crate::protocol::messages::{Hello, ShareToken, TransferOffer};
+use crate::pairing::{PAIR_DECISION_TIMEOUT, PairRequest, clean_device_name, pairing_code};
+use crate::protocol::codec::write_msg;
+use crate::protocol::messages::{Hello, PairResponse, ShareToken, TransferOffer};
 
 /// Kod zamknięcia połączenia, gdy token udostępnienia jest nieznany.
 const CLOSE_UNKNOWN_SHARE: u32 = 2;
@@ -82,6 +85,20 @@ pub trait TransferHandler: Send + Sync + 'static {
     }
 
     fn on_event(&self, event: TransferEvent);
+
+    /// Nazwa tego urządzenia przekazywana przy parowaniu.
+    fn device_name(&self) -> String {
+        crate::config::Config::load()
+            .map(|c| c.device_name())
+            .unwrap_or_else(|_| crate::config::paths::default_device_name())
+    }
+
+    /// Prośba o sparowanie. Implementacja pyta użytkownika (pokazując `request.code`)
+    /// i przy zgodzie zapisuje urządzenie (np. [`crate::config::Config::add_paired`]).
+    /// Domyślnie odrzuca – np. demon bez terminala.
+    fn confirm_pair(&self, _request: PairRequest) -> impl Future<Output = bool> + Send {
+        async { false }
+    }
 }
 
 /// Pomocnik emitujący kolejne stany jednego transferu.
@@ -155,9 +172,10 @@ pub async fn serve<H: TransferHandler>(engine: NodeEngine, handler: Arc<H>) {
             }
         };
         let handler = handler.clone();
+        let engine = engine.clone();
         tokio::spawn(async move {
             let peer = conn.remote_id();
-            if let Err(e) = handle_connection(conn, handler).await {
+            if let Err(e) = handle_connection(&engine, conn, handler).await {
                 warn!("Błąd obsługi połączenia od {peer}: {e:#}");
             }
         });
@@ -165,12 +183,19 @@ pub async fn serve<H: TransferHandler>(engine: NodeEngine, handler: Arc<H>) {
 }
 
 /// Jedno połączenie może przenosić wiele kolejnych transferów (np. wysyłka wielu plików).
-async fn handle_connection<H: TransferHandler>(conn: Connection, handler: Arc<H>) -> Result<()> {
+async fn handle_connection<H: TransferHandler>(
+    engine: &NodeEngine,
+    conn: Connection,
+    handler: Arc<H>,
+) -> Result<()> {
     while let Some((channel, hello)) = Channel::accept(&conn).await? {
         // Błąd jednego transferu nie zrywa połączenia – kolejne pliki mogą się powieść.
         let result = match hello {
             Hello::Push => handle_push(&conn, channel, handler.as_ref()).await,
             Hello::Pull { token } => handle_pull(&conn, channel, &token, handler.as_ref()).await,
+            Hello::Pair { name, addr } => {
+                handle_pair(engine, &conn, channel, &name, addr, handler.as_ref()).await
+            }
         };
         if let Err(e) = result {
             warn!("Transfer od {} nieudany: {e:#}", conn.remote_id());
@@ -234,6 +259,36 @@ async fn handle_pull<H: TransferHandler>(
     );
     let result = send_on_channel(conn, &mut channel, &file, &|d| tracker.progress(d)).await;
     report_send(&tracker, result)?;
+    channel.finish().await;
+    Ok(())
+}
+
+async fn handle_pair<H: TransferHandler>(
+    engine: &NodeEngine,
+    conn: &Connection,
+    mut channel: Channel,
+    name: &str,
+    addr: iroh::EndpointAddr,
+    handler: &H,
+) -> Result<()> {
+    let peer = conn.remote_id();
+    let request = PairRequest {
+        peer,
+        name: clean_device_name(name),
+        code: pairing_code(&engine.node_id(), &peer),
+        // Adres musi należeć do węzła uwierzytelnionego w TLS.
+        addr: (addr.id == peer).then_some(addr),
+    };
+    info!("Prośba o sparowanie od '{}' ({peer})", request.name);
+    let accepted = tokio::time::timeout(PAIR_DECISION_TIMEOUT, handler.confirm_pair(request))
+        .await
+        .unwrap_or(false);
+    let response = PairResponse {
+        accepted,
+        name: handler.device_name(),
+        addr: accepted.then(|| engine.endpoint().addr()),
+    };
+    write_msg(&mut channel.send, &response).await?;
     channel.finish().await;
     Ok(())
 }

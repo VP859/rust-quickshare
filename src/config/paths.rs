@@ -34,3 +34,21 @@ pub fn default_download_dir() -> PathBuf {
         .or_else(|| dirs::home_dir().map(|h| h.join("Downloads")))
         .unwrap_or_else(|| PathBuf::from("."))
 }
+
+/// Domyślna nazwa urządzenia widoczna dla innych (nazwa hosta bez domeny).
+#[cfg(not(target_os = "android"))]
+pub fn default_device_name() -> String {
+    let host = gethostname::gethostname().to_string_lossy().into_owned();
+    let short = host.split('.').next().unwrap_or_default().trim();
+    if short.is_empty() || short.eq_ignore_ascii_case("localhost") {
+        format!("RQS ({})", std::env::consts::OS)
+    } else {
+        short.to_string()
+    }
+}
+
+/// Na Androidzie nazwa hosta to zwykle „localhost” – model telefonu ustawia frontend.
+#[cfg(target_os = "android")]
+pub fn default_device_name() -> String {
+    "Urządzenie Android".to_string()
+}

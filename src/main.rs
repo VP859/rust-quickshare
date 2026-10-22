@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 
 use rqs_p2p::cli::args::{Cli, Commands};
+use rqs_p2p::cli::nearby_cmd::{run_discover, run_name, run_pair};
 use rqs_p2p::cli::peer_cmd::handle_peer_cmd;
 use rqs_p2p::cli::transfer_cmd::{run_receive, run_send, run_show_ticket};
 use rqs_p2p::daemon::run_daemon;
@@ -33,6 +34,12 @@ async fn main() -> Result<()> {
         Commands::Daemon { downloads_dir } => run_daemon(downloads_dir).await?,
         Commands::Tui => run_tui().await?,
         Commands::Ticket => run_show_ticket().await?,
+        Commands::Discover { timeout } => run_discover(timeout).await?,
+        Commands::Pair {
+            target,
+            auto_accept,
+        } => run_pair(&target, auto_accept).await?,
+        Commands::Name { name } => run_name(name.as_deref())?,
         Commands::Peer { command } => handle_peer_cmd(command)?,
         Commands::Doctor => {
             run_doctor().await?;

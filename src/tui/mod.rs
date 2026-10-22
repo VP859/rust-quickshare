@@ -19,8 +19,21 @@ use crate::transfer::service;
 
 pub async fn run_tui() -> Result<()> {
     // Węzeł startujemy przed przełączeniem terminala, aby błędy były czytelne.
-    let app = App::new().await?;
     let (tx, rx) = mpsc::unbounded_channel();
+    let app = App::new(tx.clone()).await?;
+    // Zmiany listy urządzeń w pobliżu trafiają do pętli TUI.
+    let nearby_task = app.discovery.as_ref().map(|d| {
+        let mut watch = d.subscribe();
+        let tx = tx.clone();
+        tokio::spawn(async move {
+            while watch.changed().await.is_ok() {
+                let devices = watch.borrow_and_update().clone();
+                if tx.send(UiMessage::Nearby(devices)).is_err() {
+                    break;
+                }
+            }
+        })
+    });
     let handler = Arc::new(TuiHandler {
         tx,
         dest_dir: app.config.download_dir(),
@@ -41,6 +54,9 @@ pub async fn run_tui() -> Result<()> {
     terminal.show_cursor()?;
 
     server.abort();
+    if let Some(task) = nearby_task {
+        task.abort();
+    }
     engine.close().await;
     res
 }
@@ -75,13 +91,17 @@ where
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => {
                     while !app.pending.is_empty() {
-                        app.answer_pending_offer(false);
+                        app.answer_pending(false);
                     }
                     return Ok(());
                 }
                 KeyCode::Char('c') => app.copy_ticket_to_clipboard(),
-                KeyCode::Char('y') => app.answer_pending_offer(true),
-                KeyCode::Char('n') => app.answer_pending_offer(false),
+                KeyCode::Char('y') => app.answer_pending(true),
+                KeyCode::Char('n') => app.answer_pending(false),
+                KeyCode::Up => app.select(-1),
+                KeyCode::Down => app.select(1),
+                KeyCode::Char('p') => app.pair_selected(),
+                KeyCode::Char('r') => app.refresh_nearby(),
                 _ => {}
             }
         }

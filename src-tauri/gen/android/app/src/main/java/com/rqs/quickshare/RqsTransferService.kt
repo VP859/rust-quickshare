@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -36,15 +37,39 @@ class RqsTransferService : Service() {
     }
   }
 
+  /** Bez blokady sterownik Wi-Fi odrzuca pakiety broadcast/multicast wykrywania urządzeń. */
+  private var multicastLock: WifiManager.MulticastLock? = null
+
   override fun onBind(intent: Intent?): IBinder? = null
+
+  private fun acquireMulticastLock() {
+    if (multicastLock?.isHeld == true) return
+    try {
+      val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+      multicastLock = wifi.createMulticastLock("rqs-discovery").apply {
+        setReferenceCounted(false)
+        acquire()
+      }
+    } catch (e: Exception) {
+      Log.w(TAG, "Brak blokady multicast – wykrywanie w sieci lokalnej może nie działać", e)
+    }
+  }
+
+  override fun onDestroy() {
+    multicastLock?.takeIf { it.isHeld }?.release()
+    multicastLock = null
+    super.onDestroy()
+  }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (intent?.action == ACTION_STOP) {
+      multicastLock?.takeIf { it.isHeld }?.release()
       ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
       stopSelf()
       return START_NOT_STICKY
     }
     createChannel()
+    acquireMulticastLock()
     ServiceCompat.startForeground(
       this,
       NOTIFICATION_ID,

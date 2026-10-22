@@ -2,10 +2,12 @@ use anyhow::{Context, Result};
 use iroh::EndpointId;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc;
 
 use super::display::{TerminalProgress, print_ticket};
 use crate::config::Config;
+use crate::discovery::{Discovery, DiscoveryOptions};
 use crate::node::{NodeEngine, NodeTicket};
 use crate::protocol::messages::{ShareToken, TransferOffer};
 use crate::transfer::sender::{PreparedFile, prepare_file};
@@ -24,8 +26,31 @@ pub async fn run_send(files: &[PathBuf], to: Option<&str>) -> Result<()> {
     result
 }
 
+/// Czas na znalezienie odbiorcy w sieci lokalnej przed wysyłką.
+const NEARBY_LOOKUP: Duration = Duration::from_millis(1500);
+
 async fn send_to_peer(engine: &NodeEngine, files: &[PathBuf], target: &str) -> Result<()> {
-    let addr = Config::load()?.resolve_target(target)?;
+    let config = Config::load()?;
+    let resolved = config.resolve_target(target);
+    // Świeży adres z sieci lokalnej – transfer działa także bez dostępu do internetu,
+    // a `--to` przyjmuje też nazwę niesparowanego urządzenia z `rqs discover`.
+    let query = match &resolved {
+        Ok(addr) => addr.id.to_string(),
+        Err(_) => target.to_string(),
+    };
+    let nearby = match Discovery::start(
+        engine.clone(),
+        &config.device_name(),
+        DiscoveryOptions::default(),
+    ) {
+        Ok(d) => d.wait_for(&query, NEARBY_LOOKUP).await,
+        Err(_) => None,
+    };
+    let addr = match (nearby, resolved) {
+        (Some(device), _) => device.addr,
+        (None, Ok(addr)) => addr,
+        (None, Err(e)) => return Err(e),
+    };
     println!("Łączenie z {}...", addr.id);
     let progress = TerminalProgress::default();
     service::send_files(engine, addr, files, &|ev| progress.handle(ev)).await

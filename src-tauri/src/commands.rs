@@ -11,6 +11,8 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::node::AppState;
+use rqs_p2p::discovery::NearbyDevice;
+use rqs_p2p::pairing::{PairOutcome, clean_device_name, pairing_code, request_pairing};
 
 type CmdResult<T> = Result<T, String>;
 
@@ -180,12 +182,7 @@ pub async fn send_files(
     if paths.is_empty() {
         return Err("Nie wybrano plików".into());
     }
-    let addr = state
-        .config
-        .lock()
-        .await
-        .resolve_target(&target)
-        .map_err(err)?;
+    let addr = resolve_with_nearby(&state, &target).await?;
     let engine = state.engine().await?.clone();
     let mut local = Vec::with_capacity(paths.len());
     for p in &paths {
@@ -285,6 +282,104 @@ pub async fn set_download_dir(path: String, state: State<'_, AppState>) -> CmdRe
     let mut config = state.config.lock().await;
     config.default_download_dir = Some(dir);
     config.save().map_err(err)
+}
+
+/// Adres urządzenia: najpierw świeży z sieci lokalnej (działa bez internetu),
+/// potem zapisany w konfiguracji. Przyjmuje Node ID, alias, nazwę z „W pobliżu” lub TICKET.
+async fn resolve_with_nearby(state: &AppState, target: &str) -> CmdResult<iroh::EndpointAddr> {
+    let resolved = state.config.lock().await.resolve_target(target);
+    let nearby = state.discovery.get().and_then(|d| match &resolved {
+        Ok(addr) => d.addr_of(&addr.id),
+        Err(_) => d.find(target).map(|n| n.addr),
+    });
+    match (nearby, resolved) {
+        (Some(addr), _) => Ok(addr),
+        (None, Ok(addr)) => Ok(addr),
+        (None, Err(e)) => Err(err(e)),
+    }
+}
+
+#[tauri::command]
+pub fn list_nearby(state: State<'_, AppState>) -> Vec<NearbyDevice> {
+    state
+        .discovery
+        .get()
+        .map(|d| d.devices())
+        .unwrap_or_default()
+}
+
+/// Natychmiastowe ogłoszenie w sieci (przycisk „Szukaj”).
+#[tauri::command]
+pub fn refresh_nearby(state: State<'_, AppState>) -> CmdResult<()> {
+    let discovery = state
+        .discovery
+        .get()
+        .ok_or("Wykrywanie w sieci lokalnej jest niedostępne")?;
+    discovery.probe();
+    Ok(())
+}
+
+/// Kod weryfikacyjny wyświetlany przed wysłaniem prośby o sparowanie.
+#[tauri::command]
+pub async fn pair_code(node_id: String, state: State<'_, AppState>) -> CmdResult<String> {
+    let peer = iroh::EndpointId::from_str(&node_id).map_err(err)?;
+    Ok(pairing_code(&state.engine().await?.node_id(), &peer))
+}
+
+/// Paruje z urządzeniem jednym przyciskiem; zwraca nazwę zapisanego urządzenia.
+#[tauri::command]
+pub async fn pair_device(node_id: String, state: State<'_, AppState>) -> CmdResult<String> {
+    let addr = resolve_with_nearby(&state, &node_id).await?;
+    let engine = state.engine().await?;
+    let my_name = state.config.lock().await.device_name();
+    match request_pairing(engine, addr.clone(), &my_name)
+        .await
+        .map_err(|e| format!("{e:#}"))?
+    {
+        PairOutcome::Accepted { name, addr: remote } => {
+            let mut config = state.config.lock().await;
+            config
+                .add_paired(addr.id, &name, remote.or(Some(addr.clone())), false)
+                .map_err(err)?;
+            config.save().map_err(err)?;
+            Ok(config
+                .find_peer(&addr.id.to_string())
+                .map(|p| p.alias.clone())
+                .unwrap_or(name))
+        }
+        PairOutcome::Rejected => Err("Drugie urządzenie odrzuciło parowanie".into()),
+    }
+}
+
+#[derive(Serialize)]
+pub struct DeviceName {
+    pub name: String,
+    /// `true`, gdy użytkownik nie ustawił nazwy (frontend Androida podstawia model telefonu).
+    pub is_default: bool,
+}
+
+#[tauri::command]
+pub async fn get_device_name(state: State<'_, AppState>) -> CmdResult<DeviceName> {
+    let config = state.config.lock().await;
+    Ok(DeviceName {
+        name: config.device_name(),
+        is_default: config.device_name.is_none(),
+    })
+}
+
+#[tauri::command]
+pub async fn set_device_name(name: String, state: State<'_, AppState>) -> CmdResult<String> {
+    let clean = clean_device_name(&name);
+    if clean.is_empty() {
+        return Err("Nazwa nie może być pusta".into());
+    }
+    let mut config = state.config.lock().await;
+    config.device_name = Some(clean.clone());
+    config.save().map_err(err)?;
+    if let Some(d) = state.discovery.get() {
+        d.set_name(&clean);
+    }
+    Ok(clean)
 }
 
 /// Pliki przekazane z menu „Udostępnij” Androida (pusta lista na desktopie).

@@ -4,6 +4,9 @@
     <!-- Sieć: węzeł iroh (QUIC/UDP, hole punching, relay) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Wykrywanie urządzeń w sieci lokalnej (broadcast/multicast UDP, bez mDNS) -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <!-- Usługa pierwszoplanowa z powiadomieniem ciągłym – system nie zabija transferów w tle -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

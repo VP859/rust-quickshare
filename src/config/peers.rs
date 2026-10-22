@@ -22,6 +22,9 @@ pub struct PeerInfo {
 pub struct Config {
     pub peers: HashMap<String, PeerInfo>,
     pub default_download_dir: Option<PathBuf>,
+    /// Nazwa tego urządzenia widoczna przy wykrywaniu i parowaniu.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_name: Option<String>,
 }
 
 impl Config {
@@ -56,6 +59,44 @@ impl Config {
         self.default_download_dir
             .clone()
             .unwrap_or_else(super::paths::default_download_dir)
+    }
+
+    pub fn device_name(&self) -> String {
+        self.device_name
+            .as_deref()
+            .map(crate::pairing::clean_device_name)
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(super::paths::default_device_name)
+    }
+
+    /// Zapisuje urządzenie po udanym parowaniu. Istniejący wpis zachowuje alias
+    /// i Auto-Accept (zmieniane świadomie przez użytkownika), aktualizuje adres.
+    pub fn add_paired(
+        &mut self,
+        node_id: EndpointId,
+        name: &str,
+        addr: Option<EndpointAddr>,
+        auto_accept: bool,
+    ) -> Result<()> {
+        let key = node_id.to_string();
+        let ticket = match addr.filter(|a| a.id == node_id) {
+            Some(a) => Some(NodeTicket::new(a).serialize_to_string()?),
+            None => self.peers.get(&key).and_then(|p| p.ticket.clone()),
+        };
+        let (alias, auto_accept) = match self.peers.get(&key) {
+            Some(existing) => (existing.alias.clone(), existing.auto_accept || auto_accept),
+            None => {
+                let name = crate::pairing::clean_device_name(name);
+                let alias = if name.is_empty() {
+                    format!("Węzeł {}", &key[..8])
+                } else {
+                    name
+                };
+                (alias, auto_accept)
+            }
+        };
+        self.upsert_peer(key, alias, auto_accept, ticket);
+        Ok(())
     }
 
     pub fn add_peer(&mut self, node_id: String, alias: String, auto_accept: bool) {
@@ -167,6 +208,25 @@ mod tests {
         assert!(c.resolve_target("Laptop Biurowy").is_ok());
         assert!(c.remove_peer("LAPTOP BIUROWY"));
         assert!(c.peers.is_empty());
+    }
+
+    #[test]
+    fn add_paired_keeps_user_settings() -> Result<()> {
+        let mut c = Config::default();
+        let id = iroh::SecretKey::generate().public();
+        c.add_paired(id, "Laptop\nBiurowy", Some(id.into()), false)?;
+        let key = id.to_string();
+        assert_eq!(c.peers[&key].alias, "Laptop Biurowy");
+        assert!(c.peers[&key].ticket.is_some());
+        c.peers.get_mut(&key).unwrap().alias = "Mój laptop".into();
+        c.add_paired(id, "Inna nazwa", None, true)?;
+        assert_eq!(c.peers[&key].alias, "Mój laptop");
+        assert!(c.peers[&key].auto_accept);
+        // Adres innego węzła nie może zostać przypisany do tego wpisu.
+        let other = iroh::SecretKey::generate().public();
+        c.add_paired(other, "X", Some(id.into()), false)?;
+        assert!(c.peers[&other.to_string()].ticket.is_none());
+        Ok(())
     }
 
     #[test]

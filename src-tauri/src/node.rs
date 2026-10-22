@@ -1,9 +1,12 @@
-//! Węzeł P2P działający przez cały czas życia aplikacji GUI oraz handler,
-//! który przekazuje oferty i postęp transferów do frontendu.
+//! Węzeł P2P działający przez cały czas życia aplikacji GUI, wykrywanie urządzeń
+//! w sieci lokalnej oraz handler, który przekazuje oferty, prośby o sparowanie
+//! i postęp transferów do frontendu.
 
 use iroh::EndpointId;
 use rqs_p2p::config::Config;
+use rqs_p2p::discovery::{Discovery, DiscoveryOptions};
 use rqs_p2p::node::NodeEngine;
+use rqs_p2p::pairing::PairRequest;
 use rqs_p2p::protocol::messages::{ShareToken, TransferOffer};
 use rqs_p2p::transfer::sender::PreparedFile;
 use rqs_p2p::transfer::service::{
@@ -21,6 +24,8 @@ use tracing::warn;
 
 /// Po tym czasie oferta bez odpowiedzi jest odrzucana.
 const DECISION_TIMEOUT: Duration = Duration::from_secs(120);
+/// Czas na potwierdzenie parowania w interfejsie (rdzeń czeka 60 s).
+const PAIR_UI_TIMEOUT: Duration = Duration::from_secs(55);
 
 pub struct AppState {
     engine: OnceCell<NodeEngine>,
@@ -29,6 +34,8 @@ pub struct AppState {
     pub shares: std::sync::Mutex<HashMap<ShareToken, PreparedFile>>,
     /// Katalog odbioru ustalony przy starcie (na Androidzie zależny od uprawnień).
     pub platform_download_dir: OnceLock<PathBuf>,
+    /// Wykrywanie w sieci lokalnej (brak, gdy nie udało się otworzyć gniazda UDP).
+    pub discovery: OnceLock<Discovery>,
 }
 
 impl AppState {
@@ -39,6 +46,7 @@ impl AppState {
             pending: Mutex::new(HashMap::new()),
             shares: std::sync::Mutex::new(HashMap::new()),
             platform_download_dir: OnceLock::new(),
+            discovery: OnceLock::new(),
         }
     }
 
@@ -61,6 +69,14 @@ impl AppState {
             (None, None) => config.download_dir(),
         }
     }
+}
+
+#[derive(Clone, Serialize)]
+pub struct IncomingPair {
+    pub id: String,
+    pub peer: String,
+    pub name: String,
+    pub code: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -165,6 +181,62 @@ impl TransferHandler for GuiHandler {
         self.state().shares.lock().ok()?.get(token).cloned()
     }
 
+    fn device_name(&self) -> String {
+        // Wywoływane w kontekście async – nie blokujemy, gdy konfiguracja jest zajęta.
+        self.state()
+            .config
+            .try_lock()
+            .map(|c| c.device_name())
+            .unwrap_or_else(|_| rqs_p2p::config::paths::default_device_name())
+    }
+
+    async fn confirm_pair(&self, req: PairRequest) -> bool {
+        let state = self.state();
+        let id = uuid_like(&req);
+        let (tx, rx) = oneshot::channel();
+        state.pending.lock().await.insert(id.clone(), tx);
+        let _ = self.app.emit(
+            "pair-request",
+            IncomingPair {
+                id: id.clone(),
+                peer: req.peer.to_string(),
+                name: req.name.clone(),
+                code: req.code.clone(),
+            },
+        );
+        self.notify(
+            "Prośba o sparowanie",
+            &format!("{} – kod {}", req.name, req.code),
+        );
+
+        // Nieco krócej niż limit rdzenia, aby posprzątać i zamknąć okno dialogowe.
+        let accepted = matches!(
+            tokio::time::timeout(PAIR_UI_TIMEOUT, rx).await,
+            Ok(Ok(true))
+        );
+        if state.pending.lock().await.remove(&id).is_some() {
+            let _ = self.app.emit("pair-cancelled", id);
+        }
+        if !accepted {
+            return false;
+        }
+        let mut config = state.config.lock().await;
+        let saved = config
+            .add_paired(req.peer, &req.name, req.addr, false)
+            .and_then(|()| config.save());
+        drop(config);
+        match saved {
+            Ok(()) => {
+                let _ = self.app.emit("peers-changed", ());
+                true
+            }
+            Err(e) => {
+                warn!("Nie udało się zapisać sparowanego urządzenia: {e:#}");
+                false
+            }
+        }
+    }
+
     fn on_event(&self, event: TransferEvent) {
         if event.direction == Direction::Download
             && let TransferStatus::Completed { .. } = event.status
@@ -175,6 +247,38 @@ impl TransferHandler for GuiHandler {
     }
 }
 
+/// Identyfikator prośby o sparowanie (unikalny dla urządzenia i chwili).
+fn uuid_like(req: &PairRequest) -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    format!("pair-{}-{nanos}", req.peer.fmt_short())
+}
+
+/// Uruchamia wykrywanie w sieci lokalnej i przekazuje zmiany listy do frontendu (`nearby`).
+fn start_discovery(app: &AppHandle, engine: &NodeEngine, name: &str) {
+    let discovery = match Discovery::start(engine.clone(), name, DiscoveryOptions::default()) {
+        Ok(d) => d,
+        Err(e) => {
+            warn!("Wykrywanie w sieci lokalnej niedostępne: {e:#}");
+            return;
+        }
+    };
+    let mut watch = discovery.subscribe();
+    let state = app.state::<AppState>();
+    if state.discovery.set(discovery).is_err() {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while watch.changed().await.is_ok() {
+            let devices = watch.borrow_and_update().clone();
+            let _ = app.emit("nearby", devices);
+        }
+    });
+}
+
 /// Uruchamia węzeł i pętlę nasłuchu w tle (wywoływane w `setup`).
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -182,6 +286,8 @@ pub fn start(app: AppHandle) {
         match state.engine().await {
             Ok(engine) => {
                 let _ = app.emit("node-ready", engine.node_id().to_string());
+                let name = state.config.lock().await.device_name();
+                start_discovery(&app, engine, &name);
                 let handler = Arc::new(GuiHandler { app: app.clone() });
                 service::serve(engine.clone(), handler).await;
             }

@@ -50,6 +50,8 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 iroh = { workspace = true }
 qrcode = { version = "0.14.1", default-features = false }
+socket2 = { version = "0.6.5", features = ["all"] }
+gethostname = "1.1.0"
 
 # ---------------------------------------------------------------------------
 # Zależności specyficzne dla platformy (Android NDK nie obsługuje X11/Wayland

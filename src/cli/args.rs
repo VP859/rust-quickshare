@@ -33,6 +33,22 @@ pub enum Commands {
     Tui,
     /// Wyświetla TICKET tego urządzenia (tekst + kod QR) do sparowania.
     Ticket,
+    /// Wyszukuje urządzenia RQS w sieci lokalnej (bez mDNS – własny broadcast UDP).
+    Discover {
+        /// Czas wyszukiwania w sekundach.
+        #[arg(short, long, default_value_t = 5)]
+        timeout: u64,
+    },
+    /// Paruje z urządzeniem z sieci lokalnej (nazwa lub Node ID z `rqs discover`)
+    /// – druga strona potwierdza, obie pokazują ten sam kod.
+    Pair {
+        target: String,
+        /// Od razu włącz Auto-Accept dla sparowanego urządzenia.
+        #[arg(long, default_value_t = false)]
+        auto_accept: bool,
+    },
+    /// Pokazuje lub zmienia nazwę tego urządzenia widoczną dla innych.
+    Name { name: Option<String> },
     /// Zarządzanie zaufanymi urządzeniami.
     Peer {
         #[command(subcommand)]

@@ -1,2 +1,5 @@
 /target/
 Cargo.lock
+dist-out/*
+*.tar.xz
+*tar.xz.sha256
