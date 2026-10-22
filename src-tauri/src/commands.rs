@@ -113,6 +113,7 @@ pub async fn add_peer(
     input: String,
     alias: String,
     auto_accept: bool,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> CmdResult<String> {
     let mut config = state.config.lock().await;
@@ -126,7 +127,96 @@ pub async fn add_peer(
         return Err("To jest TICKET tego urządzenia".into());
     }
     config.save().map_err(err)?;
+    let saved_alias = config
+        .find_peer(&node_id)
+        .map(|p| p.alias.clone())
+        .unwrap_or_default();
+    drop(config);
+    // Prośba o sparowanie: po akceptacji druga strona też zapisze to urządzenie
+    // jako zaufane (bez niej zaufanie byłoby tylko jednostronne).
+    start_pairing_after_add(app, node_id.clone(), saved_alias, auto_accept);
     Ok(node_id)
+}
+
+#[derive(Clone, Serialize)]
+struct PairResult {
+    node_id: String,
+    alias: String,
+    ok: bool,
+    message: String,
+}
+
+fn start_pairing_after_add(app: AppHandle, node_id: String, alias: String, auto_accept: bool) {
+    tauri::async_runtime::spawn(async move {
+        let state = app.state::<AppState>();
+        let outcome = async {
+            let addr = resolve_with_nearby(&state, &node_id).await?;
+            let engine = state.engine().await?;
+            let my_name = state.config.lock().await.device_name();
+            let result = request_pairing(engine, addr.clone(), &my_name)
+                .await
+                .map_err(|e| format!("{e:#}"))?;
+            Ok::<_, String>((addr, result))
+        }
+        .await;
+        let (ok, message) = match outcome {
+            Ok((addr, PairOutcome::Accepted { addr: remote, .. })) => {
+                let mut config = state.config.lock().await;
+                let saved = config
+                    .add_paired(addr.id, &alias, remote, auto_accept)
+                    .and_then(|()| config.save());
+                match saved {
+                    Ok(()) => (true, format!("Sparowano obustronnie z „{alias}”")),
+                    Err(e) => (false, format!("Błąd zapisu: {e:#}")),
+                }
+            }
+            Ok((_, PairOutcome::Rejected)) => (
+                false,
+                format!("„{alias}” odrzuciło parowanie – dodano tylko na tym urządzeniu"),
+            ),
+            Err(e) => (
+                false,
+                format!("„{alias}” dodano tylko na tym urządzeniu (parowanie nieudane: {e})"),
+            ),
+        };
+        let _ = app.emit(
+            "pair-result",
+            PairResult {
+                node_id,
+                alias,
+                ok,
+                message,
+            },
+        );
+    });
+}
+
+/// Otwiera odebrany plik (`reveal` – folder z plikiem). Tylko pliki odebrane w tej sesji.
+#[tauri::command]
+pub fn open_received(path: String, reveal: bool, state: State<'_, AppState>) -> CmdResult<()> {
+    let path = PathBuf::from(path);
+    let allowed = state
+        .received
+        .lock()
+        .map(|r| r.contains(&path))
+        .unwrap_or(false);
+    if !allowed {
+        return Err("Można otwierać tylko odebrane pliki".into());
+    }
+    let result = if reveal {
+        rqs_p2p::system::reveal_path(&path)
+    } else {
+        rqs_p2p::system::open_path(&path)
+    };
+    result.map_err(err)
+}
+
+#[tauri::command]
+pub fn discovery_health(state: State<'_, AppState>) -> Option<String> {
+    match state.discovery.get() {
+        Some(d) => d.health().hint(),
+        None => Some("Wykrywanie w sieci lokalnej jest niedostępne na tym urządzeniu.".into()),
+    }
 }
 
 #[tauri::command]
@@ -253,7 +343,8 @@ pub async fn receive_from_ticket(
     let engine = state.engine().await?.clone();
     let dest_dir = state.download_dir().await;
     tauri::async_runtime::spawn(async move {
-        let sink = |ev| {
+        let sink = |ev: service::TransferEvent| {
+            app.state::<AppState>().record_download(&ev);
             let _ = app.emit("transfer", ev);
         };
         if let Err(e) = service::pull_shared(&engine, &ticket, &dest_dir, &sink).await {

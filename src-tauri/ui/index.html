@@ -163,6 +163,7 @@
       <div><div>Auto-Accept</div><div class="muted">Pliki od tego urządzenia będą przyjmowane bez pytania</div></div>
       <label class="switch"><input type="checkbox" id="peer-auto"><span></span></label>
     </div>
+    <p class="muted" id="peer-pair-hint">Po zapisaniu drugie urządzenie dostanie prośbę o sparowanie (z kodem) – po jej akceptacji również doda to urządzenie do zaufanych.</p>
     <div class="modal-actions">
       <button id="btn-peer-cancel">Anuluj</button>
       <button class="primary" id="btn-peer-save">Zapisz</button>
@@ -410,6 +411,7 @@
     editing = peer;
     $('peer-title').textContent = peer ? `Edytuj: ${peer.alias}` : 'Dodaj Urządzenie';
     $('peer-input-field').style.display = peer ? 'none' : '';
+    $('peer-pair-hint').style.display = peer ? 'none' : '';
     $('peer-input').value = prefill;
     $('peer-alias').value = peer?.alias ?? '';
     $('peer-auto').checked = peer?.auto_accept ?? false;
@@ -431,7 +433,7 @@
         if (!input) return toast('Wklej TICKET lub Node ID', true);
         const id = await invoke('add_peer', { input, alias, autoAccept });
         online.delete(id);
-        toast('Dodano urządzenie');
+        toast('Dodano urządzenie – wysłano prośbę o sparowanie');
       }
       close('modal-peer');
       await refreshPeers();
@@ -457,7 +459,9 @@
     const box = $('nearby');
     box.replaceChildren();
     if (!nearby.length) {
-      box.append(el('p', { class: 'empty' }, 'Szukanie urządzeń RQS w sieci lokalnej… Uruchom aplikację na drugim urządzeniu w tej samej sieci. Gdy VPN blokuje sieć lokalną, użyj „Mój TICKET”.'));
+      const hint = el('p', { class: 'empty', style: 'color: var(--warn)' });
+      box.append(el('p', { class: 'empty' }, 'Szukanie urządzeń RQS w sieci lokalnej… Uruchom aplikację na drugim urządzeniu w tej samej sieci. Gdy VPN blokuje sieć lokalną, użyj „Mój TICKET”.'), hint);
+      invoke('discovery_health').then(h => { if (h) hint.textContent = h; }).catch(() => {});
       return;
     }
     for (const d of nearby) {
@@ -674,10 +678,17 @@
     row.el.className = 'transfer' + (kind === 'completed' ? ' done' : kind === 'failed' || kind === 'rejected' ? ' failed' : '');
     const bar = el('div', { class: 'bar' }, el('div'));
     bar.firstChild.style.width = pct + '%';
-    row.el.replaceChildren(
+    const parts = [
       el('div', { class: 'row' }, el('span', { class: 'name' }, (ev.direction === 'upload' ? '↑ ' : '↓ ') + ev.file_name), el('span', { class: 'muted' }, peer)),
       bar,
-      el('div', { class: 'muted', style: 'word-break: break-all' }, detail));
+      el('div', { class: 'muted', style: 'word-break: break-all' }, detail)];
+    if (kind === 'completed' && ev.direction === 'download' && ev.status.path && !isMobile) {
+      const openFile = (reveal) => invoke('open_received', { path: ev.status.path, reveal }).catch(fail);
+      parts.push(el('div', { class: 'card-actions' },
+        el('button', { onclick: () => openFile(false) }, 'Otwórz'),
+        el('button', { onclick: () => openFile(true) }, 'Pokaż w folderze')));
+    }
+    row.el.replaceChildren(...parts);
   }
   $('btn-clear').onclick = () => {
     for (const [id, row] of transfers) {
@@ -751,6 +762,11 @@
     await listen('node-error', ({ payload }) => fail(payload));
     await listen('nearby', ({ payload }) => setNearby(payload));
     await listen('peers-changed', async () => { await refreshPeers(); renderNearby(); });
+    await listen('pair-result', async ({ payload }) => {
+      toast(payload.message, !payload.ok);
+      await refreshPeers();
+      renderNearby();
+    });
     await listen('pair-request', ({ payload }) => { pairRequests.push(payload); if (pairRequests.length === 1) showNextPairRequest(); else $('pair-req-queue').textContent = `W kolejce: ${pairRequests.length - 1}`; });
     await listen('pair-cancelled', ({ payload }) => {
       const i = pairRequests.findIndex(r => r.id === payload);

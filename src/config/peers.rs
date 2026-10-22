@@ -141,11 +141,13 @@ impl Config {
                 t.addr.id.to_string(),
                 Some(NodeTicket::new(t.addr).serialize_to_string()?),
             ),
-            Err(_) => {
-                let id = EndpointId::from_str(input)
-                    .map_err(|_| anyhow::anyhow!("Nieprawidłowy TICKET lub Node ID"))?;
-                (id.to_string(), None)
-            }
+            Err(ticket_err) => match EndpointId::from_str(input) {
+                Ok(id) => (id.to_string(), None),
+                Err(_) if NodeTicket::looks_like_ticket(input) => return Err(ticket_err),
+                Err(_) => anyhow::bail!(
+                    "Nieprawidłowy Node ID (oczekiwano 64 znaków szesnastkowych) ani TICKET"
+                ),
+            },
         };
         let alias = match alias.trim() {
             "" => format!("Węzeł {}", &node_id[..8]),

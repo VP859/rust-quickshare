@@ -1,8 +1,8 @@
 use anyhow::Result;
 use clap::Parser;
 
-use rqs_p2p::cli::args::{Cli, Commands};
-use rqs_p2p::cli::nearby_cmd::{run_discover, run_name, run_pair};
+use rqs_p2p::cli::args::{Cli, Commands, PeerCommands};
+use rqs_p2p::cli::nearby_cmd::{run_discover, run_name, run_pair, run_peer_add};
 use rqs_p2p::cli::peer_cmd::handle_peer_cmd;
 use rqs_p2p::cli::transfer_cmd::{run_receive, run_send, run_show_ticket};
 use rqs_p2p::daemon::run_daemon;
@@ -40,6 +40,15 @@ async fn main() -> Result<()> {
             auto_accept,
         } => run_pair(&target, auto_accept).await?,
         Commands::Name { name } => run_name(name.as_deref())?,
+        Commands::Peer {
+            command:
+                PeerCommands::Add {
+                    ticket,
+                    alias,
+                    auto_accept,
+                    no_pair,
+                },
+        } => run_peer_add(&ticket, &alias, auto_accept, no_pair).await?,
         Commands::Peer { command } => handle_peer_cmd(command)?,
         Commands::Doctor => {
             run_doctor().await?;

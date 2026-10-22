@@ -43,6 +43,8 @@ pub async fn run_doctor() -> Result<DoctorReport> {
         println!("[✓] VPN: Brak aktywnych przeszkadzających interfejsów tunelowych.");
     }
 
+    check_discovery().await;
+
     let config_ok = match crate::config::Config::load() {
         Ok(_) => {
             println!("[✓] Konfiguracja: Plik konfiguracyjny jest poprawny.\n");
@@ -60,6 +62,51 @@ pub async fn run_doctor() -> Result<DoctorReport> {
         vpn_interface_detected: vpn_detected,
         config_valid: config_ok,
     })
+}
+
+/// Sprawdza wykrywanie urządzeń w sieci lokalnej (UDP broadcast/multicast, bez mDNS).
+async fn check_discovery() {
+    use crate::discovery::{DISCOVERY_PORT, Discovery, DiscoveryOptions};
+    let config = crate::config::Config::load().unwrap_or_default();
+    let engine = match crate::node::NodeEngine::with_persistent_identity().await {
+        Ok(e) => e,
+        Err(e) => {
+            println!("[✗] Wykrywanie: nie uruchomiono węzła ({e:#})");
+            return;
+        }
+    };
+    match Discovery::start(
+        engine.clone(),
+        &config.device_name(),
+        DiscoveryOptions::default(),
+    ) {
+        Ok(discovery) => {
+            discovery.probe();
+            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+            let health = discovery.health();
+            let devices = discovery.devices();
+            println!(
+                "[{}] Wykrywanie (UDP {DISCOVERY_PORT}): sieci lokalne: {}, wysyłanie do LAN: {}, odebrane ogłoszenia: {}, urządzenia w pobliżu: {}",
+                if health.hint().is_none() { "✓" } else { "!" },
+                health.networks,
+                if health.lan_send_ok {
+                    "OK"
+                } else {
+                    "ZABLOKOWANE"
+                },
+                health.beacons_received,
+                devices.len()
+            );
+            for d in &devices {
+                println!("      • {} ({})", d.name, d.platform);
+            }
+            if let Some(hint) = health.hint() {
+                println!("      {hint}");
+            }
+        }
+        Err(e) => println!("[✗] Wykrywanie: {e:#}"),
+    }
+    engine.close().await;
 }
 async fn check_stun_reachability() -> bool {
     if let Ok(socket) = tokio::net::UdpSocket::bind("0.0.0.0:0").await {

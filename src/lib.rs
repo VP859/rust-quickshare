@@ -5,6 +5,7 @@ pub mod discovery;
 pub mod node;
 pub mod pairing;
 pub mod protocol;
+pub mod system;
 pub mod telemetry;
 pub mod transfer;
 pub mod tui;

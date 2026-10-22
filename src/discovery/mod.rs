@@ -87,11 +87,55 @@ struct Entry {
     seen: Instant,
 }
 
+/// Stan wykrywania – pozwala interfejsom wyjaśnić, dlaczego lista jest pusta.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct DiscoveryHealth {
+    /// Gniazdo nasłuchuje na standardowym porcie (inaczej nie odbieramy ogłoszeń).
+    pub listening: bool,
+    /// Liczba sieci lokalnych IPv4 (Wi-Fi/LAN) w ostatniej rundzie ogłoszeń.
+    pub networks: usize,
+    /// W ostatniej rundzie przynajmniej jedno ogłoszenie trafiło do sieci lokalnej.
+    pub lan_send_ok: bool,
+    /// Ostatni błąd wysyłki do sieci lokalnej (np. EPERM przy VPN lub zaporze).
+    pub lan_send_error: Option<String>,
+    /// Liczba odebranych ogłoszeń od innych urządzeń.
+    pub beacons_received: u64,
+}
+
+impl DiscoveryHealth {
+    /// Wskazówka dla użytkownika, gdy wykrywanie nie może działać w pełni.
+    pub fn hint(&self) -> Option<String> {
+        if !self.listening {
+            return Some(format!(
+                "Port UDP {DISCOVERY_PORT} jest zajęty przez inny program – to urządzenie nie odbiera ogłoszeń."
+            ));
+        }
+        if self.networks == 0 {
+            return Some("Brak połączenia z siecią lokalną (Wi-Fi/LAN).".into());
+        }
+        if !self.lan_send_ok {
+            return Some(format!(
+                "Wysyłanie do sieci lokalnej jest blokowane ({}) – zwykle przez VPN lub zaporę. \
+                 NordVPN: nordvpn set lan-discovery on. Możesz też użyć TICKETU.",
+                self.lan_send_error.as_deref().unwrap_or("nieznany błąd")
+            ));
+        }
+        if self.beacons_received == 0 {
+            return Some(format!(
+                "Nie odebrano jeszcze żadnych ogłoszeń. Sprawdź, czy drugie urządzenie jest w tej samej \
+                 sieci, a zapory na obu urządzeniach przepuszczają UDP {DISCOVERY_PORT}."
+            ));
+        }
+        None
+    }
+}
+
 struct Shared {
     name: RwLock<String>,
     devices: Mutex<HashMap<EndpointId, Entry>>,
     probe: Notify,
     tx: watch::Sender<Vec<NearbyDevice>>,
+    health: Mutex<DiscoveryHealth>,
 }
 
 impl Shared {
@@ -117,8 +161,10 @@ impl Drop for Discovery {
 impl Discovery {
     /// Uruchamia ogłaszanie i nasłuch (wymaga środowiska tokio).
     pub fn start(engine: NodeEngine, name: &str, opts: DiscoveryOptions) -> Result<Self> {
+        let mut listening = true;
         let std_socket = bind(opts.port)
             .or_else(|e| {
+                listening = false;
                 // Port zajęty bez SO_REUSEADDR – nadal możemy ogłaszać i odbierać odpowiedzi.
                 warn!(
                     "Port wykrywania {} niedostępny ({e}) – tryb ograniczony",
@@ -134,9 +180,21 @@ impl Discovery {
             devices: Mutex::new(HashMap::new()),
             probe: Notify::new(),
             tx,
+            health: Mutex::new(DiscoveryHealth {
+                listening,
+                ..Default::default()
+            }),
         });
         let task = tokio::spawn(run(engine, socket, opts, shared.clone()));
         Ok(Self { shared, task })
+    }
+
+    pub fn health(&self) -> DiscoveryHealth {
+        self.shared
+            .health
+            .lock()
+            .map(|h| h.clone())
+            .unwrap_or_default()
     }
 
     pub fn devices(&self) -> Vec<NearbyDevice> {
@@ -278,37 +336,83 @@ async fn announce(
     let Some(bytes) = encode_beacon(engine, shared, false) else {
         return;
     };
-    if let Some(targets) = &opts.targets {
-        for target in targets {
-            send(socket, &bytes, *target).await;
+    // Wyniki wysyłek do sieci lokalnej (bez loopbacku i 255.255.255.255, który
+    // przy VPN trafia zwykle do tunelu) – na ich podstawie powstaje diagnostyka.
+    let mut lan = LanSendStats::default();
+    let networks = match &opts.targets {
+        Some(targets) => {
+            for target in targets {
+                lan.record(send(socket, &bytes, *target).await);
+            }
+            1
         }
-        return;
-    }
+        None => {
+            let networks = local_networks(engine);
+            send(
+                socket,
+                &bytes,
+                SocketAddrV4::new(Ipv4Addr::BROADCAST, opts.port).into(),
+            )
+            .await
+            .ok();
+            for ip in networks
+                .iter()
+                .filter_map(|(_, b)| *b)
+                .collect::<BTreeSet<_>>()
+            {
+                lan.record(send(socket, &bytes, SocketAddrV4::new(ip, opts.port).into()).await);
+            }
 
-    let networks = local_networks(engine);
-    let mut broadcasts: BTreeSet<Ipv4Addr> = BTreeSet::from([Ipv4Addr::BROADCAST]);
-    broadcasts.extend(networks.iter().filter_map(|(_, b)| *b));
-    for ip in broadcasts {
-        send(socket, &bytes, SocketAddrV4::new(ip, opts.port).into()).await;
-    }
+            // Multicast przez każdy interfejs, w tym loopback (instancje na tym komputerze).
+            let group: SocketAddr = SocketAddrV4::new(MULTICAST_GROUP, opts.port).into();
+            if socket2::SockRef::from(socket)
+                .set_multicast_if_v4(&Ipv4Addr::LOCALHOST)
+                .is_ok()
+            {
+                send(socket, &bytes, group).await.ok();
+            }
+            for (iface, _) in &networks {
+                if socket2::SockRef::from(socket)
+                    .set_multicast_if_v4(iface)
+                    .is_ok()
+                {
+                    lan.record(send(socket, &bytes, group).await);
+                }
+            }
+            networks.len()
+        }
+    };
 
-    // Multicast wysyłany przez każdy interfejs, w tym loopback (instancje na tym komputerze).
-    let group: SocketAddr = SocketAddrV4::new(MULTICAST_GROUP, opts.port).into();
-    let interfaces = std::iter::once(Ipv4Addr::LOCALHOST).chain(networks.iter().map(|(ip, _)| *ip));
-    for iface in interfaces {
-        if socket2::SockRef::from(socket)
-            .set_multicast_if_v4(&iface)
-            .is_ok()
-        {
-            send(socket, &bytes, group).await;
+    if let Ok(mut health) = shared.health.lock() {
+        health.networks = networks;
+        health.lan_send_ok = lan.ok;
+        health.lan_send_error = if lan.ok { None } else { lan.error };
+    }
+}
+
+#[derive(Default)]
+struct LanSendStats {
+    ok: bool,
+    error: Option<String>,
+}
+
+impl LanSendStats {
+    fn record(&mut self, result: std::io::Result<()>) {
+        match result {
+            Ok(()) => self.ok = true,
+            Err(e) => self.error = Some(e.to_string()),
         }
     }
 }
 
-async fn send(socket: &UdpSocket, bytes: &[u8], target: SocketAddr) {
-    if let Err(e) = socket.send_to(bytes, target).await {
-        debug!("Nie wysłano ogłoszenia do {target}: {e}");
-    }
+async fn send(socket: &UdpSocket, bytes: &[u8], target: SocketAddr) -> std::io::Result<()> {
+    socket
+        .send_to(bytes, target)
+        .await
+        .map(|_| ())
+        .inspect_err(|e| {
+            debug!("Nie wysłano ogłoszenia do {target}: {e}");
+        })
 }
 
 /// Dołącza do grupy multicast na loopbacku i każdym interfejsie (pomija już dołączone).
@@ -344,6 +448,9 @@ async fn handle_packet(
     };
     if beacon.magic != MAGIC || beacon.addr.id == engine.node_id() {
         return;
+    }
+    if let Ok(mut health) = shared.health.lock() {
+        health.beacons_received += 1;
     }
 
     let id = beacon.addr.id;

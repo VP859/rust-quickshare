@@ -1,5 +1,91 @@
-/target/
-Cargo.lock
-dist-out/*
+# =============================================================================
+# RQS P2P Quick Share – co NIE trafia do repozytorium.
+# Śledzimy kod źródłowy, konfigurację, dokumentację i pliki potrzebne do budowania.
+# =============================================================================
+
+# ---- Rust: artefakty kompilacji ---------------------------------------------
+target/
+**/target/
+# Cargo.lock celowo NIE jest tutaj: to aplikacja (binarka), więc lockfile
+# zapewnia powtarzalne buildy i musi być w repozytorium.
+
+# ---- Paczki i wyniki pakowania (cargo-dist, lokalne buildy) -----------------
+dist-out/
 *.tar.xz
-*tar.xz.sha256
+*.tar.gz
+*.zip
+*.sha256
+SHA256SUMS.txt
+*.deb
+*.rpm
+*.AppImage
+*.msi
+*.exe
+*.dmg
+*.pkg
+*.apk
+*.aab
+target/distrib/
+
+# ---- Android: wygenerowane przez Gradle / Tauri (nie ręczne pliki projektu) --
+**/.gradle/
+**/.kotlin/
+/src-tauri/gen/android/build/
+/src-tauri/gen/android/app/build/
+/src-tauri/gen/android/buildSrc/build/
+/src-tauri/gen/android/app/src/main/jniLibs/
+/src-tauri/gen/android/app/src/main/assets/
+/src-tauri/gen/android/app/src/main/java/com/rqs/quickshare/generated/
+/src-tauri/gen/android/app/tauri.properties
+/src-tauri/gen/android/app/tauri.build.gradle.kts
+/src-tauri/gen/android/app/proguard-tauri.pro
+/src-tauri/gen/android/tauri.settings.gradle
+/src-tauri/gen/android/.tauri/
+# Lokalne ustawienia SDK i podpisywania – nigdy w repozytorium.
+local.properties
+keystore.properties
+*.jks
+*.keystore
+*.p12
+
+# ---- Tauri: generowane schematy uprawnień (odtwarzane przy każdym buildzie) --
+/src-tauri/gen/schemas/
+
+# ---- Sekrety i lokalna konfiguracja użytkownika ------------------------------
+.env
+.env.*
+!.env.example
+secret.key
+*.pem
+*.key
+config.toml
+.claude/settings.local.json
+
+# ---- Dane testowe i pliki robocze ------------------------------------------
+*.part
+*.log
+*.tmp
+*.bak
+*.orig
+*.rej
+/tmp/
+/scratch/
+/rqs-test/
+*.bin
+!src-tauri/icons/**
+
+# ---- Systemy operacyjne i edytory -------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+*.iml
+.vscode/*
+!.vscode/settings.json
+
+# ---- Node (frontend Tauri / narzędzia npm) ----------------------------------
+node_modules/
+npm-debug.log*
+package-lock.json

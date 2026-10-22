@@ -28,7 +28,7 @@ rqs pair "Laptop"                            # pairing: the other side confirms,
 rqs name "My laptop"                         # this device's name visible to others
 
 rqs ticket                                   # this device's TICKET + QR code (pairing outside the LAN)
-rqs peer add <TICKET> --alias "Laptop" --auto-accept
+rqs peer add <TICKET> --alias "Laptop" --auto-accept   # + pairing request (--no-pair: only on this side)
 rqs peer list | rqs peer edit Laptop --auto-accept false | rqs peer remove Laptop
 
 rqs daemon                                   # receive in the background (Auto-Accept for trusted)
@@ -37,12 +37,28 @@ rqs send film.mkv notes.pdf --to Laptop      # send by alias, nearby name, NodeI
 rqs send film.mkv                            # share via a one-time TICKET (prints QR)
 rqs receive <TICKET> ~/Downloads             # download a shared file
 
-rqs tui                                      # terminal UI: offers [y/n], progress, devices
-rqs doctor                                   # network/config diagnostics
+rqs tui                                      # terminal UI (see below)
+rqs doctor                                   # network, local network discovery and config diagnostics
 ```
 
 Set `RQS_CONFIG_DIR` to run several independent identities on one machine (e.g. for testing).
 Configuration lives in `~/.config/rqs/` (`config.toml`, `secret.key`).
+
+### TUI (`rqs tui`)
+
+Panels: **[1] Trusted devices**, **[2] Nearby**, **[3] Transfers** (`Tab` / `1 2 3` switches, `↑↓` selects).
+
+| Key | Action |
+|-----|--------|
+| `Enter` / `s` | send a file to the selected device (`Tab` completes the path; you can drag a file into the terminal) |
+| `p` | pair with a nearby device |
+| `i` / `+` | add a device by TICKET or Node ID (+ pairing request) |
+| `e` / `a` / `x` | rename / toggle Auto-Accept / remove device |
+| `o` / `f` | open the received file / its folder |
+| `t` / `c` | this device's TICKET with QR code / copy TICKET |
+| `g` / `N` | download folder / device name |
+| `y` / `n` | answer a file offer or pairing request |
+| `?` | help |
 
 ### Running as a service
 
@@ -72,6 +88,12 @@ running in the system tray.
   switch can block the local network (e.g. NordVPN: `nordvpn set lan-discovery on`). Then use
   **My TICKET** / QR – it works over the internet as well.
 * Android holds a `MulticastLock` in the foreground service; its device name is the phone's model.
+* When the list stays empty, every interface (GUI, TUI, `rqs discover`, `rqs doctor`) shows the
+  reason: LAN sending blocked (VPN/firewall), no local network, or no announcements received.
+* Adding a device manually (TICKET/Node ID) in any interface also sends a pairing request – once
+  the other side accepts, both devices trust each other.
+* A TICKET pasted with line breaks or spaces (wrapped in a terminal) is accepted; a truncated
+  TICKET produces a clear error.
 
 ## Protocol (ALPN `rqs/0.2`)
 

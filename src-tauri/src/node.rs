@@ -36,6 +36,8 @@ pub struct AppState {
     pub platform_download_dir: OnceLock<PathBuf>,
     /// Wykrywanie w sieci lokalnej (brak, gdy nie udało się otworzyć gniazda UDP).
     pub discovery: OnceLock<Discovery>,
+    /// Odebrane pliki – tylko je wolno otworzyć z poziomu interfejsu.
+    pub received: std::sync::Mutex<std::collections::HashSet<PathBuf>>,
 }
 
 impl AppState {
@@ -47,6 +49,17 @@ impl AppState {
             shares: std::sync::Mutex::new(HashMap::new()),
             platform_download_dir: OnceLock::new(),
             discovery: OnceLock::new(),
+            received: std::sync::Mutex::new(std::collections::HashSet::new()),
+        }
+    }
+
+    /// Zapamiętuje ścieżkę ukończonego pobrania (zezwolenie na „Otwórz”).
+    pub fn record_download(&self, event: &TransferEvent) {
+        if event.direction == Direction::Download
+            && let TransferStatus::Completed { path: Some(p) } = &event.status
+            && let Ok(mut received) = self.received.lock()
+        {
+            received.insert(PathBuf::from(p));
         }
     }
 
@@ -238,6 +251,7 @@ impl TransferHandler for GuiHandler {
     }
 
     fn on_event(&self, event: TransferEvent) {
+        self.state().record_download(&event);
         if event.direction == Direction::Download
             && let TransferStatus::Completed { .. } = event.status
         {

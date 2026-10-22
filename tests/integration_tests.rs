@@ -348,6 +348,12 @@ async fn discovery_finds_peer_on_local_network() -> Result<()> {
             .context("B nie wykrył A")?;
         assert_eq!(seen_by_b.name, "Laptop A");
 
+        // Diagnostyka: ogłoszenia wysłane i odebrane – brak wskazówki o problemie.
+        let health = db.health();
+        assert!(health.listening && health.lan_send_ok, "{health:?}");
+        assert!(health.beacons_received > 0, "{health:?}");
+        assert_eq!(health.hint(), None);
+
         // Zmiana nazwy jest rozgłaszana od razu.
         da.set_name("Laptop Biurowy");
         assert!(

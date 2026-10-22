@@ -2,20 +2,19 @@ use anyhow::{Context, Result};
 use std::time::Duration;
 
 use crate::config::Config;
-use crate::discovery::{Discovery, DiscoveryOptions, NearbyDevice};
+use crate::discovery::{Discovery, DiscoveryHealth, DiscoveryOptions, NearbyDevice};
 use crate::node::{NodeEngine, NodeTicket};
 use crate::pairing::{PairOutcome, clean_device_name, pairing_code, request_pairing};
 
 /// Czas oczekiwania na urządzenie podane w `rqs pair`.
 const PAIR_LOOKUP_TIMEOUT: Duration = Duration::from_secs(8);
 
-fn print_devices(devices: &[NearbyDevice], config: &Config) {
+fn print_devices(devices: &[NearbyDevice], config: &Config, health: &DiscoveryHealth) {
     if devices.is_empty() {
         println!("Nie znaleziono urządzeń RQS w sieci lokalnej.");
-        println!(
-            "Sprawdź, czy druga aplikacja działa w tej samej sieci i czy zapora przepuszcza UDP {}.",
-            crate::discovery::DISCOVERY_PORT
-        );
+        if let Some(hint) = health.hint() {
+            println!("Wskazówka: {hint}");
+        }
         return;
     }
     println!(
@@ -53,7 +52,7 @@ pub async fn run_discover(timeout: u64) -> Result<()> {
     );
     discovery.probe();
     tokio::time::sleep(Duration::from_secs(timeout)).await;
-    print_devices(&discovery.devices(), &config);
+    print_devices(&discovery.devices(), &config, &discovery.health());
     drop(discovery);
     engine.close().await;
     Ok(())
@@ -100,6 +99,58 @@ pub async fn run_pair(target: &str, auto_accept: bool) -> Result<()> {
         }
         PairOutcome::Rejected => anyhow::bail!("Drugie urządzenie odrzuciło parowanie"),
     }
+}
+
+/// `rqs peer add <TICKET|Node ID>` – zapis lokalny + prośba o sparowanie, aby druga strona
+/// (po potwierdzeniu) również dodała to urządzenie do zaufanych.
+pub async fn run_peer_add(
+    input: &str,
+    alias: &str,
+    auto_accept: bool,
+    no_pair: bool,
+) -> Result<()> {
+    let mut config = Config::load()?;
+    let node_id = config.add_from_input(input, alias, auto_accept)?;
+    config.save()?;
+    let saved_alias = config
+        .find_peer(&node_id)
+        .map(|p| p.alias.clone())
+        .unwrap_or_default();
+    println!(
+        "[SUKCES] Dodano urządzenie '{saved_alias}' ({node_id}) (Auto-Accept: {auto_accept})."
+    );
+    if no_pair {
+        return Ok(());
+    }
+
+    let my_name = config.device_name();
+    let engine = NodeEngine::with_persistent_identity().await?;
+    let mut addr = config.resolve_target(&node_id)?;
+    if let Ok(discovery) = Discovery::start(engine.clone(), &my_name, DiscoveryOptions::default())
+        && let Some(nearby) = discovery
+            .wait_for(&node_id, Duration::from_millis(1500))
+            .await
+    {
+        addr = nearby.addr;
+    }
+    println!(
+        "Prośba o sparowanie wysłana – potwierdź na drugim urządzeniu (kod: {})...",
+        pairing_code(&engine.node_id(), &addr.id)
+    );
+    let result = request_pairing(&engine, addr.clone(), &my_name).await;
+    engine.close().await;
+    match result {
+        Ok(PairOutcome::Accepted { addr: remote, .. }) => {
+            config.add_paired(addr.id, &saved_alias, remote, auto_accept)?;
+            config.save()?;
+            println!("[SUKCES] Sparowano obustronnie – drugie urządzenie też ufa temu urządzeniu.");
+        }
+        Ok(PairOutcome::Rejected) => {
+            println!("[INFO] Drugie urządzenie odrzuciło parowanie – dodano tylko po tej stronie.")
+        }
+        Err(e) => println!("[INFO] Nie udało się sparować ({e:#}) – dodano tylko po tej stronie."),
+    }
+    Ok(())
 }
 
 /// `rqs name [nowa nazwa]`

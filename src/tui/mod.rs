@@ -2,7 +2,10 @@ pub mod app;
 pub mod ui;
 
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{
+    self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent, KeyEventKind,
+    KeyModifiers,
+};
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
@@ -13,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-use app::{App, TuiHandler, UiMessage};
+use app::{App, Focus, Popup, TuiHandler, UiMessage};
 
 use crate::transfer::service;
 
@@ -34,15 +37,12 @@ pub async fn run_tui() -> Result<()> {
             }
         })
     });
-    let handler = Arc::new(TuiHandler {
-        tx,
-        dest_dir: app.config.download_dir(),
-    });
+    let handler = Arc::new(TuiHandler { tx });
     let server = tokio::spawn(service::serve(app.engine.clone(), handler));
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    crossterm::execute!(stdout, EnterAlternateScreen)?;
+    crossterm::execute!(stdout, EnterAlternateScreen, EnableBracketedPaste)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -50,7 +50,11 @@ pub async fn run_tui() -> Result<()> {
     let res = run_app(&mut terminal, app, rx).await;
 
     disable_raw_mode()?;
-    crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    crossterm::execute!(
+        terminal.backend_mut(),
+        DisableBracketedPaste,
+        LeaveAlternateScreen
+    )?;
     terminal.show_cursor()?;
 
     server.abort();
@@ -73,37 +77,128 @@ where
         while let Ok(msg) = rx.try_recv() {
             app.handle_message(msg);
         }
+        app.tick();
         terminal.draw(|f| ui::render(f, &app))?;
 
         // Odczyt klawiatury blokuje – wykonujemy go poza wątkami runtime'u.
-        let key = tokio::task::spawn_blocking(|| -> io::Result<Option<event::KeyEvent>> {
-            if event::poll(Duration::from_millis(100))?
-                && let Event::Key(key) = event::read()?
-                && key.kind == KeyEventKind::Press
-            {
-                return Ok(Some(key));
+        let event = tokio::task::spawn_blocking(|| -> io::Result<Option<Event>> {
+            if event::poll(Duration::from_millis(100))? {
+                return Ok(Some(event::read()?));
             }
             Ok(None)
         })
         .await??;
 
-        if let Some(key) = key {
-            match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => {
+        match event {
+            Some(Event::Key(key)) if key.kind == KeyEventKind::Press => {
+                if handle_key(&mut app, key) {
                     while !app.pending.is_empty() {
                         app.answer_pending(false);
                     }
                     return Ok(());
                 }
-                KeyCode::Char('c') => app.copy_ticket_to_clipboard(),
-                KeyCode::Char('y') => app.answer_pending(true),
-                KeyCode::Char('n') => app.answer_pending(false),
-                KeyCode::Up => app.select(-1),
-                KeyCode::Down => app.select(1),
-                KeyCode::Char('p') => app.pair_selected(),
-                KeyCode::Char('r') => app.refresh_nearby(),
-                _ => {}
             }
+            // Wklejanie (TICKET, ścieżki przeciągniętych plików) trafia do pola tekstowego.
+            Some(Event::Paste(text)) => {
+                if let Some(input) = app.input.as_mut() {
+                    input
+                        .value
+                        .push_str(text.replace(['\r', '\n'], " ").trim_end());
+                    input.error = None;
+                }
+            }
+            _ => {}
         }
     }
+}
+
+/// Zwraca `true`, gdy użytkownik zamyka aplikację.
+fn handle_key(app: &mut App, key: KeyEvent) -> bool {
+    // 1. Oczekujące decyzje (oferta pliku / parowanie) mają pierwszeństwo.
+    if !app.pending.is_empty() {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => app.answer_pending(true),
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => app.answer_pending(false),
+            _ => {}
+        }
+        return false;
+    }
+
+    // 2. Pole tekstowe.
+    if let Some(input) = app.input.as_mut() {
+        match key.code {
+            KeyCode::Esc => app.input = None,
+            KeyCode::Enter => app.submit_input(),
+            KeyCode::Tab => app.input_complete(),
+            KeyCode::Backspace => {
+                input.value.pop();
+                input.error = None;
+            }
+            KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                input.value.clear();
+            }
+            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                input.value.push(c);
+                input.error = None;
+            }
+            _ => {}
+        }
+        return false;
+    }
+
+    // 3. Okna (TICKET, pomoc, potwierdzenie usunięcia).
+    if let Some(popup) = app.popup.take() {
+        match popup {
+            Popup::ConfirmRemove { node_id, .. } => {
+                if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y')) {
+                    app.confirm_remove(&node_id);
+                }
+            }
+            Popup::Ticket => {
+                if key.code == KeyCode::Char('c') {
+                    app.copy_ticket_to_clipboard();
+                    app.popup = Some(Popup::Ticket);
+                }
+            }
+            Popup::Help => {}
+        }
+        return false;
+    }
+
+    // 4. Tryb normalny.
+    match key.code {
+        KeyCode::Char('q') | KeyCode::Esc => return true,
+        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => return true,
+        KeyCode::Tab => app.cycle_focus(false),
+        KeyCode::BackTab => app.cycle_focus(true),
+        KeyCode::Up | KeyCode::Char('k') => app.select(-1),
+        KeyCode::Down | KeyCode::Char('j') => app.select(1),
+        KeyCode::Char('1') => app.focus = Focus::Trusted,
+        KeyCode::Char('2') => app.focus = Focus::Nearby,
+        KeyCode::Char('3') => app.focus = Focus::Transfers,
+        KeyCode::Enter | KeyCode::Char('s') => app.activate(),
+        KeyCode::Char('o') => app.open_selected_transfer(false),
+        KeyCode::Char('f') => app.open_selected_transfer(true),
+        KeyCode::Char('C') => app.clear_finished(),
+        KeyCode::Char('p') => {
+            if app.focus == Focus::Nearby {
+                app.pair_selected();
+            } else {
+                app.status_msg =
+                    "Parowanie: przejdź do „W pobliżu” ([2] lub Tab) i naciśnij [p].".into();
+            }
+        }
+        KeyCode::Char('e') => app.open_rename(),
+        KeyCode::Char('a') => app.toggle_auto_accept(),
+        KeyCode::Delete | KeyCode::Char('x') => app.ask_remove(),
+        KeyCode::Char('i') | KeyCode::Char('+') => app.open_add_device(),
+        KeyCode::Char('g') => app.open_download_dir(),
+        KeyCode::Char('N') => app.open_device_name(),
+        KeyCode::Char('r') => app.refresh_nearby(),
+        KeyCode::Char('t') => app.popup = Some(Popup::Ticket),
+        KeyCode::Char('c') => app.copy_ticket_to_clipboard(),
+        KeyCode::Char('?') | KeyCode::F(1) => app.popup = Some(Popup::Help),
+        _ => {}
+    }
+    false
 }

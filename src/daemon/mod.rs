@@ -65,9 +65,9 @@ impl TransferHandler for DaemonHandler {
         }
 
         let question = format!(
-            "\n[OFERTA] '{}' ({:.2} MB) od '{}' ({}). Odebrać?",
+            "\n[OFERTA] '{}' ({}) od '{}' ({}). Odebrać?",
             offer.file_name,
-            offer.file_size as f64 / 1_048_576.0,
+            crate::cli::display::human_size(offer.file_size),
             alias,
             peer
         );

@@ -6,20 +6,9 @@ pub fn handle_peer_cmd(cmd: PeerCommands) -> Result<()> {
     let mut config = Config::load()?;
 
     match cmd {
-        PeerCommands::Add {
-            ticket,
-            alias,
-            auto_accept,
-        } => {
-            let node_id = config
-                .add_from_input(&ticket, &alias, auto_accept)
-                .context("Nieprawidłowy bilet połączeniowy TICKET lub Node ID")?;
-            config.save()?;
-
-            println!(
-                "[SUKCES] Dodano urządzenie '{}' ({}) (Auto-Accept: {}).",
-                alias, node_id, auto_accept
-            );
+        // Dodawanie z prośbą o sparowanie obsługuje `nearby_cmd::run_peer_add` (async).
+        PeerCommands::Add { .. } => {
+            anyhow::bail!("`peer add` jest obsługiwane przez run_peer_add");
         }
 
         PeerCommands::List => {

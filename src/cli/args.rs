@@ -67,6 +67,9 @@ pub enum PeerCommands {
         alias: String,
         #[arg(long, default_value_t = false)]
         auto_accept: bool,
+        /// Nie wysyłaj prośby o sparowanie (dodaj tylko po tej stronie).
+        #[arg(long, default_value_t = false)]
+        no_pair: bool,
     },
     List,
     /// Zmienia alias lub ustawienie Auto-Accept.

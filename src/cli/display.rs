@@ -5,6 +5,22 @@ use std::sync::Mutex;
 
 use crate::transfer::service::{Direction, TransferEvent, TransferStatus};
 
+/// Rozmiar w czytelnych jednostkach: `512 B`, `12.3 KB`, `4.0 MB`, `1.25 GB`.
+pub fn human_size(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+    let decimals = if unit >= 3 { 2 } else { 1 };
+    format!("{value:.decimals$} {}", UNITS[unit])
+}
+
 pub fn create_progress_bar(total_bytes: u64, message: &str) -> ProgressBar {
     let pb = ProgressBar::new(total_bytes);
     if let Ok(style) = ProgressStyle::default_bar().template(
@@ -97,4 +113,18 @@ fn finish(pb: &ProgressBar, msg: String) {
         println!("{msg}");
     }
     pb.finish_with_message(msg);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::human_size;
+
+    #[test]
+    fn sizes_use_readable_units() {
+        assert_eq!(human_size(0), "0 B");
+        assert_eq!(human_size(812), "812 B");
+        assert_eq!(human_size(12 * 1024 + 300), "12.3 KB");
+        assert_eq!(human_size(5 * 1024 * 1024), "5.0 MB");
+        assert_eq!(human_size(3 * 1024 * 1024 * 1024 / 2), "1.50 GB");
+    }
 }

@@ -85,6 +85,8 @@ pub fn run() {
             pair_device,
             get_device_name,
             set_device_name,
+            open_received,
+            discovery_health,
             set_download_dir,
             take_shared_files,
         ])
