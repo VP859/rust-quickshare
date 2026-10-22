@@ -1,9 +1,2 @@
 /target/
 Cargo.lock
-# Wyjątek: ręcznie dostosowane pliki projektu Androida (gradle/buildSrc) są
-# wersjonowane – szczegóły w src-tauri/.gitignore. Zignorowany katalog nie
-# pozwalał gitowi zauważyć żadnych plików w src-tauri/gen/android/.
-!src-tauri/gen/
-src-tauri/gen/*
-!src-tauri/gen/android/
-src-tauri/gen/android/*

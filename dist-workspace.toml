@@ -1,0 +1,22 @@
+# Konfiguracja cargo-dist dla CLI `rqs` (archiwa + instalatory shell/PowerShell).
+# GUI (Tauri: .deb/.AppImage/.msi/.exe/.dmg) i Android (.apk/.aab) budują osobne
+# zadania w .github/workflows/release.yml – dlatego workflow jest edytowany ręcznie.
+[workspace]
+members = ["cargo:."]
+
+[dist]
+cargo-dist-version = "0.28.0"
+ci = "github"
+installers = ["shell", "powershell"]
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+]
+install-path = "CARGO_HOME"
+# release.yml rozszerzono o zadania Tauri i Android – nie regeneruj go przez `dist init`.
+allow-dirty = ["ci"]
+# Usługi systemowe dołączane do archiwów CLI.
+include = ["dist/systemd/rqs-daemon.service", "dist/launchd/com.rqs.daemon.plist", "dist/windows/install-autostart.ps1"]

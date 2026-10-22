@@ -1,19 +1,39 @@
+# Usługa użytkownika systemd dla demona RQS.
+#
+# Instalacja (bez uprawnień roota):
+#   mkdir -p ~/.config/systemd/user
+#   cp rqs-daemon.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now rqs-daemon.service
+#   loginctl enable-linger "$USER"    # opcjonalnie: działanie bez zalogowanej sesji
+#
+# Podgląd TICKETU i logów: journalctl --user -u rqs-daemon -f
+# Bez terminala demon przyjmuje pliki wyłącznie od urządzeń z Auto-Accept
+# (rqs peer add <TICKET> --alias Laptop --auto-accept).
+
 [Unit]
-Description=RQS P2P File Sharing Background Daemon
-Documentation=https://github.com/user/rust-quickshare
+Description=RQS P2P Quick Share – demon odbioru plików
+Documentation=https://github.com/VP859/rust-quickshare
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/rqs daemon
+# Katalogi muszą istnieć przed nałożeniem ReadWritePaths ("+" = bez sandboksu).
+ExecStartPre=+/usr/bin/mkdir -p %h/.config/rqs %h/Downloads
+# Domyślna ścieżka instalatora cargo-dist; zmień na /usr/bin/rqs przy instalacji z pakietu.
+ExecStart=%h/.cargo/bin/rqs daemon
 Restart=on-failure
 RestartSec=5s
+Environment=RUST_LOG=info
 
 NoNewPrivileges=true
-ProtectSystem=full
-ProtectHome=read-only
+PrivateTmp=true
+ProtectSystem=strict
+# Przy innym katalogu odbioru (default_download_dir w config.toml) dopisz go tutaj.
 ReadWritePaths=%h/Downloads %h/.config/rqs
+LockPersonality=true
+RestrictRealtime=true
 
 [Install]
 WantedBy=default.target

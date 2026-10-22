@@ -1,339 +1,600 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RQS P2P Quick Share</title>
-    <style>
-        :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --accent-color: #38bdf8;
-            --accent-hover: #0284c7;
-            --text-main: #f8fafc;
-            --text-sub: #94a3b8;
-            --border-color: #334155;
-            --green-color: #22c55e;
-            --red-color: #ef4444;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>RQS P2P Quick Share</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --card-2: #273449; --border: #334155;
+    --accent: #38bdf8; --accent-strong: #0284c7; --text: #f8fafc; --muted: #94a3b8;
+    --ok: #22c55e; --warn: #f59e0b; --bad: #ef4444; --radius: 12px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f1f5f9; --card: #ffffff; --card-2: #e2e8f0; --border: #cbd5e1;
+      --accent: #0284c7; --accent-strong: #0369a1; --text: #0f172a; --muted: #475569; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); -webkit-user-select: none; user-select: none; }
+  .container { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  button { font: inherit; cursor: pointer; border: none; border-radius: 8px; padding: 9px 14px; color: var(--text); background: var(--card-2); }
+  button:hover { filter: brightness(1.12); }
+  button:focus-visible, input:focus-visible, .peer-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: #00131f; font-weight: 600; }
+  button.danger { background: transparent; color: var(--bad); }
+  button.ghost { background: transparent; color: var(--muted); padding: 6px 8px; }
+  h1 { font-size: 1.25rem; } h2 { font-size: 1.05rem; } h3 { font-size: 1rem; }
+  .muted { color: var(--muted); font-size: .85rem; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; word-break: break-all; -webkit-user-select: text; user-select: text; }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        body { background-color: var(--bg-color); color: var(--text-main); padding: 24px; user-select: none; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+  .status { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.wait { background: var(--warn); }
+  .header-actions { display: flex; gap: 8px; }
 
-        .container { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
-        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 16px; }
-        
-        .dropzone {
-            border: 2px dashed var(--border-color);
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 32px 20px;
-            text-align: center;
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-        .dropzone.drag-over {
-            border-color: var(--accent-color);
-            background: rgba(56, 189, 248, 0.1);
-        }
-        .btn-browse {
-            background: var(--accent-color);
-            color: #000;
-            border: none;
-            padding: 10px 20px;
-            font-weight: 600;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-top: 12px;
-        }
+  .dropzone { border: 2px dashed var(--border); background: var(--card); border-radius: var(--radius); padding: 30px 20px; text-align: center; transition: border-color .15s, background .15s; }
+  .dropzone.drag-over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+  .dropzone .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
 
-        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .btn-add { background: #334155; color: var(--text-main); border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+  .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .peer-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; position: relative; cursor: pointer; transition: border-color .15s, transform .1s; }
+  .peer-card:hover, .peer-card.drag-over { border-color: var(--accent); }
+  .peer-card.drag-over { transform: scale(1.02); }
+  .peer-card .title { display: flex; align-items: center; gap: 8px; font-weight: 600; padding-right: 28px; overflow: hidden; }
+  .peer-card .title span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .peer-card .node-id { font-size: .72rem; color: var(--muted); margin-top: 6px; }
+  .peer-card .meta { font-size: .75rem; color: var(--muted); margin-top: 8px; }
+  .peer-card .badge { color: var(--ok); }
+  .card-menu-btn { position: absolute; top: 6px; right: 6px; }
+  .menu { position: absolute; top: 36px; right: 6px; background: var(--card-2); border: 1px solid var(--border); border-radius: 8px; padding: 4px; z-index: 20; min-width: 190px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  .menu button { display: block; width: 100%; text-align: left; background: transparent; padding: 8px 10px; }
+  .menu button:hover { background: var(--border); }
+  .empty { color: var(--muted); font-size: .85rem; padding: 6px 0; }
 
-        .peers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-        .peer-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 14px;
-            position: relative;
-            cursor: pointer;
-            transition: border-color 0.2s;
-        }
-        .peer-card:hover { border-color: var(--accent-color); }
-        .peer-card.offline { opacity: 0.5; cursor: not-allowed; }
-        .peer-card .node-id { font-size: 0.75rem; color: var(--text-sub); word-break: break-all; margin-top: 4px; }
-        .peer-card .card-menu { position: absolute; top: 10px; right: 10px; cursor: pointer; padding: 4px; color: var(--text-sub); }
-        .peer-card .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-        .peer-card .status-dot.online { background: var(--green-color); }
-        .peer-card .status-dot.offline { background: var(--red-color); }
+  .transfer { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
+  .transfer .row { display: flex; justify-content: space-between; gap: 10px; font-size: .85rem; }
+  .transfer .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar { height: 6px; background: var(--card-2); border-radius: 4px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+  .transfer.done .bar > div { background: var(--ok); } .transfer.failed .bar > div { background: var(--bad); }
+  .transfers { display: grid; gap: 8px; }
 
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0, 0, 0, 0.7); display: flex; justify-content: center; align-items: center;
-            opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 100;
-        }
-        .modal-overlay.active { opacity: 1; pointer-events: all; }
-        .modal-content {
-            background: var(--card-bg); border: 1px solid var(--border-color);
-            border-radius: 12px; width: 100%; max-width: 460px; padding: 24px; display: flex; flex-direction: column; gap: 16px;
-        }
-        .form-group { display: flex; flex-direction: column; gap: 6px; }
-        .form-group label { font-size: 0.85rem; color: var(--text-sub); }
-        .form-group input {
-            background: var(--bg-color); border: 1px solid var(--border-color);
-            color: #fff; padding: 10px; border-radius: 6px; outline: none;
-        }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; justify-content: center; align-items: center; padding: 16px; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 100; }
+  .modal-overlay.active { opacity: 1; pointer-events: all; }
+  .modal { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); width: 100%; max-width: 460px; max-height: 90vh; overflow: auto; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: .85rem; color: var(--muted); }
+  .field input[type=text], .field textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; font: inherit; -webkit-user-select: text; user-select: text; }
+  .field textarea { resize: vertical; min-height: 70px; font-family: ui-monospace, monospace; font-size: .8rem; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .switch { position: relative; width: 44px; height: 24px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; background: var(--border); border-radius: 12px; transition: background .15s; cursor: pointer; }
+  .switch span::before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .15s; }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::before { transform: translateX(20px); }
+  .qr { background: #fff; border-radius: 10px; padding: 10px; align-self: center; width: min(260px, 100%); }
+  .qr svg { width: 100%; height: auto; display: block; }
+  .ticket-box { background: var(--bg); border: 1px solid var(--border); padding: 10px; border-radius: 8px; font-size: .75rem; max-height: 90px; overflow: auto; }
+  .recipient { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 12px; background: var(--card-2); }
+  .recipient .grow { flex: 1; overflow: hidden; }
+  .recipient .grow div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recipients { display: grid; gap: 8px; }
 
-        .ticket-box {
-            background: var(--bg-color); border: 1px solid var(--accent-color);
-            padding: 12px; border-radius: 6px; font-family: monospace; word-break: break-all; color: var(--accent-color); font-size: 0.85rem;
-        }
-
-        .loading-overlay {
-            position: fixed; bottom: 24px; right: 24px;
-            background: var(--card-bg); border: 1px solid var(--accent-color);
-            padding: 14px 20px; border-radius: 8px; display: flex; align-items: center; gap: 12px;
-            transform: translateY(100px); opacity: 0; transition: all 0.3s;
-        }
-        .loading-overlay.visible { transform: translateY(0); opacity: 1; }
-    </style>
+  .toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translate(-50%, 120px); background: var(--card-2); border: 1px solid var(--accent); padding: 12px 18px; border-radius: 8px; max-width: calc(100vw - 32px); transition: transform .25s; z-index: 200; font-size: .9rem; }
+  .toast.visible { transform: translate(-50%, 0); }
+  .toast.error { border-color: var(--bad); }
+  .mobile-only { display: none; }
+  body.mobile .mobile-only { display: inline-block; }
+  body.mobile .desktop-only { display: none !important; }
+  @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+</style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h2>RQS P2P Quick Share</h2>
-            <span id="local-status" style="color: var(--accent-color); font-size: 0.9rem;">● Działający węzeł RQS</span>
-        </header>
-
-        <div class="dropzone" id="dropzone">
-            <h3>Przeciągnij i upuść plik tutaj</h3>
-            <p style="color: var(--text-sub); margin-top: 6px; font-size: 0.85rem;">Wygeneruje Bilet Udostępniania lub kliknij w aktywne urządzenie poniżej</p>
-            <button class="btn-browse" id="btn-select-file">Wybierz plik z dysku</button>
-        </div>
-
-        <section>
-            <div class="section-header">
-                <h3>Aktywne Aplikacje RQS w Sieci Lokalnej</h3>
-                <button class="btn-add" id="btn-refresh-scan">↻ Odśwież Skanowanie</button>
-            </div>
-            <div class="peers-grid" id="discovered-container"></div>
-        </section>
-
-        <section>
-            <div class="section-header">
-                <h3>Zaufane Urządzenia</h3>
-                <button class="btn-add" id="btn-open-modal">+ Dodaj Urządzenie</button>
-            </div>
-            <div class="peers-grid" id="peers-container"></div>
-        </section>
+<div class="container">
+  <header>
+    <div>
+      <h1>RQS P2P Quick Share</h1>
+      <span class="status"><span class="dot wait" id="node-dot"></span><span id="node-status">Uruchamianie węzła…</span></span>
     </div>
-
-    <div class="modal-overlay" id="modal-add-peer">
-        <div class="modal-content">
-            <h3>Dodaj Nowe Urządzenie</h3>
-            <div class="form-group">
-                <label>Ticket lub Node ID (aktywnego urządzenia)</label>
-                <input type="text" id="input-peer-ticket" placeholder="Wklej ticket połączeniowy...">
-            </div>
-            <div class="form-group">
-                <label>Nazwa Własna (Alias)</label>
-                <input type="text" id="input-peer-alias" placeholder="np. Telefon, Laptop">
-            </div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px;">
-                <button class="btn-add" id="btn-close-modal">Anuluj</button>
-                <button class="btn-browse" id="btn-save-peer">Zapisz Urządzenie</button>
-            </div>
-        </div>
+    <div class="header-actions">
+      <button id="btn-my-ticket">Mój TICKET</button>
+      <button id="btn-settings" aria-label="Ustawienia">⚙</button>
     </div>
+  </header>
 
-    
-    <div class="modal-overlay" id="modal-ticket-share">
-        <div class="modal-content">
-            <h3>Wygenerowano Bilet Udostępniania</h3>
-            <p style="font-size: 0.85rem; color: var(--text-sub);">Przekaż poniższy bilet dowolnej osobie z zainstalowaną aplikacją RQS:</p>
-            <div class="ticket-box" id="generated-ticket-text">rqs://ticket-...</div>
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button class="btn-browse" id="btn-copy-ticket">Kopiuj Bilet</button>
-                <button class="btn-add" id="btn-close-ticket-modal">Zamknij</button>
-            </div>
-        </div>
+  <section class="dropzone" id="dropzone">
+    <h2 class="desktop-only">Przeciągnij i upuść pliki tutaj</h2>
+    <h2 class="mobile-only">Wyślij pliki</h2>
+    <p class="muted" style="margin-top:6px">Upuść plik na kartę urządzenia, aby wysłać go od razu, lub wybierz odbiorcę po wybraniu pliku.</p>
+    <div class="actions">
+      <button class="primary" id="btn-select-file">Wybierz plik z dysku</button>
+      <button class="mobile-only" id="btn-scan">📷 Skanuj kod QR</button>
+      <button id="btn-receive-ticket">Odbierz z TICKETU</button>
     </div>
+  </section>
 
-    <div class="loading-overlay" id="progress-toast">
-        <span id="toast-message">Gotowy</span>
+  <section>
+    <div class="section-header">
+      <h2>Zaufane Urządzenia</h2>
+      <button class="primary" id="btn-add-peer">+ Dodaj Urządzenie</button>
     </div>
+    <div class="grid" id="peers"></div>
+  </section>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            const invoke = window.__TAURI__?.core?.invoke;
+  <section>
+    <div class="section-header"><h2>Transfery</h2><button class="ghost" id="btn-clear">Wyczyść zakończone</button></div>
+    <div class="transfers" id="transfers"><p class="empty">Brak transferów.</p></div>
+  </section>
+</div>
 
-            const dropzone = document.getElementById('dropzone');
-            const btnSelectFile = document.getElementById('btn-select-file');
-            const btnOpenModal = document.getElementById('btn-open-modal');
-            const btnCloseModal = document.getElementById('btn-close-modal');
-            const btnSavePeer = document.getElementById('btn-save-peer');
-            const btnRefreshScan = document.getElementById('btn-refresh-scan');
-            const modalAddPeer = document.getElementById('modal-add-peer');
-            const peersContainer = document.getElementById('peers-container');
-            const discoveredContainer = document.getElementById('discovered-container');
-            const modalTicketShare = document.getElementById('modal-ticket-share');
-            const generatedTicketText = document.getElementById('generated-ticket-text');
-            const btnCopyTicket = document.getElementById('btn-copy-ticket');
-            const btnCloseTicketModal = document.getElementById('btn-close-ticket-modal');
+<!-- Dodawanie / edycja urządzenia -->
+<div class="modal-overlay" id="modal-peer" role="dialog" aria-modal="true" aria-labelledby="peer-title">
+  <div class="modal">
+    <h3 id="peer-title">Dodaj Urządzenie</h3>
+    <div class="field" id="peer-input-field">
+      <label for="peer-input">TICKET lub Node ID</label>
+      <textarea id="peer-input" placeholder="rqs:… lub 64-znakowy Node ID"></textarea>
+      <button class="mobile-only" id="btn-peer-scan" style="align-self:flex-start">📷 Skanuj kod QR</button>
+    </div>
+    <div class="field">
+      <label for="peer-alias">Nazwa własna (Alias)</label>
+      <input type="text" id="peer-alias" placeholder="np. Laptop Biurowy" maxlength="60">
+    </div>
+    <div class="toggle">
+      <div><div>Auto-Accept</div><div class="muted">Pliki od tego urządzenia będą przyjmowane bez pytania</div></div>
+      <label class="switch"><input type="checkbox" id="peer-auto"><span></span></label>
+    </div>
+    <div class="modal-actions">
+      <button id="btn-peer-cancel">Anuluj</button>
+      <button class="primary" id="btn-peer-save">Zapisz</button>
+    </div>
+  </div>
+</div>
 
-            // Refresh skanowania obecności RQS
-            async function refreshAllPeers() {
-                if (!invoke) return;
-                try {
-                    const trusted = await invoke('get_trusted_peers');
-                    renderPeers(trusted, peersContainer, true);
+<!-- Wybór odbiorcy -->
+<div class="modal-overlay" id="modal-recipient" role="dialog" aria-modal="true" aria-labelledby="recipient-title">
+  <div class="modal">
+    <h3 id="recipient-title">Wybierz odbiorcę</h3>
+    <p class="muted" id="recipient-files"></p>
+    <div class="recipients" id="recipients"></div>
+    <button id="btn-share-ticket">🔗 Udostępnij przez jednorazowy TICKET / QR</button>
+    <div class="modal-actions"><button id="btn-recipient-cancel">Anuluj</button></div>
+  </div>
+</div>
 
-                    const discovered = await invoke('discover_devices');
-                    renderPeers(discovered, discoveredContainer, false);
-                } catch (err) {
-                    console.error("Błąd ładowania urządzeń:", err);
-                }
-            }
+<!-- Kod QR / TICKET -->
+<div class="modal-overlay" id="modal-ticket" role="dialog" aria-modal="true" aria-labelledby="ticket-title">
+  <div class="modal">
+    <h3 id="ticket-title">TICKET</h3>
+    <p class="muted" id="ticket-desc"></p>
+    <div class="qr" id="ticket-qr"></div>
+    <div class="ticket-box mono" id="ticket-text"></div>
+    <div class="modal-actions">
+      <button class="primary" id="btn-ticket-copy">Kopiuj</button>
+      <button id="btn-ticket-close">Zamknij</button>
+    </div>
+  </div>
+</div>
 
-            function renderPeers(peers, container, isTrusted) {
-                container.innerHTML = '';
-                if (!peers || peers.length === 0) {
-                    container.innerHTML = `<p style="color: var(--text-sub); font-size: 0.85rem;">Brak aktywne aplikacji RQS w tej sekcji.</p>`;
-                    return;
-                }
-                peers.forEach(peer => {
-                    const card = document.createElement('div');
-                    card.className = `peer-card ${peer.is_online ? '' : 'offline'}`;
-                    card.innerHTML = `
-                        ${isTrusted ? `<div class="card-menu" onclick="event.stopPropagation(); window.deletePeer('${peer.node_id}')">✕</div>` : ''}
-                        <strong><span class="status-dot ${peer.is_online ? 'online' : 'offline'}"></span>${peer.alias}</strong>
-                        <div class="node-id">${peer.node_id}</div>
-                        <span style="font-size: 0.75rem; color: ${peer.is_online ? 'var(--accent-color)' : 'var(--text-sub)'}; margin-top: 8px; display: block;">
-                            ${peer.is_online ? 'Aplikacja RQS Aktywna (Kliknij, aby wysłać)' : 'Aplikacja Nieaktywna / Wyłączona'}
-                        </span>
-                    `;
-                    
-                    if (peer.is_online) {
-                        card.addEventListener('click', () => triggerFileSelection(peer.node_id, peer.alias));
-                    } else {
-                        card.addEventListener('click', () => alert("Urządzenie jest niedostępne lub nie ma uruchomionej aplikacji RQS!"));
-                    }
-                    container.appendChild(card);
-                });
-            }
+<!-- Odbiór z TICKETU (wklejenie) -->
+<div class="modal-overlay" id="modal-receive" role="dialog" aria-modal="true" aria-labelledby="receive-title">
+  <div class="modal">
+    <h3 id="receive-title">Odbierz plik z TICKETU</h3>
+    <div class="field"><label for="receive-input">TICKET udostępnienia</label><textarea id="receive-input" placeholder="rqs:…"></textarea></div>
+    <div class="modal-actions"><button id="btn-receive-cancel">Anuluj</button><button class="primary" id="btn-receive-go">Pobierz</button></div>
+  </div>
+</div>
 
-            window.deletePeer = async (nodeId) => {
-                if (invoke) {
-                    await invoke('remove_trusted_peer', { nodeId });
-                    await refreshAllPeers();
-                    showToast("Usunięto urządzenie");
-                }
-            };
+<!-- Przychodząca oferta -->
+<div class="modal-overlay" id="modal-offer" role="alertdialog" aria-modal="true" aria-labelledby="offer-title">
+  <div class="modal">
+    <h3 id="offer-title">Przychodzący plik</h3>
+    <div><div style="font-weight:600" id="offer-file"></div><div class="muted" id="offer-meta"></div></div>
+    <p class="muted" id="offer-queue"></p>
+    <div class="modal-actions"><button class="danger" id="btn-offer-reject">Odrzuć</button><button class="primary" id="btn-offer-accept">Odbierz</button></div>
+  </div>
+</div>
 
-            async function triggerFileSelection(targetNodeId = null, targetAlias = null) {
-                if (!invoke) return;
-                try {
-                    const selectedFile = await invoke('pick_file_dialog');
-                    if (selectedFile) {
-                        if (targetNodeId) {
-                            showToast(`Nawiązywanie połączenia RQS do: ${targetAlias}...`);
-                        } else {
-                            showToast("Przetwarzanie pliku...");
-                        }
+<!-- Ustawienia -->
+<div class="modal-overlay" id="modal-settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+  <div class="modal">
+    <h3 id="settings-title">Ustawienia</h3>
+    <div class="field"><label>Node ID tego urządzenia</label><div class="ticket-box mono" id="settings-node"></div></div>
+    <div class="field"><label>Katalog odbieranych plików</label><div class="ticket-box mono" id="settings-dir"></div>
+      <button class="desktop-only" id="btn-change-dir" style="align-self:flex-start">Zmień katalog…</button></div>
+    <div class="toggle desktop-only">
+      <div><div>Uruchamiaj przy starcie systemu</div><div class="muted">Aplikacja startuje ukryta w zasobniku i odbiera pliki w tle</div></div>
+      <label class="switch"><input type="checkbox" id="autostart"><span></span></label>
+    </div>
+    <div class="modal-actions"><button id="btn-settings-close">Zamknij</button></div>
+  </div>
+</div>
 
-                        const res = await invoke('send_file_offer', {
-                            filePath: selectedFile,
-                            targetNodeId: targetNodeId
-                        });
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-                        if (res.ticket) {
-                            generatedTicketText.textContent = res.ticket;
-                            modalTicketShare.classList.add('active');
-                            showToast("Wygenerowano bilet!");
-                        } else {
-                            showToast(res.message);
-                        }
-                    }
-                } catch (err) {
-                    alert("Błąd wysyłania: " + err);
-                    showToast("Błąd: " + err);
-                }
-            }
+<script>
+(() => {
+  const T = window.__TAURI__;
+  const invoke = T?.core?.invoke;
+  const listen = T?.event?.listen;
+  const $ = (id) => document.getElementById(id);
+  const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (isMobile) document.body.classList.add('mobile');
 
-            btnSelectFile.addEventListener('click', (e) => {
-                e.stopPropagation();
-                triggerFileSelection(null);
-            });
+  // ---------- Pomocnicze ----------
+  let toastTimer;
+  function toast(msg, isError = false) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.toggle('error', isError);
+    el.classList.add('visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('visible'), isError ? 6000 : 3000);
+  }
+  const fail = (e) => toast(String(e?.message ?? e), true);
+  const fmtSize = (b) => b >= 1 << 30 ? (b / (1 << 30)).toFixed(2) + ' GB' : b >= 1 << 20 ? (b / (1 << 20)).toFixed(1) + ' MB' : b >= 1024 ? (b / 1024).toFixed(0) + ' KB' : b + ' B';
+  const baseName = (p) => decodeURIComponent(String(p).split(/[\\/]/).pop() || p);
+  const shortId = (id) => id.slice(0, 10) + '…';
+  function el(tag, props = {}, ...children) {
+    const e = document.createElement(tag);
+    Object.entries(props).forEach(([k, v]) => k === 'class' ? e.className = v : k.startsWith('on') ? e.addEventListener(k.slice(2), v) : e.setAttribute(k, v));
+    children.flat().forEach(c => e.append(c instanceof Node ? c : document.createTextNode(String(c))));
+    return e;
+  }
+  const open = (id) => $(id).classList.add('active');
+  const close = (id) => $(id).classList.remove('active');
+  document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', (e) => { if (e.target === m && m.id !== 'modal-offer') close(m.id); }));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.active:not(#modal-offer)').forEach(m => close(m.id)); });
 
-            dropzone.addEventListener('click', () => triggerFileSelection(null));
-            btnRefreshScan.addEventListener('click', () => refreshAllPeers());
+  async function copyText(text) {
+    try {
+      if (T?.clipboardManager?.writeText) await T.clipboardManager.writeText(text);
+      else await invoke('plugin:clipboard-manager|write_text', { text });
+    } catch { await navigator.clipboard.writeText(text); }
+    toast('Skopiowano do schowka');
+  }
 
-            ['dragenter', 'dragover'].forEach(evt => {
-                dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); });
-            });
-            ['dragleave', 'drop'].forEach(evt => {
-                dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('drag-over'); });
-            });
-            dropzone.addEventListener('drop', async (e) => {
-                const files = e.dataTransfer?.files;
-                if (files && files.length > 0 && invoke) {
-                    const path = files[0].path || files[0].name;
-                    showToast("Przetwarzanie pliku...");
-                    const res = await invoke('send_file_offer', { filePath: path, targetNodeId: null });
-                    if (res.ticket) {
-                        generatedTicketText.textContent = res.ticket;
-                        modalTicketShare.classList.add('active');
-                    }
-                }
-            });
+  async function pickFiles() {
+    const opts = { multiple: true, directory: false };
+    const res = T?.dialog?.open ? await T.dialog.open(opts) : await invoke('plugin:dialog|open', { options: opts });
+    if (!res) return [];
+    return (Array.isArray(res) ? res : [res]).map(f => typeof f === 'string' ? f : f.path ?? f.uri ?? String(f));
+  }
 
-            btnOpenModal.addEventListener('click', () => modalAddPeer.classList.add('active'));
-            btnCloseModal.addEventListener('click', () => modalAddPeer.classList.remove('active'));
-            btnCloseTicketModal.addEventListener('click', () => modalTicketShare.classList.remove('active'));
+  async function scanQr() {
+    const opts = { windowed: false, formats: ['QR_CODE'] };
+    const res = T?.barcodeScanner?.scan ? await T.barcodeScanner.scan(opts) : await invoke('plugin:barcode-scanner|scan', opts);
+    return res?.content?.trim();
+  }
 
-            btnCopyTicket.addEventListener('click', () => {
-                navigator.clipboard.writeText(generatedTicketText.textContent);
-                showToast("Skopiowano bilet do schowka!");
-                modalTicketShare.classList.remove('active');
-            });
+  // ---------- Węzeł ----------
+  let nodeInfo = null;
+  async function loadNodeInfo() {
+    try {
+      nodeInfo = await invoke('get_node_info');
+      $('node-dot').className = 'dot ok';
+      $('node-status').textContent = 'Węzeł aktywny · ' + shortId(nodeInfo.node_id);
+    } catch (e) {
+      $('node-dot').className = 'dot bad';
+      $('node-status').textContent = 'Węzeł niedostępny';
+      fail(e);
+    }
+  }
 
-            btnSavePeer.addEventListener('click', async () => {
-                const ticket = document.getElementById('input-peer-ticket').value;
-                const alias = document.getElementById('input-peer-alias').value;
+  function showTicket(title, desc, ticket, svg) {
+    $('ticket-title').textContent = title;
+    $('ticket-desc').textContent = desc;
+    $('ticket-qr').innerHTML = svg; // SVG generowany przez backend (qrcode), nie dane od użytkownika
+    $('ticket-text').textContent = ticket;
+    open('modal-ticket');
+  }
+  $('btn-my-ticket').onclick = async () => {
+    if (!nodeInfo) await loadNodeInfo();
+    if (nodeInfo) showTicket('TICKET tego urządzenia', 'Zeskanuj ten kod na innym urządzeniu lub wklej TICKET w „+ Dodaj Urządzenie”, aby sparować.', nodeInfo.ticket, nodeInfo.qr_svg);
+  };
+  $('btn-ticket-copy').onclick = () => copyText($('ticket-text').textContent);
+  $('btn-ticket-close').onclick = () => close('modal-ticket');
 
-                if (!ticket.trim()) {
-                    alert("Wprowadź ticket lub Node ID!");
-                    return;
-                }
+  // ---------- Urządzenia ----------
+  let peers = [];
+  const online = new Map();
+  let openMenu = null;
+  document.addEventListener('click', () => { openMenu?.remove(); openMenu = null; });
 
-                if (invoke) {
-                    try {
-                        await invoke('add_trusted_peer', {
-                            ticketOrId: ticket,
-                            alias: alias,
-                            autoAccept: false
-                        });
-                        await refreshAllPeers();
-                        modalAddPeer.classList.remove('active');
-                        document.getElementById('input-peer-ticket').value = '';
-                        document.getElementById('input-peer-alias').value = '';
-                        showToast("Dodano urządzenie!");
-                    } catch (err) {
-                        alert(err);
-                    }
-                }
-            });
+  async function refreshPeers() {
+    try { peers = await invoke('list_peers'); } catch (e) { fail(e); peers = []; }
+    renderPeers();
+  }
 
-            function showToast(msg) {
-                const toast = document.getElementById('progress-toast');
-                document.getElementById('toast-message').textContent = msg;
-                toast.classList.add('visible');
-                setTimeout(() => toast.classList.remove('visible'), 3000);
-            }
+  function renderPeers() {
+    const box = $('peers');
+    box.replaceChildren();
+    if (!peers.length) {
+      box.append(el('p', { class: 'empty' }, 'Brak zaufanych urządzeń. Dodaj urządzenie, skanując lub wklejając jego TICKET.'));
+      return;
+    }
+    for (const p of peers) {
+      const state = online.get(p.node_id);
+      const dot = el('span', { class: 'dot ' + (state === true ? 'ok' : state === false ? 'bad' : 'wait') });
+      const menuBtn = el('button', { class: 'ghost card-menu-btn', 'aria-label': 'Opcje urządzenia', onclick: (e) => { e.stopPropagation(); showMenu(card, p); } }, '⋮');
+      const card = el('div', { class: 'peer-card', tabindex: '0', 'data-node': p.node_id, role: 'button',
+          'aria-label': `Wyślij plik do ${p.alias}`,
+          onclick: () => sendToPeer(p),
+          onkeydown: (e) => { if (e.key === 'Enter') sendToPeer(p); } },
+        menuBtn,
+        el('div', { class: 'title' }, dot, el('span', {}, p.alias)),
+        el('div', { class: 'node-id mono' }, p.node_id),
+        el('div', { class: 'meta' },
+          state === true ? 'Dostępne · kliknij, aby wysłać' : state === false ? 'Nieosiągalne (uruchom RQS na urządzeniu)' : 'Sprawdzanie…',
+          p.auto_accept ? el('span', { class: 'badge' }, ' · Auto-Accept') : ''));
+      box.append(card);
+    }
+  }
 
-            await refreshAllPeers();
-        });
-    </script>
+  async function checkOnline() {
+    await Promise.all(peers.map(async (p) => {
+      try { online.set(p.node_id, await invoke('peer_online', { nodeId: p.node_id })); }
+      catch { online.set(p.node_id, false); }
+      renderPeers();
+    }));
+  }
+
+  function showMenu(card, p) {
+    openMenu?.remove();
+    const item = (label, fn, cls = '') => el('button', { class: cls, onclick: async (e) => { e.stopPropagation(); openMenu?.remove(); openMenu = null; try { await fn(); } catch (err) { fail(err); } } }, label);
+    openMenu = el('div', { class: 'menu', onclick: (e) => e.stopPropagation() },
+      item('Wyślij plik…', () => sendToPeer(p)),
+      item('Edytuj nazwę i ustawienia', () => openPeerModal(p)),
+      item(p.auto_accept ? 'Wyłącz Auto-Accept' : 'Włącz Auto-Accept', async () => {
+        await invoke('update_peer', { nodeId: p.node_id, alias: null, autoAccept: !p.auto_accept });
+        await refreshPeers();
+        toast(`Auto-Accept ${!p.auto_accept ? 'włączony' : 'wyłączony'} dla ${p.alias}`);
+      }),
+      item('Kopiuj Node ID', () => copyText(p.node_id)),
+      item('Usuń urządzenie', async () => {
+        if (!confirm(`Usunąć urządzenie „${p.alias}”?`)) return;
+        await invoke('remove_peer', { nodeId: p.node_id });
+        online.delete(p.node_id);
+        await refreshPeers();
+        toast('Usunięto urządzenie');
+      }, 'danger'));
+    card.append(openMenu);
+  }
+
+  let editing = null;
+  function openPeerModal(peer = null, prefill = '') {
+    editing = peer;
+    $('peer-title').textContent = peer ? `Edytuj: ${peer.alias}` : 'Dodaj Urządzenie';
+    $('peer-input-field').style.display = peer ? 'none' : '';
+    $('peer-input').value = prefill;
+    $('peer-alias').value = peer?.alias ?? '';
+    $('peer-auto').checked = peer?.auto_accept ?? false;
+    open('modal-peer');
+    (peer ? $('peer-alias') : $('peer-input')).focus();
+  }
+  $('btn-add-peer').onclick = () => openPeerModal();
+  $('btn-peer-cancel').onclick = () => close('modal-peer');
+  $('btn-peer-scan').onclick = async () => { try { const t = await scanQr(); if (t) $('peer-input').value = t; } catch (e) { fail(e); } };
+  $('btn-peer-save').onclick = async () => {
+    const alias = $('peer-alias').value.trim();
+    const autoAccept = $('peer-auto').checked;
+    try {
+      if (editing) {
+        await invoke('update_peer', { nodeId: editing.node_id, alias, autoAccept });
+        toast('Zapisano zmiany');
+      } else {
+        const input = $('peer-input').value.trim();
+        if (!input) return toast('Wklej TICKET lub Node ID', true);
+        const id = await invoke('add_peer', { input, alias, autoAccept });
+        online.delete(id);
+        toast('Dodano urządzenie');
+      }
+      close('modal-peer');
+      await refreshPeers();
+      checkOnline();
+    } catch (e) { fail(e); }
+  };
+
+  // ---------- Wysyłanie ----------
+  async function sendFiles(paths, target, label) {
+    if (!paths.length) return;
+    try {
+      await invoke('send_files', { paths, target });
+      toast(`Wysyłanie ${paths.length > 1 ? paths.length + ' plików' : baseName(paths[0])} → ${label}`);
+    } catch (e) { fail(e); }
+  }
+
+  async function sendToPeer(p) {
+    try { await sendFiles(await pickFiles(), p.node_id, p.alias); } catch (e) { fail(e); }
+  }
+
+  let pendingFiles = [];
+  function chooseRecipient(paths) {
+    if (!paths.length) return;
+    pendingFiles = paths;
+    $('recipient-files').textContent = paths.length === 1 ? baseName(paths[0]) : `${paths.length} plików: ${paths.map(baseName).join(', ')}`;
+    const box = $('recipients');
+    box.replaceChildren();
+    if (!peers.length) box.append(el('p', { class: 'empty' }, 'Brak zaufanych urządzeń — użyj TICKETU poniżej.'));
+    for (const p of peers) {
+      const state = online.get(p.node_id);
+      box.append(el('button', { class: 'recipient', onclick: () => { close('modal-recipient'); sendFiles(pendingFiles, p.node_id, p.alias); } },
+        el('span', { class: 'dot ' + (state === true ? 'ok' : state === false ? 'bad' : 'wait') }),
+        el('div', { class: 'grow' }, el('div', {}, p.alias), el('div', { class: 'muted mono' }, shortId(p.node_id)))));
+    }
+    $('btn-share-ticket').disabled = paths.length !== 1;
+    $('btn-share-ticket').title = paths.length !== 1 ? 'TICKET obsługuje jeden plik' : '';
+    open('modal-recipient');
+  }
+  $('btn-recipient-cancel').onclick = () => close('modal-recipient');
+  $('btn-share-ticket').onclick = async () => {
+    close('modal-recipient');
+    try {
+      const s = await invoke('share_file', { path: pendingFiles[0] });
+      showTicket(`Udostępniono: ${s.file_name}`, 'Odbiorca skanuje kod lub wkleja TICKET w „Odbierz z TICKETU” (albo: rqs receive <TICKET>). Pozostaw aplikację włączoną do końca transferu.', s.ticket, s.qr_svg);
+    } catch (e) { fail(e); }
+  };
+  $('btn-select-file').onclick = async () => { try { chooseRecipient(await pickFiles()); } catch (e) { fail(e); } };
+
+  // ---------- Odbiór z TICKETU / QR ----------
+  async function handleScannedTicket(text) {
+    if (!text) return;
+    const info = await invoke('inspect_ticket', { ticket: text });
+    if (info.has_share) {
+      await invoke('receive_from_ticket', { ticket: text });
+      toast('Pobieranie pliku…');
+    } else {
+      openPeerModal(null, text);
+    }
+  }
+  $('btn-scan').onclick = async () => { try { await handleScannedTicket(await scanQr()); } catch (e) { fail(e); } };
+  $('btn-receive-ticket').onclick = () => { $('receive-input').value = ''; open('modal-receive'); $('receive-input').focus(); };
+  $('btn-receive-cancel').onclick = () => close('modal-receive');
+  $('btn-receive-go').onclick = async () => {
+    try { await handleScannedTicket($('receive-input').value.trim()); close('modal-receive'); } catch (e) { fail(e); }
+  };
+
+  // ---------- Natywne przeciąganie i upuszczanie (Tauri) ----------
+  function targetAt(pos) {
+    if (!pos) return null;
+    const ratio = window.devicePixelRatio || 1;
+    const node = document.elementFromPoint(pos.x / ratio, pos.y / ratio);
+    return node?.closest('.peer-card') || node?.closest('#dropzone') || null;
+  }
+  let hovered = null;
+  function setHover(target) {
+    if (hovered === target) return;
+    hovered?.classList.remove('drag-over');
+    hovered = target;
+    hovered?.classList.add('drag-over');
+  }
+  async function setupDragDrop() {
+    const webview = T?.webview?.getCurrentWebview?.();
+    if (!webview?.onDragDropEvent) return;
+    await webview.onDragDropEvent(({ payload }) => {
+      if (payload.type === 'enter' || payload.type === 'over') {
+        setHover(targetAt(payload.position) || $('dropzone'));
+      } else if (payload.type === 'drop') {
+        const target = targetAt(payload.position);
+        setHover(null);
+        const paths = payload.paths || [];
+        const peer = target?.dataset?.node && peers.find(p => p.node_id === target.dataset.node);
+        if (peer) sendFiles(paths, peer.node_id, peer.alias);
+        else chooseRecipient(paths);
+      } else {
+        setHover(null);
+      }
+    });
+  }
+
+  // ---------- Transfery ----------
+  const transfers = new Map();
+  const STATUS = {
+    preparing: 'Liczenie haszu BLAKE3…', awaiting_decision: 'Oczekiwanie na decyzję…', running: '',
+    completed: 'Zakończono ✓', rejected: 'Odrzucono', failed: 'Błąd',
+  };
+  function renderTransfer(ev) {
+    let row = transfers.get(ev.id);
+    if (!row) {
+      row = { el: el('div', { class: 'transfer' }) };
+      transfers.set(ev.id, row);
+      const list = $('transfers');
+      list.querySelector('.empty')?.remove();
+      list.prepend(row.el);
+    }
+    row.ev = ev;
+    const kind = ev.status.kind;
+    const pct = ev.total ? Math.min(100, Math.round(ev.done / ev.total * 100)) : (kind === 'completed' ? 100 : 0);
+    const peer = peers.find(p => p.node_id === ev.peer)?.alias ?? shortId(ev.peer);
+    const detail = kind === 'running' ? `${pct}% · ${fmtSize(ev.done)} / ${fmtSize(ev.total)}`
+      : kind === 'failed' ? `Błąd: ${ev.status.error}` : kind === 'rejected' ? `Odrzucono: ${ev.status.reason}`
+      : kind === 'completed' && ev.status.path ? `Zapisano: ${ev.status.path}` : STATUS[kind];
+    row.el.className = 'transfer' + (kind === 'completed' ? ' done' : kind === 'failed' || kind === 'rejected' ? ' failed' : '');
+    const bar = el('div', { class: 'bar' }, el('div'));
+    bar.firstChild.style.width = pct + '%';
+    row.el.replaceChildren(
+      el('div', { class: 'row' }, el('span', { class: 'name' }, (ev.direction === 'upload' ? '↑ ' : '↓ ') + ev.file_name), el('span', { class: 'muted' }, peer)),
+      bar,
+      el('div', { class: 'muted', style: 'word-break: break-all' }, detail));
+  }
+  $('btn-clear').onclick = () => {
+    for (const [id, row] of transfers) {
+      if (['completed', 'failed', 'rejected'].includes(row.ev.status.kind)) { row.el.remove(); transfers.delete(id); }
+    }
+    if (!transfers.size) $('transfers').replaceChildren(el('p', { class: 'empty' }, 'Brak transferów.'));
+  };
+
+  // ---------- Oferty przychodzące ----------
+  const offers = [];
+  function showNextOffer() {
+    const o = offers[0];
+    if (!o) return close('modal-offer');
+    $('offer-file').textContent = o.file_name;
+    $('offer-meta').textContent = `${fmtSize(o.size)} · od ${o.alias ?? 'Nieznane urządzenie (' + shortId(o.peer) + ')'}`;
+    $('offer-queue').textContent = offers.length > 1 ? `W kolejce: ${offers.length - 1}` : '';
+    open('modal-offer');
+  }
+  async function answerOffer(accept) {
+    const o = offers.shift();
+    if (o) { try { await invoke('respond_to_offer', { transferId: o.id, accept }); } catch (e) { fail(e); } }
+    showNextOffer();
+  }
+  $('btn-offer-accept').onclick = () => answerOffer(true);
+  $('btn-offer-reject').onclick = () => answerOffer(false);
+
+  // ---------- Ustawienia ----------
+  $('btn-settings').onclick = async () => {
+    if (!nodeInfo) await loadNodeInfo();
+    $('settings-node').textContent = nodeInfo?.node_id ?? '—';
+    $('settings-dir').textContent = nodeInfo?.download_dir ?? '—';
+    if (!isMobile) { try { $('autostart').checked = await invoke('plugin:autostart|is_enabled'); } catch {} }
+    open('modal-settings');
+  };
+  $('btn-settings-close').onclick = () => close('modal-settings');
+  $('autostart').onchange = async (e) => {
+    try { await invoke(e.target.checked ? 'plugin:autostart|enable' : 'plugin:autostart|disable'); toast('Zapisano'); }
+    catch (err) { e.target.checked = !e.target.checked; fail(err); }
+  };
+  $('btn-change-dir').onclick = async () => {
+    try {
+      const dir = T?.dialog?.open ? await T.dialog.open({ directory: true }) : await invoke('plugin:dialog|open', { options: { directory: true } });
+      if (!dir) return;
+      await invoke('set_download_dir', { path: String(dir) });
+      await loadNodeInfo();
+      $('settings-dir').textContent = nodeInfo?.download_dir ?? String(dir);
+      toast('Zmieniono katalog odbioru');
+    } catch (e) { fail(e); }
+  };
+
+  // ---------- Udostępnianie z Androida ----------
+  async function checkSharedFiles() {
+    try {
+      const files = await invoke('take_shared_files');
+      if (files.length) chooseRecipient(files);
+    } catch (e) { fail(e); }
+  }
+  window.addEventListener('rqs-share', checkSharedFiles);
+
+  // ---------- Start ----------
+  document.addEventListener('DOMContentLoaded', async () => {
+    if (!invoke) { toast('Brak API Tauri – uruchom aplikację przez Tauri', true); return; }
+    await listen('transfer', ({ payload }) => renderTransfer(payload));
+    await listen('transfer-error', ({ payload }) => fail(payload.message));
+    await listen('incoming-offer', ({ payload }) => { offers.push(payload); if (offers.length === 1) showNextOffer(); else $('offer-queue').textContent = `W kolejce: ${offers.length - 1}`; });
+    await listen('node-error', ({ payload }) => fail(payload));
+    await setupDragDrop();
+    await refreshPeers();
+    await loadNodeInfo();
+    checkOnline();
+    setInterval(checkOnline, 60000);
+    if (isMobile) checkSharedFiles();
+  });
+})();
+</script>
 </body>
 </html>

@@ -1,137 +1,153 @@
-use anyhow::{Context, Result, anyhow};
-use std::path::Path;
+use anyhow::{Context, Result};
+use iroh::endpoint::Connection;
+use std::path::{Path, PathBuf};
 use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
+use tokio::task::JoinSet;
 use tracing::info;
 
-use crate::node::{NodeEngine, NodeTicket, load_or_generate_secret_key};
+use super::{Channel, ProgressFn};
 use crate::protocol::codec::{read_msg, write_msg};
 use crate::protocol::messages::{
-    ChunkHeader, DEFAULT_CHUNK_SIZE, TransferComplete, TransferDecision, TransferOffer,
+    CHUNK_WINDOW, ChunkHeader, DEFAULT_CHUNK_SIZE, Hello, TransferDecision, TransferOffer,
+    TransferResult,
 };
 use crate::transfer::hash::compute_file_hash;
-use crate::transfer::progress::create_progress_bar;
+use crate::transfer::security::sanitize_filename;
 
-pub async fn run_sender(file_path: &Path) -> Result<()> {
-    if !file_path.exists() || !file_path.is_file() {
-        anyhow::bail!(
-            "Podany plik nie istnieje lub nie jest plikiem: {:?}",
-            file_path
-        );
+/// Plik gotowy do wysłania – z policzonym haszem BLAKE3 (liczonym raz, także przy wznowieniu).
+#[derive(Debug, Clone)]
+pub struct PreparedFile {
+    pub path: PathBuf,
+    pub name: String,
+    pub size: u64,
+    pub hash: [u8; 32],
+}
+
+pub async fn prepare_file(path: &Path) -> Result<PreparedFile> {
+    let metadata = tokio::fs::metadata(path)
+        .await
+        .with_context(|| format!("Nie można odczytać pliku {:?}", path))?;
+    if !metadata.is_file() {
+        anyhow::bail!("Podana ścieżka nie jest plikiem: {:?}", path);
     }
-
-    let metadata = tokio::fs::metadata(file_path).await?;
-    let file_size = metadata.len();
-    let file_name = file_path
+    let raw_name = path
         .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| anyhow!("Nieprawidłowa nazwa pliku"))?
-        .to_string();
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let name = sanitize_filename(&raw_name).unwrap_or_else(|_| "plik".to_string());
+    let hash = compute_file_hash(path).await?;
+    Ok(PreparedFile {
+        path: path.to_path_buf(),
+        name,
+        size: metadata.len(),
+        hash,
+    })
+}
 
-    println!("Obliczanie haszu BLAKE3 pliku '{}'...", file_name);
-    let file_hash = compute_file_hash(file_path).await?;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SendOutcome {
+    Delivered,
+    Rejected(String),
+}
 
-    let secret_key = load_or_generate_secret_key(None)?;
-    let engine = NodeEngine::new(secret_key).await?;
+/// Otwiera nowy strumień kontrolny (`Hello::Push`) i wysyła plik.
+pub async fn push_file(
+    conn: &Connection,
+    file: &PreparedFile,
+    progress: ProgressFn<'_>,
+) -> Result<SendOutcome> {
+    let mut channel = Channel::open(conn, &Hello::Push).await?;
+    let outcome = send_on_channel(conn, &mut channel, file, progress).await?;
+    channel.finish().await;
+    Ok(outcome)
+}
 
-    let addr = engine.node_addr().await?;
-    let ticket = NodeTicket::new(addr);
-    let ticket_str = ticket.serialize_to_string()?;
-
-    println!("\n==================================================================");
-    println!(" Węzeł nadawcy jest gotowy.");
-    println!(" Udostępnij poniższy TICKET odbiorcy:");
-    println!("\n {}", ticket_str);
-    println!("==================================================================\n");
-
-    info!("Oczekiwanie na połączenie przychodzące od odbiorcy...");
-    let conn = engine.accept().await?;
-    info!("Nawiązano połączenie wejściowe z odbiorcą.");
-
-    let (mut send, mut recv) = conn
-        .open_bi()
-        .await
-        .context("Nie udało się otworzyć strumienia dwukierunkowego")?;
-
-    info!("Zaakceptowano strumień dwukierunkowy.");
-
+/// Strona wysyłająca protokołu: oferta → decyzja → chunki na osobnych strumieniach
+/// jednokierunkowych (do [`CHUNK_WINDOW`] równolegle) → werdykt odbiorcy.
+pub async fn send_on_channel(
+    conn: &Connection,
+    channel: &mut Channel,
+    file: &PreparedFile,
+    progress: ProgressFn<'_>,
+) -> Result<SendOutcome> {
     let offer = TransferOffer {
-        file_name: file_name.clone(),
-        file_size,
+        file_name: file.name.clone(),
+        file_size: file.size,
         chunk_size: DEFAULT_CHUNK_SIZE,
-        file_hash,
+        file_hash: file.hash,
     };
-    write_msg(&mut send, &offer).await?;
-    send.flush()
+    write_msg(&mut channel.send, &offer).await?;
+
+    let start_chunk_index = match read_msg(&mut channel.recv).await? {
+        TransferDecision::Accept { start_chunk_index } => start_chunk_index,
+        TransferDecision::Reject { reason } => return Ok(SendOutcome::Rejected(reason)),
+    };
+    let total_chunks = offer.total_chunks();
+    if start_chunk_index > total_chunks {
+        anyhow::bail!("Odbiorca zażądał nieistniejącego chunka #{start_chunk_index}");
+    }
+    info!(
+        "Wysyłanie '{}' od chunka {}/{}",
+        file.name, start_chunk_index, total_chunks
+    );
+
+    let mut source = File::open(&file.path).await?;
+    let start_offset = start_chunk_index * offer.chunk_size as u64;
+    source.seek(SeekFrom::Start(start_offset)).await?;
+    let mut done = start_offset.min(file.size);
+    progress(done);
+
+    // Upuszczenie JoinSet (np. przy błędzie) przerywa wszystkie zadania w locie.
+    let mut in_flight: JoinSet<Result<u32>> = JoinSet::new();
+    for chunk_index in start_chunk_index..total_chunks {
+        while in_flight.len() >= CHUNK_WINDOW {
+            done += join_next(&mut in_flight).await? as u64;
+            progress(done);
+        }
+
+        let len = offer
+            .chunk_len(chunk_index)
+            .context("Błąd wyliczenia długości chunka")?;
+        let mut payload = vec![0u8; len as usize];
+        source
+            .read_exact(&mut payload)
+            .await
+            .context("Plik źródłowy zmienił się w trakcie wysyłania")?;
+
+        // Strumienie są otwierane po kolei, więc odbiorca przyjmuje je w kolejności chunków.
+        let mut stream = conn
+            .open_uni()
+            .await
+            .context("Nie udało się otworzyć strumienia chunka")?;
+        in_flight.spawn(async move {
+            let header = ChunkHeader {
+                chunk_index,
+                payload_len: len,
+                chunk_hash: *blake3::hash(&payload).as_bytes(),
+            };
+            write_msg(&mut stream, &header).await?;
+            stream.write_all(&payload).await?;
+            stream.finish()?;
+            Ok(len)
+        });
+    }
+    while !in_flight.is_empty() {
+        done += join_next(&mut in_flight).await? as u64;
+        progress(done);
+    }
+
+    match read_msg(&mut channel.recv).await? {
+        TransferResult::Verified => Ok(SendOutcome::Delivered),
+        TransferResult::Failed { reason } => {
+            anyhow::bail!("Odbiorca odrzucił plik po weryfikacji: {reason}")
+        }
+    }
+}
+
+async fn join_next(set: &mut JoinSet<Result<u32>>) -> Result<u32> {
+    set.join_next()
         .await
-        .context("Błąd spłukiwania strumienia oferty")?;
-    info!("Wysłano ofertę transferu pliku.");
-
-    let decision: TransferDecision = read_msg(&mut recv).await?;
-    let start_chunk_index = match decision {
-        TransferDecision::Accept { start_chunk_index } => {
-            info!(
-                "Odbiorca zaakceptował transfer od chunka: {}",
-                start_chunk_index
-            );
-            start_chunk_index
-        }
-        TransferDecision::Reject { reason } => {
-            anyhow::bail!("Odbiorca odrzucił transfer. Powód: {}", reason);
-        }
-    };
-
-    let mut file = File::open(file_path).await?;
-    let start_offset = start_chunk_index * (DEFAULT_CHUNK_SIZE as u64);
-    if start_offset < file_size {
-        file.seek(SeekFrom::Start(start_offset)).await?;
-    }
-
-    let total_chunks = file_size.div_ceil(DEFAULT_CHUNK_SIZE as u64);
-    let pb = create_progress_bar(file_size, &format!("Wysyłanie: {}", file_name));
-    pb.set_position(start_offset.min(file_size));
-
-    let mut buffer = vec![0u8; DEFAULT_CHUNK_SIZE as usize];
-
-    for chunk_idx in start_chunk_index..total_chunks {
-        let mut bytes_read = 0;
-        while bytes_read < DEFAULT_CHUNK_SIZE as usize {
-            let n = file.read(&mut buffer[bytes_read..]).await?;
-            if n == 0 {
-                break;
-            }
-            bytes_read += n;
-        }
-
-        if bytes_read == 0 {
-            break;
-        }
-
-        let payload = &buffer[..bytes_read];
-        let chunk_hash = *blake3::hash(payload).as_bytes();
-
-        let header = ChunkHeader {
-            chunk_index: chunk_idx,
-            payload_len: bytes_read as u32,
-            chunk_hash,
-        };
-
-        write_msg(&mut send, &header).await?;
-        send.write_all(payload).await?;
-        send.flush().await?;
-
-        pb.inc(bytes_read as u64);
-    }
-
-    pb.finish_with_message("Przesyłanie bajtów zakończone. Oczekiwanie na weryfikację...");
-
-    send.finish().context("Błąd zamykania strumienia nadawcy")?;
-
-    info!("Oczekiwanie na potwierdzenie TransferComplete od odbiorcy...");
-    let _complete: TransferComplete = read_msg(&mut recv).await?;
-    println!("\n[SUKCES] Plik został pomyślnie odebrany i zweryfikowany przez odbiorcę!");
-
-    engine.close().await?;
-
-    Ok(())
+        .context("Brak zadań do oczekiwania")?
+        .context("Zadanie wysyłania chunka zostało przerwane")?
 }

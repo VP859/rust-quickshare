@@ -1,64 +1,142 @@
 pub mod commands;
+mod node;
+mod platform;
 
 use commands::*;
-use rqs_p2p::config::Config;
-use std::collections::HashMap;
+use node::AppState;
+
+#[cfg(desktop)]
 use tauri::Manager;
-use tauri::menu::{Menu, MenuItem};
-use tauri::tray::TrayIconBuilder;
-use tokio::sync::Mutex;
+
+/// Argument przekazywany przez autostart – aplikacja startuje ukryta w zasobniku.
+#[cfg(desktop)]
+const MINIMIZED_ARG: &str = "--minimized";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .try_init();
+
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        // Pluginy mobilne rejestrowane wyłącznie na Androidzie/iOS –
-        // na desktopie zbiera je osobna gałąź cfg poniżej, dzięki czemu
-        // `cargo build` na Linuksie/Windows/macOS nie wymaga tych crate'ów.
-        #[cfg(mobile)]
         .plugin(tauri_plugin_notification::init())
-        #[cfg(mobile)]
-        .plugin(tauri_plugin_barcode_scanner::init())
-        #[cfg(mobile)]
-        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_clipboard_manager::init());
+
+    #[cfg(mobile)]
+    {
+        builder = builder
+            .plugin(tauri_plugin_barcode_scanner::init())
+            .plugin(tauri_plugin_fs::init());
+    }
+
+    #[cfg(desktop)]
+    {
+        builder = builder
+            .plugin(tauri_plugin_autostart::init(
+                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                Some(vec![MINIMIZED_ARG]),
+            ))
+            // Zamknięcie okna chowa je do zasobnika – węzeł nadal odbiera pliki.
+            .on_window_event(|window, event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            });
+    }
+
+    builder
+        .manage(AppState::new())
         .setup(|app| {
-            let quit_i = MenuItem::with_id(app, "quit", "Zakończ RQS", true, None::<&str>)?;
-            let show_i = MenuItem::with_id(app, "show", "Pokaż Okno", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+            platform::init(app.handle());
+            commands::load_config(app.handle());
+            node::start(app.handle().clone());
 
-            let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
-                .menu(&menu)
-                .on_menu_event(|app_handle, event| match event.id.as_ref() {
-                    "show" => {
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                    "quit" => {
-                        app_handle.exit(0);
-                    }
-                    _ => {}
-                })
-                .build(app)?;
-
+            #[cfg(desktop)]
+            {
+                tray::build(app)?;
+                if std::env::args().any(|a| a == MINIMIZED_ARG)
+                    && let Some(window) = app.get_webview_window("main")
+                {
+                    window.hide()?;
+                }
+            }
             Ok(())
-        })
-        .manage(AppState {
-            config: Mutex::new(Config::load().unwrap_or_default()),
-            pending_responses: Mutex::new(HashMap::new()),
         })
         .invoke_handler(tauri::generate_handler![
             get_node_info,
-            send_file_offer,
+            list_peers,
+            add_peer,
+            update_peer,
+            remove_peer,
+            peer_online,
+            send_files,
+            share_file,
+            inspect_ticket,
+            receive_from_ticket,
             respond_to_offer,
-            get_trusted_peers,
-            add_trusted_peer,
-            remove_trusted_peer,
-            pick_file_dialog,
-            discover_devices,
+            set_download_dir,
+            take_shared_files,
         ])
         .run(tauri::generate_context!())
-        .expect("Błąd podczas uruchamiania aplikacji Tauri v2");
+        .unwrap_or_else(|e| {
+            eprintln!("Błąd podczas uruchamiania aplikacji Tauri v2: {e}");
+            std::process::exit(1);
+        });
+}
+
+#[cfg(desktop)]
+mod tray {
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    use tauri::{App, AppHandle, Manager};
+
+    fn show_main(app: &AppHandle) {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+    }
+
+    pub fn build(app: &App) -> tauri::Result<()> {
+        let show = MenuItem::with_id(app, "show", "Pokaż okno", true, None::<&str>)?;
+        let hide = MenuItem::with_id(app, "hide", "Ukryj do zasobnika", true, None::<&str>)?;
+        let quit = MenuItem::with_id(app, "quit", "Zakończ RQS", true, None::<&str>)?;
+        let menu = Menu::with_items(app, &[&show, &hide, &quit])?;
+
+        let mut tray = TrayIconBuilder::with_id("rqs-tray")
+            .tooltip("RQS P2P Quick Share – nasłuchuje")
+            .menu(&menu)
+            .show_menu_on_left_click(false)
+            .on_menu_event(|app, event| match event.id.as_ref() {
+                "show" => show_main(app),
+                "hide" => {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.hide();
+                    }
+                }
+                "quit" => app.exit(0),
+                _ => {}
+            })
+            .on_tray_icon_event(|tray, event| {
+                if let TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } = event
+                {
+                    show_main(tray.app_handle());
+                }
+            });
+        if let Some(icon) = app.default_window_icon() {
+            tray = tray.icon(icon.clone());
+        }
+        tray.build(app)?;
+        Ok(())
+    }
 }

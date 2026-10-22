@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Agent launchd (macOS) uruchamiający demona RQS po zalogowaniu.
+
+  Instalacja (podmienia __HOME__ na katalog domowy):
+    sed "s|__HOME__|$HOME|g" com.rqs.daemon.plist > ~/Library/LaunchAgents/com.rqs.daemon.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.rqs.daemon.plist
+
+  Usunięcie:
+    launchctl bootout gui/$(id -u)/com.rqs.daemon && rm ~/Library/LaunchAgents/com.rqs.daemon.plist
+-->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -6,16 +16,23 @@
     <string>com.rqs.daemon</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/rqs</string>
+        <string>__HOME__/.cargo/bin/rqs</string>
         <string>daemon</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <true/>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
     <key>StandardOutPath</key>
-    <string>/tmp/rqs-daemon.log</string>
+    <string>__HOME__/Library/Logs/rqs-daemon.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/rqs-daemon.err</string>
+    <string>__HOME__/Library/Logs/rqs-daemon.log</string>
 </dict>
 </plist>

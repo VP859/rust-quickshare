@@ -1,19 +1,16 @@
 {
-  "$schema": "../gen/schemas/desktop-capability.json",
+  "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Domyślne uprawnienia dla aplikacji RQS GUI",
-  "windows": [
-    "main"
-  ],
+  "description": "Uprawnienia okna głównego RQS na Linux/Windows/macOS",
+  "windows": ["main"],
+  "platforms": ["linux", "windows", "macOS"],
   "permissions": [
     "core:default",
-    "core:event:default",
     "dialog:default",
-    "dialog:allow-open"
-  ],
-  "platforms": [
-    "linux",
-    "windows",
-    "macOS"
+    "notification:default",
+    "clipboard-manager:allow-write-text",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
   ]
 }

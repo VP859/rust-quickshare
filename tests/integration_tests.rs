@@ -1,273 +1,318 @@
+//! Testy end-to-end protokołu RQS na dwóch prawdziwych węzłach iroh (QUIC).
+
 use anyhow::{Context, Result};
+use iroh::EndpointId;
 use rqs_p2p::node::{NodeEngine, NodeTicket, load_or_generate_secret_key};
 use rqs_p2p::protocol::codec::{read_msg, write_msg};
 use rqs_p2p::protocol::messages::{
-    ChunkHeader, DEFAULT_CHUNK_SIZE, TransferComplete, TransferDecision, TransferOffer,
+    DEFAULT_CHUNK_SIZE, Hello, ShareToken, TransferDecision, TransferOffer,
 };
+use rqs_p2p::transfer::Channel;
+use rqs_p2p::transfer::receiver::part_path_for;
 use rqs_p2p::transfer::security::resolve_secure_target_path;
-use std::path::PathBuf;
+use rqs_p2p::transfer::sender::{PreparedFile, prepare_file};
+use rqs_p2p::transfer::service::{
+    self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
+};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tempfile::tempdir;
-use tokio::fs::{File, OpenOptions};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-async fn create_test_file_with_bytes(
-    path: &PathBuf,
-    size_bytes: usize,
-) -> Result<(blake3::Hash, Vec<u8>)> {
-    let mut data = vec![0u8; size_bytes];
-    for (i, byte) in data.iter_mut().enumerate() {
-        *byte = (i % 251) as u8;
+const TEST_TIMEOUT: Duration = Duration::from_secs(60);
+
+struct TestHandler {
+    accept: bool,
+    dest_dir: PathBuf,
+    share: Option<(ShareToken, PreparedFile)>,
+    events: Mutex<Vec<TransferEvent>>,
+}
+
+impl TestHandler {
+    fn new(accept: bool, dest_dir: &Path) -> Self {
+        Self {
+            accept,
+            dest_dir: dest_dir.to_path_buf(),
+            share: None,
+            events: Mutex::new(Vec::new()),
+        }
     }
-    let mut file = File::create(path).await?;
-    file.write_all(&data).await?;
-    file.flush().await?;
 
-    let hash = blake3::hash(&data);
-    Ok((hash, data))
+    fn statuses(&self) -> Vec<TransferStatus> {
+        self.events
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|e| e.status.clone())
+            .collect()
+    }
 }
 
-#[tokio::test]
-async fn test_resume_on_connection_break() -> Result<()> {
-    let sender_dir = tempdir()?;
-    let receiver_dir = tempdir()?;
-
-    let file_path = sender_dir.path().join("big_payload.dat");
-    let file_size = 5 * 1024 * 1024; // 5 MB
-    let (original_hash, full_bytes) = create_test_file_with_bytes(&file_path, file_size).await?;
-
-    let part_path = receiver_dir.path().join("big_payload.dat.part");
-    let initial_part_bytes = 2 * 1024 * 1024; // 2 MB
-    tokio::fs::write(&part_path, &full_bytes[..initial_part_bytes]).await?;
-
-    let key1 = load_or_generate_secret_key(None)?;
-    let key2 = load_or_generate_secret_key(None)?;
-
-    let sender_engine = NodeEngine::new(key1).await?;
-    let receiver_engine = NodeEngine::new(key2).await?;
-
-    let addr = sender_engine.node_addr().await?;
-    let ticket = NodeTicket::new(addr);
-
-    let full_bytes_clone = full_bytes.clone();
-
-    let mut tx_handle = tokio::spawn(async move {
-        let conn = sender_engine
-            .accept()
-            .await
-            .context("Błąd akceptowania połączenia po stronie nadawcy")?;
-        let (mut send, mut recv) = conn
-            .open_bi()
-            .await
-            .context("Błąd otwierania strumienia Bidi po stronie nadawcy")?;
-
-        let offer = TransferOffer {
-            file_name: "big_payload.dat".to_string(),
-            file_size: file_size as u64,
-            chunk_size: DEFAULT_CHUNK_SIZE as u32,
-            file_hash: *original_hash.as_bytes(),
-        };
-        write_msg(&mut send, &offer)
-            .await
-            .context("Nie udało się wysłać oferty")?;
-        send.flush()
-            .await
-            .context("Nie udało się spłukać strumienia oferty")?;
-
-        let decision: TransferDecision = read_msg(&mut recv)
-            .await
-            .context("Błąd odczytu decyzji odbiorcy")?;
-        let start_chunk_index = match decision {
-            TransferDecision::Accept { start_chunk_index } => start_chunk_index,
-            _ => anyhow::bail!("Odbiorca odrzucił transfer!"),
-        };
-
-        let expected_start = (initial_part_bytes as u64) / (DEFAULT_CHUNK_SIZE as u64);
-        assert_eq!(
-            start_chunk_index, expected_start,
-            "Nadawca odebrał niepoprawny index wznowienia chunka"
-        );
-
-        let total_chunks = (file_size as u64).div_ceil(DEFAULT_CHUNK_SIZE as u64);
-        for chunk_idx in start_chunk_index..total_chunks {
-            let start = (chunk_idx * DEFAULT_CHUNK_SIZE as u64) as usize;
-            let end = ((chunk_idx + 1) * DEFAULT_CHUNK_SIZE as u64).min(file_size as u64) as usize;
-            let payload = &full_bytes_clone[start..end];
-            let chunk_hash = *blake3::hash(payload).as_bytes();
-
-            let header = ChunkHeader {
-                chunk_index: chunk_idx,
-                payload_len: payload.len() as u32,
-                chunk_hash,
-            };
-
-            write_msg(&mut send, &header)
-                .await
-                .context("Błąd wysyłania nagłówka chunka")?;
-            AsyncWriteExt::write_all(&mut send, payload)
-                .await
-                .context("Błąd wysyłania payloadu chunka")?;
-            send.flush()
-                .await
-                .context("Błąd spłukiwania bufora chunka")?;
-        }
-
-        send.finish().context("Błąd kończenia strumienia nadawcy")?;
-
-        let _complete: TransferComplete = read_msg(&mut recv)
-            .await
-            .context("Błąd odbioru ramki TransferComplete")?;
-        Ok::<(), anyhow::Error>(())
-    });
-
-    let mut rx_handle = tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(300)).await;
-
-        let mut conn = None;
-        for _ in 0..15 {
-            if let Ok(c) = receiver_engine.connect(ticket.addr.clone()).await {
-                conn = Some(c);
-                break;
+impl TransferHandler for TestHandler {
+    async fn decide(&self, _: EndpointId, _: &str, _: &TransferOffer) -> OfferDecision {
+        if self.accept {
+            OfferDecision::Accept {
+                dest_dir: self.dest_dir.clone(),
             }
-            tokio::time::sleep(Duration::from_millis(300)).await;
-        }
-
-        let conn = conn.context("Nie udało się połączyć odbiorcy z nadawcą po kilku próbach")?;
-        let (mut send, mut recv) = conn
-            .accept_bi()
-            .await
-            .context("Błąd akceptowania strumienia Bidi po stronie odbiorcy")?;
-
-        let offer: TransferOffer = read_msg(&mut recv)
-            .await
-            .context("Błąd odczytu oferty przez odbiorcę")?;
-        assert_eq!(offer.file_size, file_size as u64);
-
-        let existing_bytes = tokio::fs::metadata(&part_path)
-            .await
-            .context("Błąd odczytu metadanych pliku .part")?
-            .len();
-        let start_chunk_index = existing_bytes / (offer.chunk_size as u64);
-
-        let expected_start = (initial_part_bytes as u64) / (offer.chunk_size as u64);
-        assert_eq!(
-            start_chunk_index, expected_start,
-            "Odbiorca wyliczył błędny punkt wznowienia"
-        );
-
-        let decision = TransferDecision::Accept { start_chunk_index };
-        write_msg(&mut send, &decision)
-            .await
-            .context("Błąd wysyłania decyzji akceptacji")?;
-        send.flush().await.context("Błąd spłukiwania decyzji")?;
-
-        {
-            let mut part_file = OpenOptions::new()
-                .write(true)
-                .append(true)
-                .open(&part_path)
-                .await
-                .context("Nie udało się otworzyć pliku .part do dopisywania")?;
-
-            let total_chunks = offer.file_size.div_ceil(offer.chunk_size as u64);
-            for expected_idx in start_chunk_index..total_chunks {
-                let header: ChunkHeader = read_msg(&mut recv)
-                    .await
-                    .context("Błąd odczytu nagłówka chunka")?;
-                assert_eq!(header.chunk_index, expected_idx);
-
-                let mut payload = vec![0u8; header.payload_len as usize];
-                AsyncReadExt::read_exact(&mut recv, &mut payload)
-                    .await
-                    .context("Błąd odczytu zawartości chunka z sieci")?;
-
-                let computed_hash = *blake3::hash(&payload).as_bytes();
-                assert_eq!(computed_hash, header.chunk_hash);
-
-                part_file
-                    .write_all(&payload)
-                    .await
-                    .context("Błąd zapisu chunka do pliku .part")?;
-                part_file
-                    .flush()
-                    .await
-                    .context("Błąd spłukiwania pliku .part")?;
+        } else {
+            OfferDecision::Reject {
+                reason: "test".into(),
             }
         }
+    }
 
-        let downloaded_bytes = tokio::fs::read(&part_path)
-            .await
-            .context("Błąd ponownego odczytu pliku .part")?;
-        let downloaded_hash = blake3::hash(&downloaded_bytes);
-        assert_eq!(*downloaded_hash.as_bytes(), offer.file_hash);
+    fn shared_file(&self, token: &ShareToken) -> Option<PreparedFile> {
+        self.share
+            .as_ref()
+            .filter(|(t, _)| t == token)
+            .map(|(_, f)| f.clone())
+    }
 
-        let final_path = receiver_dir.path().join("big_payload.dat");
-        tokio::fs::rename(&part_path, &final_path)
-            .await
-            .context("Błąd zmiany nazwy z .part na docelową")?;
+    fn on_event(&self, event: TransferEvent) {
+        self.events.lock().unwrap().push(event);
+    }
+}
 
-        write_msg(&mut send, &TransferComplete)
-            .await
-            .context("Błąd wysyłania ramki TransferComplete")?;
-        send.flush()
-            .await
-            .context("Błąd spłukiwania ramki TransferComplete")?;
-        send.finish()
-            .context("Błąd zamykania strumienia odbiorcy")?;
-        Ok::<(), anyhow::Error>(())
-    });
+fn pattern(size: usize) -> Vec<u8> {
+    (0..size).map(|i| (i % 251) as u8).collect()
+}
 
-    let test_future = async {
-        tokio::select! {
-            res = &mut rx_handle => res.context("rx_handle error")??,
-            res = &mut tx_handle => res.context("tx_handle error")??,
-        }
-        Ok::<(), anyhow::Error>(())
-    };
+async fn engine() -> Result<NodeEngine> {
+    NodeEngine::new(load_or_generate_secret_key(None)?).await
+}
 
-    tokio::time::timeout(Duration::from_secs(15), test_future)
+/// Uruchamia węzeł odbiorcy z handlerem; zwraca (silnik, adres).
+async fn start_receiver(handler: Arc<TestHandler>) -> Result<(NodeEngine, iroh::EndpointAddr)> {
+    let receiver = engine().await?;
+    let addr = receiver.node_addr().await?;
+    tokio::spawn(service::serve(receiver.clone(), handler));
+    Ok((receiver, addr))
+}
+
+async fn with_timeout<T>(fut: impl std::future::Future<Output = Result<T>>) -> Result<T> {
+    tokio::time::timeout(TEST_TIMEOUT, fut)
         .await
-        .context("Test przekroczył limit czasu 15 sekund")??;
-
-    Ok(())
+        .context("Test przekroczył limit czasu")?
 }
 
-#[tokio::test]
-async fn test_bit_rot_corruption_detection() -> Result<()> {
-    let mut payload = vec![0u8; 1024];
-    payload[0] = 0xAA;
-    let original_hash = *blake3::hash(&payload).as_bytes();
+#[tokio::test(flavor = "multi_thread")]
+async fn push_multi_chunk_file_to_accepting_peer() -> Result<()> {
+    with_timeout(async {
+        let src = tempdir()?;
+        let dst = tempdir()?;
+        let data = pattern(5 * DEFAULT_CHUNK_SIZE as usize + 123);
+        let path = src.path().join("raport.bin");
+        tokio::fs::write(&path, &data).await?;
 
-    let header = ChunkHeader {
-        chunk_index: 0,
-        payload_len: 1024,
-        chunk_hash: original_hash,
-    };
+        let handler = Arc::new(TestHandler::new(true, dst.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        let sent = Mutex::new(Vec::new());
+        service::send_files(&sender, addr, &[path], &|e| sent.lock().unwrap().push(e)).await?;
 
-    let mut corrupted_payload = payload.clone();
-    corrupted_payload[0] = 0xBB;
+        assert_eq!(tokio::fs::read(dst.path().join("raport.bin")).await?, data);
+        assert!(matches!(
+            sent.lock().unwrap().last().map(|e| &e.status),
+            Some(TransferStatus::Completed { .. })
+        ));
+        Ok(())
+    })
+    .await
+}
 
-    let computed_hash = *blake3::hash(&corrupted_payload).as_bytes();
+#[tokio::test(flavor = "multi_thread")]
+async fn resumes_from_existing_part_file() -> Result<()> {
+    with_timeout(async {
+        let src = tempdir()?;
+        let dst = tempdir()?;
+        let data = pattern(5 * DEFAULT_CHUNK_SIZE as usize);
+        let path = src.path().join("big_payload.dat");
+        tokio::fs::write(&path, &data).await?;
+        let prepared = prepare_file(&path).await?;
 
-    assert_ne!(
-        header.chunk_hash, computed_hash,
-        "Wykrywanie Bit Rot zawiodło! Uszkodzone dane zostały zaakceptowane."
-    );
+        // 2 pełne chunki + niepełny ogon, który musi zostać obcięty.
+        let offer = TransferOffer {
+            file_name: prepared.name.clone(),
+            file_size: prepared.size,
+            chunk_size: DEFAULT_CHUNK_SIZE,
+            file_hash: prepared.hash,
+        };
+        let part = part_path_for(dst.path(), &offer)?;
+        let resume_at = 2 * DEFAULT_CHUNK_SIZE as usize;
+        tokio::fs::write(&part, &data[..resume_at + 1000]).await?;
 
-    Ok(())
+        let handler = Arc::new(TestHandler::new(true, dst.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        let sent = Mutex::new(Vec::new());
+        service::send_files(&sender, addr, &[path], &|e| sent.lock().unwrap().push(e)).await?;
+
+        assert_eq!(
+            tokio::fs::read(dst.path().join("big_payload.dat")).await?,
+            data
+        );
+        assert!(!part.exists(), "plik .part powinien zniknąć po sukcesie");
+        let first_progress = sent
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|e| e.status == TransferStatus::Running)
+            .map(|e| e.done);
+        assert_eq!(first_progress, Some(resume_at as u64));
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn corrupted_part_file_is_detected_and_discarded() -> Result<()> {
+    with_timeout(async {
+        let src = tempdir()?;
+        let dst = tempdir()?;
+        let data = pattern(3 * DEFAULT_CHUNK_SIZE as usize);
+        let path = src.path().join("x.bin");
+        tokio::fs::write(&path, &data).await?;
+        let prepared = prepare_file(&path).await?;
+        let offer = TransferOffer {
+            file_name: prepared.name.clone(),
+            file_size: prepared.size,
+            chunk_size: DEFAULT_CHUNK_SIZE,
+            file_hash: prepared.hash,
+        };
+        let part = part_path_for(dst.path(), &offer)?;
+        tokio::fs::write(&part, vec![0xEE; DEFAULT_CHUNK_SIZE as usize]).await?;
+
+        let handler = Arc::new(TestHandler::new(true, dst.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        // Drugi plik w tym samym połączeniu musi dotrzeć mimo błędu pierwszego.
+        let other = src.path().join("drugi.txt");
+        tokio::fs::write(&other, b"ok").await?;
+        let first =
+            service::send_files(&sender, addr.clone(), &[path.clone(), other], &|_| {}).await;
+        assert!(first.is_err(), "uszkodzony .part musi zostać wykryty");
+        assert!(!part.exists(), "uszkodzony .part musi zostać usunięty");
+        assert_eq!(tokio::fs::read(dst.path().join("drugi.txt")).await?, b"ok");
+
+        // Ponowna próba zaczyna od zera i kończy się sukcesem.
+        service::send_files(&sender, addr, &[path], &|_| {}).await?;
+        assert_eq!(tokio::fs::read(dst.path().join("x.bin")).await?, data);
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejected_offer_writes_nothing() -> Result<()> {
+    with_timeout(async {
+        let src = tempdir()?;
+        let dst = tempdir()?;
+        let path = src.path().join("tajne.txt");
+        tokio::fs::write(&path, b"dane").await?;
+
+        let handler = Arc::new(TestHandler::new(false, dst.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        let sent = Mutex::new(Vec::new());
+        service::send_files(&sender, addr, &[path], &|e| sent.lock().unwrap().push(e)).await?;
+
+        assert!(matches!(
+            sent.lock().unwrap().last().map(|e| &e.status),
+            Some(TransferStatus::Rejected { .. })
+        ));
+        assert_eq!(std::fs::read_dir(dst.path())?.count(), 0);
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pull_by_ticket_requires_matching_token() -> Result<()> {
+    with_timeout(async {
+        let src = tempdir()?;
+        let dst = tempdir()?;
+        let data = pattern(DEFAULT_CHUNK_SIZE as usize * 2 + 7);
+        let path = src.path().join("zdjęcie.jpg");
+        tokio::fs::write(&path, &data).await?;
+
+        let token = service::new_share_token();
+        let mut handler = TestHandler::new(false, dst.path());
+        handler.share = Some((token, prepare_file(&path).await?));
+        let handler = Arc::new(handler);
+        let (_tx, addr) = start_receiver(handler.clone()).await?;
+        let puller = engine().await?;
+
+        let wrong = NodeTicket::with_share(addr.clone(), [0; 16]);
+        assert!(
+            service::pull_shared(&puller, &wrong, dst.path(), &|_| {})
+                .await
+                .is_err()
+        );
+
+        let ticket = NodeTicket::deserialize_from_str(
+            &NodeTicket::with_share(addr, token).serialize_to_string()?,
+        )?;
+        let saved = service::pull_shared(&puller, &ticket, dst.path(), &|_| {}).await?;
+        assert_eq!(saved.file_name().unwrap(), "zdjęcie.jpg");
+        assert_eq!(tokio::fs::read(saved).await?, data);
+        // Sender (serwujący) również raportuje zakończenie.
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(
+            handler
+                .statuses()
+                .iter()
+                .any(|s| matches!(s, TransferStatus::Completed { .. }))
+        );
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn malicious_offers_are_refused() -> Result<()> {
+    with_timeout(async {
+        let dst = tempdir()?;
+        let inner = dst.path().join("inbox");
+        let handler = Arc::new(TestHandler::new(true, &inner));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let attacker = engine().await?;
+
+        let bad_offers = [
+            ("../../.bashrc", DEFAULT_CHUNK_SIZE),
+            ("/etc/passwd", DEFAULT_CHUNK_SIZE),
+            ("ok.txt", 0),        // dzielenie przez zero
+            ("ok.txt", u32::MAX), // ogromna alokacja
+        ];
+        for (name, chunk_size) in bad_offers {
+            let conn = attacker.connect(addr.clone()).await?;
+            let mut ch = Channel::open(&conn, &Hello::Push).await?;
+            let offer = TransferOffer {
+                file_name: name.into(),
+                file_size: 10,
+                chunk_size,
+                file_hash: [0; 32],
+            };
+            write_msg(&mut ch.send, &offer).await?;
+            let reply: Result<TransferDecision> = read_msg(&mut ch.recv).await;
+            assert!(
+                reply.is_err(),
+                "oferta {name:?}/{chunk_size} powinna zostać zerwana"
+            );
+        }
+        assert!(!dst.path().join(".bashrc").exists());
+        assert!(!inner.exists() || std::fs::read_dir(&inner)?.count() == 0);
+        Ok(())
+    })
+    .await
 }
 
 #[tokio::test]
 async fn test_path_traversal_exploit_blocked() -> Result<()> {
     let base_sandbox = tempdir()?;
-    let malicious_filename = "../../.bashrc";
-
-    let result = resolve_secure_target_path(base_sandbox.path(), malicious_filename);
-
+    let result = resolve_secure_target_path(base_sandbox.path(), "../../.bashrc");
     assert!(
         result.is_err(),
         "Zabezpieczenie przed Path Traversal nie zablokowało niebezpiecznej nazwy pliku!"
     );
-
     Ok(())
 }

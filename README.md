@@ -1,56 +1,106 @@
-# rust-quickshare
+# RQS P2P Quick Share (rust-quickshare)
 
-**Secure, P2P, and VPN-friendly file sharing for the modern web.**
+**Secure, P2P, and VPN-friendly file sharing for Linux, Windows, macOS and Android.**
 
-`rust-quickshare` is a high-performance, decentralized file-sharing application built in Rust. Unlike traditional LAN-sharing tools that rely on mDNS or UDP Broadcast (which often break when a VPN is active), `rust-quickshare` uses **QUIC-based P2P** and **NAT Traversal** to ensure seamless transfers even through complex network configurations.
+RQS transfers files directly between devices over QUIC. There is no storage server and no cloud;
+devices find each other by **TICKET** (text or QR code) instead of mDNS or Bluetooth, so it keeps
+working with a VPN enabled on either side.
 
-## 🚀 Key Features
+## Features
 
-*   **🔒 End-to-End Encryption:** All data is encrypted using QUIC (TLS 1.3) with Ed25519 identities. No server sees your files; the relay (DERP) only handles encrypted blobs.
-*   **🌐 VPN & NAT Friendly:** Uses `iroh` for automatic UDP Hole Punching (STUN) and Connection Migration. If a direct P2P link isn't possible, it seamlessly falls back to an encrypted relay.
-*   **⚡ Blazing Fast:** Built with `tokio` for async I/O and `blake3` for ultra-fast hashing. Supports resumable transfers and large files without blocking.
-*   **🔍 No mDNS Required:** Discovers devices via Ticket/Pairing Codes (QR or text), bypassing traditional local network discovery limitations.
-*   **🛠️ Resumable Transfers:** Automatically detects partial downloads and resumes from the last chunk, saving bandwidth and time.
+* **End-to-end encryption** – QUIC + TLS 1.3 with a persistent Ed25519 identity per device (`NodeID`).
+  Relays (fallback when hole punching fails) only forward encrypted packets.
+* **VPN & NAT friendly** – [`iroh`](https://github.com/n0-computer/iroh): UDP hole punching,
+  connection migration, encrypted relay fallback, NodeID lookup via DNS/pkarr.
+* **Integrity** – BLAKE3 hash of every 1 MiB chunk and of the whole file.
+* **Resume** – downloads go to a `.part` file; after a dropped connection (IP/VPN change) the
+  transfer resumes from the last complete chunk.
+* **Trusted devices** – alias + Auto-Accept per device; untrusted offers require confirmation.
+* **Interfaces** – desktop/Android GUI (Tauri v2), TUI (ratatui), CLI (clap), background daemon.
 
-## 🛠️ Tech Stack
-
-*   **Core Language:** Rust (Edition 2021)
-*   **P2P Network:** [`iroh`](https://github.com/n0-computer/iroh) (QUIC, STUN, DERP Relay)
-*   **Async Runtime:** `tokio` (with `full` features)
-*   **Hashing:** `blake3` (SIMD-optimized, multi-threaded)
-*   **Serialization:** `bincode` (for fast metadata headers)
-*   **Logging:** `tracing` + `tracing-subscriber`
-*   **CLI/TUI:** `clap`, `ratatui`, `crossterm` (for terminal interface)
-*   **GUI (Optional):** `tauri` or `egui`
-
-## 🏗️ Architecture & Flow
-
-`rust-quickshare` uses a ticket-based discovery and chunked streaming protocol.
-
-1.  **Discovery:** The sender generates a **Ticket** (containing their Ed25519 Node ID). This can be shared via QR code or copied as text.
-2.  **Connection:** The receiver uses the Ticket to initiate a **QUIC Handshake**. 
-    *   *Direct Mode:* STUN servers help both devices punch holes through their NATs for a direct P2P UDP connection.
-    *   *Relay Mode:* If NATs are symmetric or firewalls are strict, traffic is routed through an encrypted `iroh` relay (DERP).
-3.  **Metadata Exchange:** The sender offers file details (name, size, BLAKE3 hash). The receiver accepts or rejects.
-4.  **Streaming:** Files are split into chunks (e.g., 2MB). Each chunk is streamed with its index and hash for real-time verification.
-5.  **Verification:** The receiver verifies each chunk on-the-fly. Upon completion, a final BLAKE3 hash is compared to ensure integrity.
-6.  **Resume:** If the connection drops, the receiver checks for `.part` files and requests the transfer to resume from the last successful offset.
-
-## 📦 Installation & Building
-
-### Prerequisites
-*   [Rust](https://www.rust-lang.org/tools/install) (latest stable)
-*   Cargo
-
-### Clone and Build
+## Usage (CLI)
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/rust-quickshare.git
-cd rust-quickshare
+rqs ticket                                   # this device's TICKET + QR code (for pairing)
+rqs peer add <TICKET> --alias "Laptop" --auto-accept
+rqs peer list | rqs peer edit Laptop --auto-accept false | rqs peer remove Laptop
 
-# Build the project
-cargo build --release
+rqs daemon                                   # receive in the background (Auto-Accept for trusted)
+rqs send film.mkv notes.pdf --to Laptop      # send to a trusted device (alias/NodeID/TICKET)
 
-# Run the CLI
-cargo run --bin quickshare -- --help
+rqs send film.mkv                            # share via a one-time TICKET (prints QR)
+rqs receive <TICKET> ~/Downloads             # download a shared file
+
+rqs tui                                      # terminal UI: offers [y/n], progress, devices
+rqs doctor                                   # network/config diagnostics
+```
+
+Set `RQS_CONFIG_DIR` to run several independent identities on one machine (e.g. for testing).
+Configuration lives in `~/.config/rqs/` (`config.toml`, `secret.key`).
+
+### Running as a service
+
+| System  | File | Installation |
+|---------|------|--------------|
+| Linux   | `dist/systemd/rqs-daemon.service` | `systemctl --user enable --now rqs-daemon` (instructions in the file) |
+| macOS   | `dist/launchd/com.rqs.daemon.plist` | `launchctl bootstrap gui/$(id -u) …` (instructions in the file) |
+| Windows | `dist/windows/install-autostart.ps1` | Task Scheduler task at logon |
+
+A daemon without a terminal accepts files **only** from devices with Auto-Accept.
+The GUI has its own "Uruchamiaj przy starcie systemu" (launch at startup) toggle and keeps
+running in the system tray.
+
+## Protocol (ALPN `rqs/0.2`)
+
+```
+dialer ─ bi stream ─▶ Hello::Push | Hello::Pull{token}     (one control stream per file)
+sender ────────────▶ TransferOffer {name, size, chunk_size=1MiB, blake3}
+receiver ──────────▶ TransferDecision::Accept{start_chunk_index} | Reject{reason}
+sender ─ uni stream per chunk (≤8 in flight) ─▶ ChunkHeader{index, len, blake3} + payload
+receiver ──────────▶ TransferResult::Verified | Failed{reason}
+```
+
+* Frames: `postcard` with a 4-byte length prefix, max 64 KiB; offers with `chunk_size` 0 or
+  > 16 MiB are rejected.
+* File names are sanitized (path traversal, absolute paths, Windows reserved names); a received
+  file never overwrites an existing one (`file (1).ext`).
+* The `.part` name includes a hash fragment (`name.<hash>.part`), so a resume never appends
+  data from a different file.
+
+## Architecture
+
+```
+src/protocol/   messages and codec (no I/O)
+src/node/       iroh endpoint, persistent identity, TICKET
+src/transfer/   sender, receiver, security, service (shared accept loop + events)
+src/config/     trusted devices, paths
+src/cli/ src/tui/ src/daemon/   terminal interfaces
+src-tauri/      GUI (desktop + Android), src-tauri/ui/index.html – frontend
+src-tauri/gen/android/          Android project (Share Target, foreground service)
+```
+
+## Building
+
+```bash
+cargo build --release -p rqs_p2p            # CLI `rqs`
+cargo test                                   # unit + end-to-end tests (two iroh nodes)
+
+# GUI (Linux needs: libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev)
+cd src-tauri && npx @tauri-apps/cli@2 dev
+npx @tauri-apps/cli@2 build                  # .deb/.AppImage/.rpm | .msi/.exe | .dmg
+
+# Android (ANDROID_HOME, NDK_HOME, JDK 17+)
+cargo install tauri-cli --version "^2" --locked   # BuildTask.kt calls `cargo tauri`
+cargo tauri android build --apk --aab
+```
+
+On Android: share any file from Gallery/Files → **RQS** → pick a recipient. The node stays
+alive in the background thanks to a foreground service with a persistent notification. Received
+files land in `Download/RQS`.
+
+## Releases
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`: CLI (cargo-dist), GUI installers
+(Tauri) and APK/AAB are collected into a draft GitHub release with `SHA256SUMS.txt`.
+Android signing: the `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`
+and `ANDROID_KEY_PASSWORD` secrets.

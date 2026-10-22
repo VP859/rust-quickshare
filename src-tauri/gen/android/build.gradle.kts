@@ -4,9 +4,8 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // AGP 8.9.x => wymaga JDK 17 (kompatybilne z Gradle 8.14 / 9.x)
-        classpath("com.android.tools.build:gradle:8.9.2")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0")
+        classpath("com.android.tools.build:gradle:9.3.1")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.10")
     }
 }
 
@@ -16,3 +15,8 @@ allprojects {
         mavenCentral()
     }
 }
+
+tasks.register("clean").configure {
+    delete("build")
+}
+

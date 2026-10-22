@@ -31,7 +31,7 @@ fn bench_protocol_codec(c: &mut Criterion) {
 
     let header = ChunkHeader {
         chunk_index: 1024,
-        payload_len: DEFAULT_CHUNK_SIZE as u32,
+        payload_len: DEFAULT_CHUNK_SIZE,
         chunk_hash: [0x7F; 32],
     };
 
@@ -50,7 +50,7 @@ fn bench_protocol_codec(c: &mut Criterion) {
     let offer = TransferOffer {
         file_name: "test_large_archive_distribution.tar.gz".into(),
         file_size: 10_000_000_000,
-        chunk_size: DEFAULT_CHUNK_SIZE as u32,
+        chunk_size: DEFAULT_CHUNK_SIZE,
         file_hash: [0xAB; 32],
     };
 
@@ -92,7 +92,7 @@ fn bench_duplex_stream_transfer(c: &mut Criterion) {
                         for idx in 0..total_chunks {
                             let header = ChunkHeader {
                                 chunk_index: idx as u64,
-                                payload_len: DEFAULT_CHUNK_SIZE as u32,
+                                payload_len: DEFAULT_CHUNK_SIZE,
                                 chunk_hash: [0x11; 32],
                             };
                             write_msg(&mut sender_stream, &header).await.unwrap();

@@ -1,121 +1,104 @@
-// =============================================================================
-//  RQS Quick Share – app/build.gradle.kts
-//  Wersja dostosowana do Androida (nakładka tworzona przez `cargo tauri android init`).
-//  Pliki wygenerowane automatycznie zostają w .gitignore; ten plik jest
-//  wersjonowany, ponieważ zawiera ręczne zmiany:
-//    * namespace/applicationId = com.rqs.quickshare (zgodnie z tauri.conf.json)
-//    * minSdk 24 / targetSdk 35
-//    * TAURI_KOTLIN_CLASS -> nasza MainActivity (obsługa Share Sheet)
-//    * dependencje: androidx.core (FileProvider), accompanist/permission nie są
-//      potrzebne – uprawnienia prosimy po stronie Rust/JNI.
-// =============================================================================
+import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("rust")
 }
 
-// Wersja aplikacji pobierana z tauri.conf.json (single source of truth).
-val appVersion: String by lazy {
-    val cfg = file("$rootDir/../../tauri.conf.json")
-    if (cfg.exists()) {
-        Regex("\"version\"\\s*:\\s*\"([^\"]+)\"").find(cfg.readText())?.groupValues?.get(1) ?: "0.1.0"
-    } else "0.1.0"
+val tauriProperties = Properties().apply {
+    val propFile = file("tauri.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
+
+// Podpis wydania: gen/android/keystore.properties (tworzony w CI z sekretów, ignorowany przez git).
+val keystoreProperties = Properties().apply {
+    val propFile = rootProject.file("keystore.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
 }
 
 android {
+    compileSdk = 37
     namespace = "com.rqs.quickshare"
-    compileSdk = 35
-
     defaultConfig {
+        manifestPlaceholders["usesCleartextTraffic"] = "false"
         applicationId = "com.rqs.quickshare"
-        // Iroh + QUIC wymagają nowszych API; 24 to bezpieczne minimum (Android 7.0)
         minSdk = 24
-        targetSdk = 35
-        versionCode = 1
-        versionName = appVersion
-
-        // Tauri v2 nie używa placeholdera w manifeście – klasa Kotlin jest
-        // wskazywana przez <meta-data android:name="TAURI_KOTLIN_CLASS">
-        // bezpośrednio w AndroidManifest.xml (com.rqs.quickshare.MainActivity).
-
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
-        }
+        targetSdk = 37
+        versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
+        versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
-
-    buildTypes {
-        getByName("release") {
-            isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
-    packaging {
-        jniLibs {
-            useLegacyPackaging = false
-        }
-    }
-
-    sourceSets {
-        getByName("main") {
-            manifest.srcFile("src/main/AndroidManifest.xml")
-            java.srcDirs("src/main/java")
-            // Tutaj `cargo tauri android build` podkłada librqs_gui_lib.so
-            jniLibs.srcDirs("src/main/jniLibs")
-        }
-    }
-
-    lint {
-        // Iroh wymaga INTERNET/WAKE_LOCK – lint nie może ich wywalać jako błędu
-        abortOnError = false
-        disable += setOf("ExpiredTargetSdkVersion", "NotificationPermission")
-    }
-}
-
-dependencies {
-    implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("androidx.activity:activity-ktx:1.9.2")
-    implementation("androidx.lifecycle:lifecycle-service:2.8.6")
-    implementation("androidx.core:core-splashscreen:1.0.1")
-    testImplementation("junit:junit:4.13.2")
-}
-
-// -----------------------------------------------------------------------------
-// Zadanie pomocnicze: przed assemblingiem kopiujemy bibliotekę .so z Cargo do
-// src/main/jniLibs/<abi>/librqs_gui_lib.so  (robione też przez `tauri android build`,
-// tutaj tylko dla wygodnego `./gradlew assembleDebug` podczas debugowania).
-// -----------------------------------------------------------------------------
-tasks.register("copyRustLib") {
-    doLast {
-        val outRoot = file("$rootDir/../target")
-        val mapping = mapOf(
-            "arm64-v8a" to "aarch64-linux-android",
-            "armeabi-v7a" to "armv7-linux-androideabi",
-            "x86_64" to "x86_64-linux-android",
-        )
-        mapping.forEach { (abi, triple) ->
-            val src = file("$outRoot/$triple/debug/librqs_gui_lib.so")
-            if (src.exists()) {
-                val dstDir = file("src/main/jniLibs/$abi")
-                dstDir.mkdirs()
-                copy { from(src); into(dstDir); rename { "librqs_gui_lib.so" } }
+    signingConfigs {
+        if (keystoreProperties.containsKey("storeFile")) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
             }
         }
     }
+    buildTypes {
+        getByName("debug") {
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+            isDebuggable = true
+            isJniDebuggable = true
+            isMinifyEnabled = false
+            packaging {
+                jniLibs.keepDebugSymbols.add("*/arm64-v8a/*.so")
+                jniLibs.keepDebugSymbols.add("*/armeabi-v7a/*.so")
+                jniLibs.keepDebugSymbols.add("*/x86/*.so")
+                jniLibs.keepDebugSymbols.add("*/x86_64/*.so")
+            }
+        }
+        getByName("release") {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+            optimization {
+               enable = true
+            }
+            proguardFiles(
+                *fileTree(".") {
+                  include("**/*.pro")
+                  exclude("build/**")
+                }.files.toTypedArray()
+            )
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+    buildFeatures {
+        buildConfig = true
+    }
 }
-// W trybie CI (`cargo tauri android build`) zadanie jest pomijane, bo Tauri
-// sam kopiuje artefakty Cargo do jniLibs. Uruchamiamy je tylko lokalnie.
-if (System.getenv("CI") == null) {
-    tasks.matching { it.name.startsWith("merge") && it.name.contains("JniLibFolders") }
-        .configureEach { dependsOn("copyRustLib") }
+
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_1_8
+    }
 }
+
+rust {
+    rootDirRel = "../../../"
+}
+
+dependencies {
+    implementation("androidx.webkit:webkit:1.14.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    // IntentCompat / ServiceCompat (Share Target, usługa pierwszoplanowa)
+    implementation("androidx.core:core-ktx:1.16.0")
+    implementation("androidx.activity:activity-ktx:1.10.1")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.lifecycle:lifecycle-process:2.10.0")
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.4")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
+}
+
+apply(from = file("tauri.build.gradle.kts"))

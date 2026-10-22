@@ -1,174 +1,124 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
+use iroh::EndpointId;
+use std::io::IsTerminal;
 use std::path::PathBuf;
-use tokio::io::{AsyncSeekExt, AsyncWriteExt, SeekFrom};
+use std::sync::Arc;
 use tracing::{info, warn};
 
 use crate::config::Config;
-use crate::node::{NodeEngine, load_or_generate_secret_key};
-use crate::protocol::codec::{read_msg, write_msg};
-use crate::protocol::messages::{ChunkHeader, TransferComplete, TransferDecision, TransferOffer};
-use crate::transfer::hash::compute_file_hash;
+use crate::node::NodeEngine;
+use crate::protocol::messages::TransferOffer;
+use crate::transfer::service::{
+    self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
+};
 
-pub async fn run_daemon(downloads_dir_opt: Option<PathBuf>) -> Result<()> {
-    let config = Config::load()?;
-    let downloads_dir = downloads_dir_opt
-        .or_else(|| config.default_download_dir.clone())
-        .or_else(dirs::download_dir)
-        .unwrap_or_else(|| PathBuf::from("."));
+/// Demon: zaufane urządzenia z Auto-Accept są przyjmowane automatycznie; pozostałe –
+/// po potwierdzeniu w konsoli (jeśli jest terminal) lub odrzucane (usługa systemowa).
+struct DaemonHandler {
+    downloads_dir: Option<PathBuf>,
+    interactive: bool,
+    /// Serializuje pytania w konsoli przy równoległych ofertach.
+    prompt_lock: tokio::sync::Mutex<()>,
+}
 
-    tokio::fs::create_dir_all(&downloads_dir).await?;
-
-    let secret_key = load_or_generate_secret_key(None)?;
-    let engine = NodeEngine::new(secret_key).await?;
-    let node_id = engine.node_id().to_string();
-
-    let addr = engine.node_addr().await?;
-    let ticket_str = crate::node::NodeTicket::new(addr).serialize_to_string()?;
-
-    println!("==================================================================");
-    println!(" DEMON RQS UROCHOMIONY W TLE");
-    println!(" Twój Node ID: {}", node_id);
-    println!(" Twój TICKET : {}", ticket_str);
-    println!(" Katalog pobierania: {:?}", downloads_dir);
-    println!("==================================================================\n");
-
-    loop {
-        let conn = match engine.accept().await {
-            Ok(c) => c,
-            Err(e) => {
-                warn!("Błąd akceptacji połączenia wejściowego: {:?}", e);
-                continue;
-            }
-        };
-
-        let remote_node_id = conn.remote_id().to_string();
-        let peer_info = config.find_peer(&remote_node_id).cloned();
-        let target_dir = downloads_dir.clone();
-
-        tokio::spawn(async move {
-            if let Err(e) =
-                handle_daemon_incoming(conn, remote_node_id, peer_info, target_dir).await
-            {
-                warn!("Błąd podczas obsługi połączenia w demonie: {:?}", e);
-            }
-        });
+impl DaemonHandler {
+    async fn ask_user(&self, question: String) -> bool {
+        let _guard = self.prompt_lock.lock().await;
+        tokio::task::spawn_blocking(move || {
+            use std::io::Write;
+            print!("{question} [y/N]: ");
+            let _ = std::io::stdout().flush();
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input).is_ok() && input.trim().eq_ignore_ascii_case("y")
+        })
+        .await
+        .unwrap_or(false)
     }
 }
 
-async fn handle_daemon_incoming(
-    conn: iroh::endpoint::Connection,
-    remote_node_id: String,
-    peer_info: Option<crate::config::PeerInfo>,
-    downloads_dir: PathBuf,
-) -> Result<()> {
-    let (mut send, mut recv) = conn
-        .accept_bi()
-        .await
-        .context("Błąd otwarcia strumienia bi-directional")?;
+impl TransferHandler for DaemonHandler {
+    async fn decide(&self, peer: EndpointId, _: &str, offer: &TransferOffer) -> OfferDecision {
+        // Konfiguracja czytana przy każdej ofercie – zmiany z `rqs peer` działają bez restartu.
+        let config = Config::load().unwrap_or_else(|e| {
+            warn!("Nie udało się wczytać konfiguracji: {e:#}");
+            Config::default()
+        });
+        let dest_dir = self
+            .downloads_dir
+            .clone()
+            .unwrap_or_else(|| config.download_dir());
+        let peer_info = config.find_peer(&peer.to_string());
+        let alias = peer_info
+            .map(|p| p.alias.as_str())
+            .unwrap_or("Nieznane Urządzenie");
 
-    let offer: TransferOffer = read_msg(&mut recv).await?;
-    let alias = peer_info
-        .as_ref()
-        .map(|p| p.alias.as_str())
-        .unwrap_or("Nieznane Urządzenie");
+        if peer_info.is_some_and(|p| p.auto_accept) {
+            info!("Auto-Accept: '{}' od '{}'", offer.file_name, alias);
+            return OfferDecision::Accept { dest_dir };
+        }
+        if !self.interactive {
+            return OfferDecision::Reject {
+                reason: format!("Urządzenie {alias} nie ma włączonego Auto-Accept"),
+            };
+        }
 
-    info!(
-        "Oferta transferu od '{}' ({}): {} ({} bajtów)",
-        alias, remote_node_id, offer.file_name, offer.file_size
-    );
-
-    let is_auto_accept = peer_info.as_ref().map(|p| p.auto_accept).unwrap_or(false);
-
-    if !is_auto_accept {
-        println!(
-            "\n[OFERTA] Otrzymano plik '{}' ({:.2} MB) od '{}' ({}).",
+        let question = format!(
+            "\n[OFERTA] '{}' ({:.2} MB) od '{}' ({}). Odebrać?",
             offer.file_name,
             offer.file_size as f64 / 1_048_576.0,
             alias,
-            remote_node_id
+            peer
         );
-        print!("Czy chcesz odebrać plik? [y/N]: ");
-        use std::io::Write;
-        std::io::stdout().flush()?;
-
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-
-        if !input.trim().eq_ignore_ascii_case("y") {
-            let decision = TransferDecision::Reject {
-                reason: "Użytkownik odrzucił połączenie w konsoli demona".to_string(),
-            };
-            write_msg(&mut send, &decision).await?;
-            println!("[ODRZUCONO] Transfer został odrzucony.");
-            return Ok(());
+        if self.ask_user(question).await {
+            OfferDecision::Accept { dest_dir }
+        } else {
+            OfferDecision::Reject {
+                reason: "Użytkownik odrzucił transfer".into(),
+            }
         }
-    } else {
-        info!(
-            "Automatyczna akceptacja (Auto-Accept) dla zaufanego urządzenia: {}",
-            alias
-        );
     }
 
-    // Pobieranie pliku
-    let dest_path = downloads_dir.join(&offer.file_name);
-    let part_path = downloads_dir.join(format!("{}.part", offer.file_name));
-
-    let mut start_chunk_index: u64 = 0;
-    if part_path.exists() {
-        let metadata = tokio::fs::metadata(&part_path).await?;
-        let existing_bytes = metadata.len();
-        let valid_chunks = existing_bytes / (offer.chunk_size as u64);
-        let valid_bytes = valid_chunks * (offer.chunk_size as u64);
-
-        if existing_bytes != valid_bytes {
-            let file = tokio::fs::OpenOptions::new()
-                .write(true)
-                .open(&part_path)
-                .await?;
-            file.set_len(valid_bytes).await?;
+    fn on_event(&self, ev: TransferEvent) {
+        match ev.status {
+            TransferStatus::Completed { path } => info!(
+                "[SUKCES] '{}' od {} → {}",
+                ev.file_name,
+                ev.peer,
+                path.unwrap_or_default()
+            ),
+            TransferStatus::Failed { error } => warn!("[BŁĄD] '{}': {error}", ev.file_name),
+            TransferStatus::Rejected { reason } => {
+                info!("[ODRZUCONO] '{}' od {}: {reason}", ev.file_name, ev.peer)
+            }
+            _ => {}
         }
-        start_chunk_index = valid_chunks;
     }
+}
 
-    write_msg(&mut send, &TransferDecision::Accept { start_chunk_index }).await?;
+pub async fn run_daemon(downloads_dir: Option<PathBuf>) -> Result<()> {
+    let engine = NodeEngine::with_persistent_identity().await?;
+    let ticket_str = engine.ticket().await?.serialize_to_string()?;
+    let target = downloads_dir
+        .clone()
+        .unwrap_or_else(|| Config::load().unwrap_or_default().download_dir());
 
-    let mut part_file = tokio::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(false)
-        .open(&part_path)
-        .await?;
+    println!("==================================================================");
+    println!(" DEMON RQS URUCHOMIONY");
+    println!(" Twój Node ID: {}", engine.node_id());
+    println!(" Twój TICKET : {}", ticket_str);
+    println!(" Katalog pobierania: {:?}", target);
+    println!("==================================================================\n");
 
-    let start_offset = start_chunk_index * (offer.chunk_size as u64);
-    part_file.seek(SeekFrom::Start(start_offset)).await?;
+    let handler = Arc::new(DaemonHandler {
+        downloads_dir,
+        interactive: std::io::stdin().is_terminal(),
+        prompt_lock: tokio::sync::Mutex::new(()),
+    });
 
-    let total_chunks = offer.file_size.div_ceil(offer.chunk_size as u64);
-
-    for expected_idx in start_chunk_index..total_chunks {
-        let header: ChunkHeader = read_msg(&mut recv).await?;
-        if header.chunk_index != expected_idx {
-            anyhow::bail!("Niezgodność indeksów chunków");
-        }
-
-        let mut payload = vec![0u8; header.payload_len as usize];
-        recv.read_exact(&mut payload).await?;
-
-        if *blake3::hash(&payload).as_bytes() != header.chunk_hash {
-            anyhow::bail!("Błąd spójności chunka BLAKE3");
-        }
-
-        part_file.write_all(&payload).await?;
-        part_file.flush().await?;
+    tokio::select! {
+        _ = service::serve(engine.clone(), handler) => {}
+        _ = tokio::signal::ctrl_c() => info!("Otrzymano sygnał zakończenia"),
     }
-
-    let file_hash = compute_file_hash(&part_path).await?;
-    if file_hash != offer.file_hash {
-        anyhow::bail!("Niezgodność końcowego haszu pliku BLAKE3");
-    }
-
-    tokio::fs::rename(&part_path, &dest_path).await?;
-    write_msg(&mut send, &TransferComplete).await?;
-
-    println!("\n[SUKCES] Zakończono pobieranie: {:?}", dest_path);
+    engine.close().await;
     Ok(())
 }

@@ -12,47 +12,34 @@ crate-type = ["lib", "cdylib", "staticlib"]
 name = "rqs-gui"
 path = "src/main.rs"
 
+# Instalatory GUI buduje `tauri build` (patrz .github/workflows/release.yml), nie cargo-dist.
+[package.metadata.dist]
+dist = false
+
 [build-dependencies]
 tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
 rqs_p2p = { path = ".." }
-# Uwaga: `tray-icon` to opcja właściwa wyłącznie dla desktopu – na Androidzie
-# zostaje włączona warunkowo (patrz sekcja target.'cfg(not(android))' poniżej).
 tauri = { version = "2.12.4", features = [] }
 tauri-plugin-dialog = "2.8.3"
-# Odczyt plików z Share Sheet (`content://…`) po stronie JS + Rust
-tauri-plugin-fs = "2.4.0"
-# Cykl życia aktywności Androida (onNewIntent, onResume, onDestroy)
-tauri-plugin-android-lifecycle = "2.0.0"
-tauri-plugin-android-lifecycle-capabilities = "2.0.0"
+tauri-plugin-notification = "2"
+tauri-plugin-clipboard-manager = "2"
+qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 serde_json = "1.0.154"
-blake3 = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
-uuid = { workspace = true }
-chrono = { workspace = true }
 iroh = { workspace = true }
-futures-util = "0.3"
-
-# ---------------------------------------------------------------------------
-# Zależności specyficzne dla platformy
-# ---------------------------------------------------------------------------
-[target.'cfg(not(target_os = "android"))'.dependencies]
-# Tacka systemowa i menu kontekstowe mają sens tylko na Linux/Windows/macOS
-tauri = { version = "2.12.4", features = ["tray-icon"] }
-
-[target.'cfg(target_os = "android")'.dependencies]
-# Pluginy mobilne używane w lib.rs wyłącznie za `#[cfg(mobile)]`:
-# powiadomienia systemowe, skaner QR (parowanie peerów) i schowek.
-tauri-plugin-notification = "2"
-tauri-plugin-barcode-scanner = "2"
-tauri-plugin-clipboard-manager = "2"
-# JNI do wywołań natywnych: ContentResolver, NotificationManager, WifiManager
-jni = "0.21"
-ndk-context = "0.1"
-# Logowanie przez logcat (build.rs dodaje -llog dla native_activity_log)
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-android-tracing-layer = "0.1"
+
+# Zasobnik systemowy i autostart mają sens tylko na Linux/Windows/macOS.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri = { version = "2.12.4", features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart = "2"
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2"
+# Odczyt URI `content://` zwracanych przez okno wyboru plików na Androidzie.
+tauri-plugin-fs = "2.4.0"

@@ -6,6 +6,7 @@ use ratatui::{
 };
 
 use super::app::App;
+use crate::transfer::service::{Direction as TransferDirection, TransferStatus};
 
 pub fn render(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -37,7 +38,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
-        .title(" Aktywne i Historiowe Transfery Plików ")
+        .title(" Aktywne i Historyczne Transfery Plików ")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Green));
 
@@ -47,33 +48,49 @@ fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(vec![Constraint::Length(3); app.transfers.len()])
-        .split(area);
+    let inner = block.inner(area);
+    f.render_widget(block, area);
 
-    for (i, (_, item)) in app.transfers.iter().enumerate() {
-        if i >= chunks.len() {
-            break;
-        }
-        let pct = if item.file_size > 0 {
-            (item.bytes_transferred as f64 / item.file_size as f64 * 100.0) as u16
+    // Najnowsze transfery na górze; tyle, ile zmieści się w panelu.
+    let visible = (inner.height / 2).max(1) as usize;
+    let items: Vec<_> = app.transfers.iter().rev().take(visible).collect();
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(vec![Constraint::Length(2); items.len()])
+        .split(inner);
+
+    for (item, row) in items.into_iter().zip(rows.iter()) {
+        let pct = if item.total > 0 {
+            (item.done as f64 / item.total as f64 * 100.0) as u16
         } else {
             0
         };
-
+        let arrow = match item.direction {
+            TransferDirection::Upload => "↑",
+            TransferDirection::Download => "↓",
+        };
+        let (state, color) = match &item.status {
+            TransferStatus::Preparing => ("haszowanie".to_string(), Color::Blue),
+            TransferStatus::AwaitingDecision => ("oczekuje".to_string(), Color::Yellow),
+            TransferStatus::Running => (format!("{pct}%"), Color::Yellow),
+            TransferStatus::Completed { .. } => ("zakończono ✓".to_string(), Color::Green),
+            TransferStatus::Rejected { reason } => (format!("odrzucono: {reason}"), Color::Red),
+            TransferStatus::Failed { error } => (format!("błąd: {error}"), Color::Red),
+        };
         let label = format!(
-            "{} ({:.1} MB/s) - {}/{} B",
-            item.file_name, item.speed_mbps, item.bytes_transferred, item.file_size
+            "{arrow} {} — {:.1}/{:.1} MB — {state}",
+            item.file_name,
+            item.done as f64 / 1_048_576.0,
+            item.total as f64 / 1_048_576.0,
         );
 
         let gauge = Gauge::default()
             .block(Block::default().borders(Borders::BOTTOM))
-            .gauge_style(Style::default().fg(Color::Yellow).bg(Color::Black))
+            .gauge_style(Style::default().fg(color).bg(Color::Black))
             .percent(pct.min(100))
             .label(label);
 
-        f.render_widget(gauge, chunks[i]);
+        f.render_widget(gauge, *row);
     }
 }
 
@@ -110,12 +127,13 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     );
     f.render_widget(peers_list, chunks[0]);
 
-    let prompt_text = if let Some((node, name, size)) = &app.pending_offer {
+    let prompt_text = if let Some(offer) = app.pending.front() {
         format!(
-            "Otrzymano ofertę pliku!\nPlik: {}\nRozmiar: {:.2} MB\nOd: {}\n\nCzy akceptujesz? [y / n]",
-            name,
-            *size as f64 / 1_048_576.0,
-            node
+            "Otrzymano ofertę pliku! (w kolejce: {})\nPlik: {}\nRozmiar: {:.2} MB\nOd: {}\n\nCzy akceptujesz? [y / n]",
+            app.pending.len(),
+            offer.file_name,
+            offer.file_size as f64 / 1_048_576.0,
+            offer.peer_label
         )
     } else {
         "Brak oczekujących prośb transferu.".to_string()

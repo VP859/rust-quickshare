@@ -43,8 +43,16 @@ pub async fn run_doctor() -> Result<DoctorReport> {
         println!("[✓] VPN: Brak aktywnych przeszkadzających interfejsów tunelowych.");
     }
 
-    let config_ok = true;
-    println!("[✓] Konfiguracja: Plik konfiguracyjny jest poprawny.\n");
+    let config_ok = match crate::config::Config::load() {
+        Ok(_) => {
+            println!("[✓] Konfiguracja: Plik konfiguracyjny jest poprawny.\n");
+            true
+        }
+        Err(e) => {
+            println!("[✗] Konfiguracja: {e:#}\n");
+            false
+        }
+    };
 
     Ok(DoctorReport {
         udp_socket_ok: udp_ok,

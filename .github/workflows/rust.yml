@@ -32,6 +32,15 @@ jobs:
 
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    # Crate GUI (src-tauri) wymaga WebKitGTK i pozostałych bibliotek Tauri.
+    - name: Install Linux build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+          libayatana-appindicator3-dev librsvg2-dev
 
     - name: Auto-format code
       run: cargo fmt --all
@@ -55,4 +64,4 @@ jobs:
       run: cargo test --verbose
 
     - name: Clippy check
-      run: cargo clippy -- -D warnings
+      run: cargo clippy --workspace --all-targets -- -D warnings
