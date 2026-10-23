@@ -5458,7 +5458,6 @@ dependencies = [
  "indicatif",
  "iroh",
  "libc",
- "memmap2",
  "network-interface",
  "postcard",
  "qrcode",

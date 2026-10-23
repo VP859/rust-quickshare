@@ -92,6 +92,8 @@ struct Entry {
 pub struct DiscoveryHealth {
     /// Gniazdo nasłuchuje na standardowym porcie (inaczej nie odbieramy ogłoszeń).
     pub listening: bool,
+    /// Zakończono pierwszą rundę ogłoszeń – wcześniej stan sieci jest jeszcze nieznany.
+    pub announced: bool,
     /// Liczba sieci lokalnych IPv4 (Wi-Fi/LAN) w ostatniej rundzie ogłoszeń.
     pub networks: usize,
     /// W ostatniej rundzie przynajmniej jedno ogłoszenie trafiło do sieci lokalnej.
@@ -109,6 +111,9 @@ impl DiscoveryHealth {
             return Some(format!(
                 "Port UDP {DISCOVERY_PORT} jest zajęty przez inny program – to urządzenie nie odbiera ogłoszeń."
             ));
+        }
+        if !self.announced {
+            return None;
         }
         if self.networks == 0 {
             return Some("Brak połączenia z siecią lokalną (Wi-Fi/LAN).".into());
@@ -415,6 +420,7 @@ async fn announce(
                 );
             }
         }
+        health.announced = true;
         health.networks = networks;
         health.lan_send_ok = lan.ok;
         health.lan_send_error = error;

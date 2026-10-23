@@ -349,7 +349,15 @@ async fn discovery_finds_peer_on_local_network() -> Result<()> {
         assert_eq!(seen_by_b.name, "Laptop A");
 
         // Diagnostyka: ogłoszenia wysłane i odebrane – brak wskazówki o problemie.
-        let health = db.health();
+        // Odbiór może wyprzedzić pierwszą rundę własnych ogłoszeń – czekamy na nią.
+        let mut health = db.health();
+        for _ in 0..50 {
+            if health.announced {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            health = db.health();
+        }
         assert!(health.listening && health.lan_send_ok, "{health:?}");
         assert!(health.beacons_received > 0, "{health:?}");
         assert_eq!(health.hint(), None);

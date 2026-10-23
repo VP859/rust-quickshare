@@ -1,5 +1,4 @@
 pub mod hash;
-pub mod performance;
 pub mod receiver;
 pub mod security;
 pub mod sender;

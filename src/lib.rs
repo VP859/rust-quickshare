@@ -9,7 +9,3 @@ pub mod system;
 pub mod telemetry;
 pub mod transfer;
 pub mod tui;
-
-pub use telemetry::doctor;
-pub use transfer::performance;
-pub use transfer::security;
