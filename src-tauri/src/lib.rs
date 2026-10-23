@@ -12,14 +12,31 @@ use tauri::Manager;
 #[cfg(desktop)]
 const MINIMIZED_ARG: &str = "--minimized";
 
+fn init_logging() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+
+    // Na Androidzie stdout nie trafia nigdzie – logi kierujemy do logcat
+    // (`adb logcat -s RqsCore`).
+    #[cfg(target_os = "android")]
+    {
+        use tracing_subscriber::layer::SubscriberExt;
+        use tracing_subscriber::util::SubscriberInitExt;
+        if let Ok(layer) = tracing_android::layer("RqsCore") {
+            let _ = tracing_subscriber::registry()
+                .with(filter)
+                .with(layer)
+                .try_init();
+            return;
+        }
+    }
+
+    let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
-        .try_init();
+    init_logging();
 
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

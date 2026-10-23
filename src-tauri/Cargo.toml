@@ -43,3 +43,7 @@ tauri-plugin-autostart = "2"
 tauri-plugin-barcode-scanner = "2"
 # Odczyt URI `content://` zwracanych przez okno wyboru plików na Androidzie.
 tauri-plugin-fs = "2.4.0"
+
+[target.'cfg(target_os = "android")'.dependencies]
+# Logi Rusta w `adb logcat` (stdout aplikacji Android nie jest nigdzie zapisywany).
+tracing-android = "0.2.0"

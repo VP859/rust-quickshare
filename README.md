@@ -88,6 +88,11 @@ running in the system tray.
   switch can block the local network (e.g. NordVPN: `nordvpn set lan-discovery on`). Then use
   **My TICKET** / QR – it works over the internet as well.
 * Android holds a `MulticastLock` in the foreground service; its device name is the phone's model.
+* **Android 17+** (targetSdk 37) blocks all local network traffic (broadcast, multicast, direct
+  LAN connections) without the **ACCESS_LOCAL_NETWORK** permission ("Nearby devices" group).
+  The app requests it at startup; if it was denied: Settings → Apps → RQS Quick Share →
+  Permissions → Nearby devices. Without it only transfers through the internet relay work.
+* Android logs (Rust + Kotlin): `adb logcat -s RqsCore RqsService RqsShare`.
 * When the list stays empty, every interface (GUI, TUI, `rqs discover`, `rqs doctor`) shows the
   reason: LAN sending blocked (VPN/firewall), no local network, or no announcements received.
 * Adding a device manually (TICKET/Node ID) in any interface also sends a pairing request – once

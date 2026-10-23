@@ -752,6 +752,11 @@
     } catch (e) { fail(e); }
   }
   window.addEventListener('rqs-share', checkSharedFiles);
+  // Android 17: po nadaniu uprawnienia do sieci lokalnej od razu szukamy urządzeń.
+  window.addEventListener('rqs-lan-permission', async () => {
+    try { await invoke('refresh_nearby'); toast('Dostęp do sieci lokalnej przyznany – szukanie urządzeń…'); }
+    catch (e) { fail(e); }
+  });
 
   // ---------- Start ----------
   document.addEventListener('DOMContentLoaded', async () => {
@@ -782,6 +787,8 @@
     await loadNodeInfo();
     checkOnline();
     setInterval(checkOnline, 60000);
+    // Podpowiedź diagnostyczna przy pustej liście „W pobliżu” odświeżana na bieżąco.
+    setInterval(() => { if (!nearby.length) renderNearby(); }, 5000);
     if (isMobile) checkSharedFiles();
   });
 })();

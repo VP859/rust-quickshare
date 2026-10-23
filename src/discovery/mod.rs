@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use tokio::net::UdpSocket;
 use tokio::sync::{Notify, watch};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::node::NodeEngine;
 use crate::pairing::clean_device_name;
@@ -113,6 +113,14 @@ impl DiscoveryHealth {
         if self.networks == 0 {
             return Some("Brak połączenia z siecią lokalną (Wi-Fi/LAN).".into());
         }
+        if !self.lan_send_ok && cfg!(target_os = "android") {
+            return Some(format!(
+                "Android blokuje dostęp do sieci lokalnej ({}). Nadaj aplikacji uprawnienie \
+                 „Urządzenia w pobliżu” (Ustawienia → Aplikacje → RQS Quick Share → Uprawnienia) \
+                 i sprawdź, czy VPN na telefonie zezwala na sieć lokalną.",
+                self.lan_send_error.as_deref().unwrap_or("nieznany błąd")
+            ));
+        }
         if !self.lan_send_ok {
             return Some(format!(
                 "Wysyłanie do sieci lokalnej jest blokowane ({}) – zwykle przez VPN lub zaporę. \
@@ -185,6 +193,15 @@ impl Discovery {
                 ..Default::default()
             }),
         });
+        info!(
+            "Wykrywanie: nasłuch UDP {} ({})",
+            opts.port,
+            if listening {
+                "OK"
+            } else {
+                "port zajęty – tryb ograniczony"
+            }
+        );
         let task = tokio::spawn(run(engine, socket, opts, shared.clone()));
         Ok(Self { shared, task })
     }
@@ -384,9 +401,23 @@ async fn announce(
     };
 
     if let Ok(mut health) = shared.health.lock() {
+        let error = if lan.ok { None } else { lan.error };
+        if health.networks != networks
+            || health.lan_send_ok != lan.ok
+            || health.lan_send_error != error
+        {
+            if lan.ok {
+                info!("Wykrywanie: ogłoszenia wysyłane do {networks} sieci lokalnych");
+            } else {
+                warn!(
+                    "Wykrywanie: brak wysyłki do sieci lokalnej (sieci: {networks}, błąd: {})",
+                    error.as_deref().unwrap_or("brak interfejsu")
+                );
+            }
+        }
         health.networks = networks;
         health.lan_send_ok = lan.ok;
-        health.lan_send_error = if lan.ok { None } else { lan.error };
+        health.lan_send_error = error;
     }
 }
 
@@ -488,7 +519,13 @@ async fn handle_packet(
                     || e.device.addr != device.addr
             }
             None if devices.len() >= MAX_DEVICES => return,
-            None => true,
+            None => {
+                info!(
+                    "Wykrywanie: nowe urządzenie '{}' ({}) z {from}",
+                    device.name, device.platform
+                );
+                true
+            }
         };
         devices.insert(
             id,
@@ -525,43 +562,105 @@ fn expire(shared: &Shared) {
 }
 
 /// Adresy IPv4 tego urządzenia w sieciach lokalnych wraz z adresem broadcast sieci.
-#[cfg_attr(not(target_os = "android"), allow(unused_variables))]
 fn local_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
-    let mut networks = Vec::new();
-
-    #[cfg(not(target_os = "android"))]
-    {
-        use network_interface::{Addr, NetworkInterface, NetworkInterfaceConfig};
-        for iface in NetworkInterface::show().unwrap_or_default() {
-            for addr in iface.addr {
-                let Addr::V4(v4) = addr else { continue };
-                if v4.ip.is_loopback() {
-                    continue;
-                }
-                let broadcast = v4.broadcast.or_else(|| {
-                    v4.netmask
-                        .map(|m| Ipv4Addr::from(u32::from(v4.ip) | !u32::from(m)))
-                });
-                networks.push((v4.ip, broadcast.filter(|b| *b != v4.ip)));
-            }
-        }
-    }
-
-    // Android nie udostępnia listy interfejsów bez uprawnień – zakładamy /24
-    // dla prywatnych adresów wykrytych przez iroh.
-    #[cfg(target_os = "android")]
-    for addr in engine.endpoint().addr().ip_addrs() {
-        if let SocketAddr::V4(v4) = addr
-            && v4.ip().is_private()
-        {
-            let o = v4.ip().octets();
-            networks.push((*v4.ip(), Some(Ipv4Addr::new(o[0], o[1], o[2], 255))));
-        }
-    }
-
+    let mut networks = platform_networks(engine);
     networks.sort();
     networks.dedup();
     networks
+}
+
+#[cfg(not(target_os = "android"))]
+fn platform_networks(_engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
+    use network_interface::{Addr, NetworkInterface, NetworkInterfaceConfig};
+    let mut networks = Vec::new();
+    for iface in NetworkInterface::show().unwrap_or_default() {
+        for addr in iface.addr {
+            let Addr::V4(v4) = addr else { continue };
+            if v4.ip.is_loopback() {
+                continue;
+            }
+            let broadcast = v4.broadcast.or_else(|| {
+                v4.netmask
+                    .map(|m| Ipv4Addr::from(u32::from(v4.ip) | !u32::from(m)))
+            });
+            networks.push((v4.ip, broadcast.filter(|b| *b != v4.ip)));
+        }
+    }
+    networks
+}
+
+#[cfg(target_os = "android")]
+fn platform_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
+    let networks = android::interfaces();
+    if !networks.is_empty() {
+        return networks;
+    }
+    // Gdy getifaddrs nic nie zwróci – przybliżenie /24 z adresów wykrytych przez iroh.
+    engine
+        .endpoint()
+        .addr()
+        .ip_addrs()
+        .filter_map(|addr| match addr {
+            SocketAddr::V4(v4) if v4.ip().is_private() => {
+                let o = v4.ip().octets();
+                Some((*v4.ip(), Some(Ipv4Addr::new(o[0], o[1], o[2], 255))))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// Lista interfejsów na Androidzie. `getifaddrs` z bioniki działa bez dodatkowych
+/// uprawnień (od Androida 11 bez adresów MAC, ale z adresami IP i maskami).
+/// Kompilowane także w testach na Linuksie (glibc ma to samo API), aby je sprawdzić.
+#[cfg(any(target_os = "android", all(test, target_os = "linux")))]
+mod android {
+    use std::net::Ipv4Addr;
+
+    pub fn interfaces() -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
+        let mut networks = Vec::new();
+        let mut head: *mut libc::ifaddrs = std::ptr::null_mut();
+        // SAFETY: przy sukcesie getifaddrs zwraca listę zwalnianą niżej przez freeifaddrs.
+        if unsafe { libc::getifaddrs(&mut head) } != 0 {
+            return networks;
+        }
+        let mut current = head;
+        while !current.is_null() {
+            // SAFETY: `current` wskazuje element listy zwróconej przez getifaddrs.
+            let ifa = unsafe { &*current };
+            current = ifa.ifa_next;
+            if ifa.ifa_addr.is_null() || ifa.ifa_netmask.is_null() {
+                continue;
+            }
+            // SAFETY: ifa_addr nie jest pusty; rodzina adresu decyduje o typie struktury.
+            if i32::from(unsafe { (*ifa.ifa_addr).sa_family }) != libc::AF_INET {
+                continue;
+            }
+            // SAFETY: dla AF_INET adres i maska są typu sockaddr_in.
+            let (ip, mask) = unsafe {
+                let ip = &*(ifa.ifa_addr as *const libc::sockaddr_in);
+                let mask = &*(ifa.ifa_netmask as *const libc::sockaddr_in);
+                (
+                    u32::from_be(ip.sin_addr.s_addr),
+                    u32::from_be(mask.sin_addr.s_addr),
+                )
+            };
+            let addr = Ipv4Addr::from(ip);
+            if addr.is_loopback() || addr.is_unspecified() {
+                continue;
+            }
+            // Interfejsy punkt-punkt (VPN: tun0, wg0) nie mają adresu broadcast.
+            let has_broadcast = ifa.ifa_flags & libc::IFF_BROADCAST as u32 != 0;
+            let broadcast = Ipv4Addr::from(ip | !mask);
+            networks.push((
+                addr,
+                (has_broadcast && broadcast != addr).then_some(broadcast),
+            ));
+        }
+        // SAFETY: zwalniamy dokładnie listę zaalokowaną przez getifaddrs.
+        unsafe { libc::freeifaddrs(head) };
+        networks
+    }
 }
 
 #[cfg(test)]
@@ -577,6 +676,30 @@ mod tests {
             id,
             addr: id.into(),
         }
+    }
+
+    /// Wersja androidowa (getifaddrs) zwraca te same sieci co biblioteka desktopowa.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn getifaddrs_matches_network_interface() {
+        use network_interface::{Addr, NetworkInterface, NetworkInterfaceConfig};
+        let expected: BTreeSet<(Ipv4Addr, Option<Ipv4Addr>)> = NetworkInterface::show()
+            .unwrap_or_default()
+            .into_iter()
+            .flat_map(|i| i.addr)
+            .filter_map(|a| match a {
+                Addr::V4(v4) if !v4.ip.is_loopback() => {
+                    let b = v4.broadcast.or_else(|| {
+                        v4.netmask
+                            .map(|m| Ipv4Addr::from(u32::from(v4.ip) | !u32::from(m)))
+                    });
+                    Some((v4.ip, b.filter(|b| *b != v4.ip)))
+                }
+                _ => None,
+            })
+            .collect();
+        let got: BTreeSet<_> = android::interfaces().into_iter().collect();
+        assert_eq!(got, expected);
     }
 
     #[test]
