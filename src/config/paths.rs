@@ -49,7 +49,7 @@ pub fn default_device_name() -> String {
     let host = gethostname::gethostname().to_string_lossy().into_owned();
     let short = host.split('.').next().unwrap_or_default().trim();
     if short.is_empty() || short.eq_ignore_ascii_case("localhost") {
-        format!("RQS ({})", std::env::consts::OS)
+        format!("Ferry ({})", std::env::consts::OS)
     } else {
         short.to_string()
     }

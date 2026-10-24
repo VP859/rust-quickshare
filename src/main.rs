@@ -1,4 +1,4 @@
-//! `rqs`: command line, terminal UI and daemon of RQS P2P Quick Share.
+//! `rqs`: command line, terminal UI and daemon of Ferry.
 
 use anyhow::Result;
 use clap::Parser;

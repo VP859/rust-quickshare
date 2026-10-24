@@ -16,6 +16,15 @@ pub fn open_path(path: &Path) -> io::Result<()> {
     spawn_detached(opener(path, false)?)
 }
 
+/// Opens a web address in the default browser (Linux, macOS, Windows).
+///
+/// # Errors
+///
+/// Fails when the platform is unsupported or the opener program cannot be started.
+pub fn open_url(url: &str) -> io::Result<()> {
+    spawn_detached(opener(Path::new(url), false)?)
+}
+
 /// Opens the folder containing `path`, selecting the file on Windows and macOS.
 ///
 /// # Errors

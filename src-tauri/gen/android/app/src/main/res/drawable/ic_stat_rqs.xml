@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Monochrome status bar icon: two arrows (send/receive) -->
+<!-- Monochrome status bar icon: the app mark (two opposite arrows) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M7,3L3,7h3v7h2V7h3L7,3zM16,10v7h-3l4,4 4,-4h-3v-7h-2z" />
+        android:pathData="M4,8h15M15,4l4,4 -4,4M20,16H5M9,12l-4,4 4,4"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>

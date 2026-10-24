@@ -1,4 +1,4 @@
-//! # RQS P2P Quick Share
+//! # Ferry
 //!
 //! Secure peer-to-peer file sharing over QUIC for Linux, Windows, macOS and
 //! Android. Files go directly between devices: no storage server, no cloud,

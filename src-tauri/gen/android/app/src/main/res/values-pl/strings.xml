@@ -1,9 +1,9 @@
 <resources>
-    <string name="share_target_label">Wyślij przez RQS</string>
+    <string name="share_target_label">Wyślij przez Ferry</string>
 
-    <string name="notif_channel_node">Węzeł RQS</string>
+    <string name="notif_channel_node">Węzeł Ferry</string>
     <string name="notif_channel_node_desc">Utrzymuje węzeł P2P aktywny, aby transfery trwały w tle</string>
-    <string name="notif_node_title">RQS Quick Share działa w tle</string>
+    <string name="notif_node_title">Ferry działa w tle</string>
     <string name="notif_node_text">Możesz odbierać i wysyłać pliki</string>
     <string name="notif_action_stop">Zatrzymaj</string>
 </resources>

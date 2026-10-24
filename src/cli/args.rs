@@ -3,7 +3,7 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-/// Secure P2P file sharing over QUIC, without servers, cloud or mDNS.
+/// Ferry – secure P2P file sharing over QUIC, without servers, cloud or mDNS.
 #[derive(Parser, Debug)]
 #[command(name = "rqs", author, version, long_about = None)]
 pub struct Cli {
@@ -46,7 +46,7 @@ pub enum Commands {
     Tui,
     /// Show this device's TICKET (text and QR code) for pairing.
     Ticket,
-    /// Search for RQS devices on the local network (own UDP broadcast, no mDNS).
+    /// Search for Ferry devices on the local network (own UDP broadcast, no mDNS).
     Discover {
         /// Search duration in seconds.
         #[arg(short, long, default_value_t = 5)]

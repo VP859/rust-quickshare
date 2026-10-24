@@ -1,11 +1,11 @@
 <resources>
-    <string name="app_name">RQS Quick Share</string>
-    <string name="main_activity_title">RQS Quick Share</string>
-    <string name="share_target_label">Send with RQS</string>
+    <string name="app_name">Ferry</string>
+    <string name="main_activity_title">Ferry</string>
+    <string name="share_target_label">Send with Ferry</string>
 
-    <string name="notif_channel_node">RQS node</string>
+    <string name="notif_channel_node">Ferry node</string>
     <string name="notif_channel_node_desc">Keeps the P2P node running so transfers continue in the background</string>
-    <string name="notif_node_title">RQS Quick Share is running in the background</string>
+    <string name="notif_node_title">Ferry is running in the background</string>
     <string name="notif_node_text">You can send and receive files</string>
     <string name="notif_action_stop">Stop</string>
 </resources>

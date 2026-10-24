@@ -198,8 +198,8 @@ discovery.unknown_error:
   en: "unknown error"
   pl: "nieznany błąd"
 discovery.android_blocked:
-  en: "Android blocks access to the local network (%{error}). Grant the app the \"Nearby devices\" permission (Settings → Apps → RQS Quick Share → Permissions) and check that a VPN on the phone allows the local network."
-  pl: "Android blokuje dostęp do sieci lokalnej (%{error}). Nadaj aplikacji uprawnienie „Urządzenia w pobliżu” (Ustawienia → Aplikacje → RQS Quick Share → Uprawnienia) i sprawdź, czy VPN na telefonie zezwala na sieć lokalną."
+  en: "Android blocks access to the local network (%{error}). Grant the app the \"Nearby devices\" permission (Settings → Apps → Ferry → Permissions) and check that a VPN on the phone allows the local network."
+  pl: "Android blokuje dostęp do sieci lokalnej (%{error}). Nadaj aplikacji uprawnienie „Urządzenia w pobliżu” (Ustawienia → Aplikacje → Ferry Share → Uprawnienia) i sprawdź, czy VPN na telefonie zezwala na sieć lokalną."
 discovery.lan_blocked:
   en: "Sending to the local network is blocked (%{error}) – usually by a VPN or a firewall. NordVPN: nordvpn set lan-discovery on. You can also use a TICKET."
   pl: "Wysyłanie do sieci lokalnej jest blokowane (%{error}) – zwykle przez VPN lub zaporę. NordVPN: nordvpn set lan-discovery on. Możesz też użyć TICKETU."
@@ -209,8 +209,8 @@ discovery.nothing_received:
 
 # ---------------------------------------------------------------- doctor
 doctor.title:
-  en: "[RQS DOCTOR] Network environment diagnostics"
-  pl: "[RQS DOCTOR] Diagnostyka środowiska sieciowego"
+  en: "[FERRY DOCTOR] Network environment diagnostics"
+  pl: "[FERRY DOCTOR] Diagnostyka środowiska sieciowego"
 doctor.udp_ok:
   en: "UDP socket: a UDP port can be opened."
   pl: "Gniazdo UDP: można poprawnie otworzyć port UDP."
@@ -310,8 +310,8 @@ peer.added:
   en: "[SUCCESS] Added device '%{alias}' (%{id}) (Auto-Accept: %{auto})."
   pl: "[SUKCES] Dodano urządzenie '%{alias}' (%{id}) (Auto-Accept: %{auto})."
 nearby.none:
-  en: "No RQS devices found on the local network."
-  pl: "Nie znaleziono urządzeń RQS w sieci lokalnej."
+  en: "No Ferry devices found on the local network."
+  pl: "Nie znaleziono urządzeń Ferry w sieci lokalnej."
 nearby.hint:
   en: "Hint: %{hint}"
   pl: "Wskazówka: %{hint}"
@@ -396,8 +396,8 @@ daemon.pair:
   en: "[PAIRING] '%{name}' (%{id}) wants to pair.\nVerification code: %{code} – does the other device show the same code?"
   pl: "[PAROWANIE] '%{name}' (%{id}) chce się sparować.\nKod weryfikacyjny: %{code} – czy jest taki sam na drugim urządzeniu?"
 daemon.started:
-  en: "RQS DAEMON STARTED"
-  pl: "DEMON RQS URUCHOMIONY"
+  en: "FERRY DAEMON STARTED"
+  pl: "DEMON FERRY URUCHOMIONY"
 daemon.folder:
   en: "Download folder: %{path}"
   pl: "Katalog pobierania: %{path}"
@@ -580,8 +580,8 @@ tui.nearby_title:
   en: "Nearby  [p] pair"
   pl: "W pobliżu  [p] sparuj"
 tui.nearby_searching:
-  en: "Searching for RQS devices on the local network… [r] refresh"
-  pl: "Szukanie urządzeń RQS w sieci lokalnej… [r] odśwież"
+  en: "Searching for Ferry devices on the local network… [r] refresh"
+  pl: "Szukanie urządzeń Ferry w sieci lokalnej… [r] odśwież"
 tui.paired_as:
   en: "paired as \"%{alias}\""
   pl: "sparowane jako „%{alias}”"
@@ -741,11 +741,11 @@ gui.tray_hide:
   en: "Hide to tray"
   pl: "Ukryj do zasobnika"
 gui.tray_quit:
-  en: "Quit RQS"
-  pl: "Zakończ RQS"
+  en: "Quit Ferry"
+  pl: "Zakończ Ferry"
 gui.tray_tooltip:
-  en: "RQS P2P Quick Share – listening"
-  pl: "RQS P2P Quick Share – nasłuchuje"
+  en: "Ferry – listening for transfers"
+  pl: "Ferry – oczekuje na transfery"
 gui.pair_one_sided_rejected:
   en: "\"%{alias}\" declined the pairing – trusted only on this device"
   pl: "„%{alias}” odrzuciło parowanie – dodano tylko na tym urządzeniu"

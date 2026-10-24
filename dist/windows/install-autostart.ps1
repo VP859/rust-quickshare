@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Registers the RQS daemon (`rqs daemon`) in Task Scheduler to start at logon.
+  Registers the Ferry daemon (`rqs daemon`) in Task Scheduler to start at logon.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File install-autostart.ps1
@@ -16,7 +16,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$TaskName = "RQS P2P Quick Share Daemon"
+$TaskName = "Ferry Daemon"
 
 if ($Uninstall) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -35,6 +35,6 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
-    -Principal $principal -Description "RQS P2P background file receiving" -Force | Out-Null
+    -Principal $principal -Description "Ferry: background P2P file receiving" -Force | Out-Null
 Start-ScheduledTask -TaskName $TaskName
 Write-Host "Registered and started '$TaskName'."

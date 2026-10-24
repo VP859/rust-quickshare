@@ -1,4 +1,4 @@
-# systemd user service for the RQS daemon.
+# systemd user service for the Ferry daemon (`rqs daemon`).
 #
 # Installation (no root needed):
 #   mkdir -p ~/.config/systemd/user
@@ -12,7 +12,7 @@
 # (rqs peer add <TICKET> --alias Laptop --auto-accept).
 
 [Unit]
-Description=RQS P2P Quick Share – file receiving daemon
+Description=Ferry – P2P file receiving daemon
 Documentation=https://github.com/VP859/rust-quickshare
 After=network-online.target
 Wants=network-online.target

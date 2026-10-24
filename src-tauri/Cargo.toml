@@ -2,6 +2,8 @@
 name = "rqs-gui"
 version = "0.1.0"
 edition = "2024"
+description = "Ferry – P2P file sharing app for desktop and Android"
+repository = "https://github.com/VP859/rust-quickshare"
 
 [lib]
 name = "rqs_gui_lib"

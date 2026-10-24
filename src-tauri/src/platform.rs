@@ -24,7 +24,7 @@ mod imp {
     }
 
     /// Sets the configuration directory, picks the download folder
-    /// (public `Download/RQS`, falling back to the app's private download folder)
+    /// (public `Download/Ferry`, falling back to the app's private download folder)
     /// and removes stale shared files.
     pub fn init(app: &AppHandle) {
         if let Ok(data) = app.path().app_data_dir() {
@@ -35,7 +35,7 @@ mod imp {
             .path()
             .home_dir()
             .ok()
-            .map(|h| h.join("Download").join("RQS"))
+            .map(|h| h.join("Download").join("Ferry"))
             .filter(|d| std::fs::create_dir_all(d).is_ok());
         let dir = public
             .or_else(|| app.path().download_dir().ok())

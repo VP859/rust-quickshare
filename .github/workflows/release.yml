@@ -203,4 +203,4 @@ jobs:
           gh release create "$TAG" release/* \
             --repo "$GITHUB_REPOSITORY" \
             --draft --generate-notes \
-            --title "RQS P2P Quick Share $TAG"
+            --title "Ferry $TAG"

@@ -1,4 +1,4 @@
-//! Tauri v2 desktop and Android application of RQS P2P Quick Share.
+//! Tauri v2 desktop and Android application of Ferry.
 //!
 //! The Rust side runs the P2P node ([`rqs_p2p`]) and exposes [`commands`] to the
 //! web frontend in `ui/index.html`. On desktop the app keeps running in the
@@ -118,6 +118,8 @@ pub fn run() {
             discovery_health,
             set_download_dir,
             take_shared_files,
+            app_info,
+            open_repository,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

@@ -576,6 +576,33 @@ pub async fn set_language(
     Ok(language.code())
 }
 
+/// Name, version and source code address of the application.
+#[derive(Serialize)]
+pub struct AppInfo {
+    /// Product name.
+    pub name: &'static str,
+    /// Version of the GUI.
+    pub version: &'static str,
+    /// Source code repository.
+    pub repository: &'static str,
+}
+
+/// Name, version and repository shown in the settings.
+#[tauri::command]
+pub fn app_info() -> AppInfo {
+    AppInfo {
+        name: "Ferry",
+        version: env!("CARGO_PKG_VERSION"),
+        repository: env!("CARGO_PKG_REPOSITORY"),
+    }
+}
+
+/// Opens the project repository in the default browser (desktop only).
+#[tauri::command]
+pub fn open_repository() -> CmdResult<()> {
+    rqs_p2p::system::open_url(env!("CARGO_PKG_REPOSITORY")).map_err(err)
+}
+
 /// Paths of files shared from the Android "Share" menu (empty on desktop).
 #[tauri::command]
 pub fn take_shared_files(app: AppHandle) -> Vec<String> {

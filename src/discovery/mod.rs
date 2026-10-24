@@ -1,4 +1,4 @@
-//! Automatic discovery of RQS devices on the local network.
+//! Automatic discovery of Ferry devices on the local network.
 //!
 //! No mDNS or Bluetooth is used. Every node announces itself every few seconds
 //! with a small UDP packet (`RQSd`, port [`DISCOVERY_PORT`]) sent to the

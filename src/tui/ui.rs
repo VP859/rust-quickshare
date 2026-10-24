@@ -94,7 +94,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
         Line::styled(app.status_msg.clone(), Style::default().fg(Color::Yellow)),
     ];
     let block = Block::default()
-        .title(format!(" RQS P2P Quick Share  {} ", t!("tui.header_keys")))
+        .title(format!(" Ferry  {} ", t!("tui.header_keys")))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
     f.render_widget(

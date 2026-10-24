@@ -1,10 +1,14 @@
-# RQS P2P Quick Share (rust-quickshare)
+<p align="center"><img src="src-tauri/icons/icon.svg" width="96" alt="Ferry logo"></p>
 
-**Secure, P2P, and VPN-friendly file sharing for Linux, Windows, macOS and Android.**
+<h1 align="center">Ferry</h1>
 
-RQS transfers files directly between devices over QUIC. There is no storage server and no cloud;
+<p align="center"><b>Secure, peer-to-peer and VPN-friendly file sharing for Linux, Windows, macOS and Android.</b></p>
+
+Ferry transfers files directly between devices over QUIC. There is no storage server and no cloud;
 devices find each other by **TICKET** (text or QR code) instead of mDNS or Bluetooth, so it keeps
 working with a VPN enabled on either side.
+
+The command line tool is called `rqs`, and the crates keep their `rqs_p2p` / `rqs-gui` names.
 
 ## Features
 
@@ -16,7 +20,7 @@ working with a VPN enabled on either side.
 * **Resume** – downloads go to a `.part` file; after a dropped connection (IP/VPN change) the
   transfer resumes from the last complete chunk.
 * **Trusted devices** – alias + Auto-Accept per device; untrusted offers require confirmation.
-* **Nearby devices + one-button pairing** – RQS apps on the same network show up
+* **Nearby devices + one-button pairing** – Ferry apps on the same network show up
   automatically; **Pair** adds a device without retyping a TICKET or scanning a QR code.
 * **Interfaces** – desktop/Android GUI (Tauri v2), TUI (ratatui), CLI (clap), background daemon.
 * **Languages** – English (default) and Polish in every interface (see [Language](#language)).
@@ -86,7 +90,7 @@ English is the default. The language is chosen in this order:
 4. English.
 
 The Android parts outside the web view (notification, foreground service) use the phone's system
-or per-app language (Settings → Apps → RQS Quick Share → Language). Log messages are always
+or per-app language (Settings → Apps → Ferry → Language). Log messages are always
 in English. Translations live in `locales/app.yml` (backend) and in `src-tauri/ui/index.html`
 (GUI); a unit test checks that every key has both languages.
 
@@ -108,7 +112,7 @@ in English. Translations live in `locales/app.yml` (backend) and in `src-tauri/u
 * Android holds a `MulticastLock` in the foreground service; its device name is the phone's model.
 * **Android 17+** (targetSdk 37) blocks all local network traffic (broadcast, multicast, direct
   LAN connections) without the **ACCESS_LOCAL_NETWORK** permission ("Nearby devices" group).
-  The app requests it at startup; if it was denied: Settings → Apps → RQS Quick Share →
+  The app requests it at startup; if it was denied: Settings → Apps → Ferry →
   Permissions → Nearby devices. Without it only transfers through the internet relay work.
 * Android logs (Rust + Kotlin): `adb logcat -s RqsCore RqsService RqsShare`.
 * When the list stays empty, every interface (GUI, TUI, `rqs discover`, `rqs doctor`) shows the
@@ -167,9 +171,9 @@ cargo install tauri-cli --version "^2" --locked   # BuildTask.kt calls `cargo ta
 cargo tauri android build --apk --aab
 ```
 
-On Android: share any file from Gallery/Files → **RQS** → pick a recipient. The node stays
+On Android: share any file from Gallery/Files → **Ferry** → pick a recipient. The node stays
 alive in the background thanks to a foreground service with a persistent notification. Received
-files land in `Download/RQS`.
+files land in `Download/Ferry`.
 
 ## Releases
 

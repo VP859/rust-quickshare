@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  launchd agent (macOS) starting the RQS daemon at login.
+  launchd agent (macOS) starting the Ferry daemon (`rqs daemon`) at login.
 
   Installation (replaces __HOME__ with the home directory):
     sed "s|__HOME__|$HOME|g" com.rqs.daemon.plist > ~/Library/LaunchAgents/com.rqs.daemon.plist
