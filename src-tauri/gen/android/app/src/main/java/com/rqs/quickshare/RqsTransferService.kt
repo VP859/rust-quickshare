@@ -16,9 +16,13 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 
 /**
- * Usługa pierwszoplanowa (dataSync) z powiadomieniem ciągłym. Sama nie wykonuje
- * transferów – węzeł iroh działa w procesie aplikacji (Rust); usługa sprawia,
- * że system nie zabija tego procesu po zminimalizowaniu aplikacji.
+ * Foreground service (`dataSync`) with a persistent notification.
+ *
+ * The service performs no transfers itself: the iroh node runs inside the app
+ * process (Rust). Keeping a foreground service alive prevents Android from killing
+ * that process once the app is moved to the background. The service also holds a
+ * Wi-Fi [WifiManager.MulticastLock], without which the Wi-Fi driver drops the
+ * broadcast/multicast packets used for local device discovery.
  */
 class RqsTransferService : Service() {
   companion object {
@@ -27,17 +31,16 @@ class RqsTransferService : Service() {
     private const val NOTIFICATION_ID = 1001
     private const val ACTION_STOP = "com.rqs.quickshare.STOP"
 
+    /** Starts the service; failures (e.g. starting from the background) are logged. */
     fun start(context: Context) {
       try {
         ContextCompat.startForegroundService(context, Intent(context, RqsTransferService::class.java))
       } catch (e: Exception) {
-        // Np. ForegroundServiceStartNotAllowedException przy starcie z tła.
-        Log.w(TAG, "Nie udało się uruchomić usługi pierwszoplanowej", e)
+        Log.w(TAG, "Could not start the foreground service", e)
       }
     }
   }
 
-  /** Bez blokady sterownik Wi-Fi odrzuca pakiety broadcast/multicast wykrywania urządzeń. */
   private var multicastLock: WifiManager.MulticastLock? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
@@ -51,7 +54,7 @@ class RqsTransferService : Service() {
         acquire()
       }
     } catch (e: Exception) {
-      Log.w(TAG, "Brak blokady multicast – wykrywanie w sieci lokalnej może nie działać", e)
+      Log.w(TAG, "No multicast lock - local network discovery may not work", e)
     }
   }
 
@@ -79,7 +82,7 @@ class RqsTransferService : Service() {
     return START_STICKY
   }
 
-  /** Android 15+: limit czasu usług dataSync – kończymy zgodnie z wymaganiami systemu. */
+  /** Android 15+ limits `dataSync` services; the service stops when the system asks. */
   override fun onTimeout(startId: Int, fgsType: Int) {
     stopSelf(startId)
   }

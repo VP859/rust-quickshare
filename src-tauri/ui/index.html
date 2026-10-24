@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -12,7 +12,7 @@
   }
   @media (prefers-color-scheme: light) {
     :root { --bg: #f1f5f9; --card: #ffffff; --card-2: #e2e8f0; --border: #cbd5e1;
-      --accent: #0284c7; --accent-strong: #0369a1; --text: #0f172a; --muted: #475569; }
+      --accent: #0284c7; --accent-strong: #0369a1; --text: #0f172a; --muted: #3b485a; }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -69,6 +69,7 @@
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label { font-size: .85rem; color: var(--muted); }
   .field input[type=text], .field textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; font: inherit; -webkit-user-select: text; user-select: text; }
+  .field select { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 10px; border-radius: 8px; font: inherit; }
   .field textarea { resize: vertical; min-height: 70px; font-family: ui-monospace, monospace; font-size: .8rem; }
   .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .switch { position: relative; width: 44px; height: 24px; flex: none; }
@@ -104,85 +105,82 @@
   <header>
     <div>
       <h1>RQS P2P Quick Share</h1>
-      <span class="status"><span class="dot wait" id="node-dot"></span><span id="node-status">Uruchamianie węzła…</span></span>
+      <span class="status"><span class="dot wait" id="node-dot"></span><span id="node-status"></span></span>
     </div>
     <div class="header-actions">
-      <button id="btn-my-ticket">Mój TICKET</button>
-      <button id="btn-settings" aria-label="Ustawienia">⚙</button>
+      <button id="btn-my-ticket" data-i18n="my_ticket"></button>
+      <button id="btn-settings" data-i18n-aria="settings">⚙</button>
     </div>
   </header>
 
   <section class="dropzone" id="dropzone">
-    <h2 class="desktop-only">Przeciągnij i upuść pliki tutaj</h2>
-    <h2 class="mobile-only">Wyślij pliki</h2>
-    <p class="muted" style="margin-top:6px">Upuść plik na kartę urządzenia, aby wysłać go od razu, lub wybierz odbiorcę po wybraniu pliku.</p>
+    <h2 class="desktop-only" data-i18n="drop_here"></h2>
+    <h2 class="mobile-only" data-i18n="send_files"></h2>
+    <p class="muted" style="margin-top:6px" data-i18n="drop_hint"></p>
     <div class="actions">
-      <button class="primary" id="btn-select-file">Wybierz plik z dysku</button>
-      <button class="mobile-only" id="btn-scan">📷 Skanuj kod QR</button>
-      <button id="btn-receive-ticket">Odbierz z TICKETU</button>
+      <button class="primary" id="btn-select-file" data-i18n="select_file"></button>
+      <button class="mobile-only" id="btn-scan" data-i18n="scan_qr"></button>
+      <button id="btn-receive-ticket" data-i18n="receive_ticket"></button>
     </div>
   </section>
 
   <section>
     <div class="section-header">
-      <h2>Urządzenia w pobliżu</h2>
-      <button id="btn-nearby-refresh">↻ Szukaj</button>
+      <h2 data-i18n="nearby"></h2>
+      <button id="btn-nearby-refresh" data-i18n="search"></button>
     </div>
-    <p class="muted section-hint">Aplikacje RQS w tej samej sieci – sparuj jednym przyciskiem, bez przepisywania kodu.</p>
+    <p class="muted section-hint" data-i18n="nearby_hint"></p>
     <div class="grid" id="nearby"></div>
   </section>
 
   <section>
     <div class="section-header">
-      <h2>Zaufane Urządzenia</h2>
-      <button class="primary" id="btn-add-peer">+ Dodaj Urządzenie</button>
+      <h2 data-i18n="trusted"></h2>
+      <button class="primary" id="btn-add-peer" data-i18n="add_device_btn"></button>
     </div>
     <div class="grid" id="peers"></div>
   </section>
 
   <section>
-    <div class="section-header"><h2>Transfery</h2><button class="ghost" id="btn-clear">Wyczyść zakończone</button></div>
-    <div class="transfers" id="transfers"><p class="empty">Brak transferów.</p></div>
+    <div class="section-header"><h2 data-i18n="transfers"></h2><button class="ghost" id="btn-clear" data-i18n="clear_finished"></button></div>
+    <div class="transfers" id="transfers"></div>
   </section>
 </div>
 
-<!-- Dodawanie / edycja urządzenia -->
 <div class="modal-overlay" id="modal-peer" role="dialog" aria-modal="true" aria-labelledby="peer-title">
   <div class="modal">
-    <h3 id="peer-title">Dodaj Urządzenie</h3>
+    <h3 id="peer-title"></h3>
     <div class="field" id="peer-input-field">
-      <label for="peer-input">TICKET lub Node ID</label>
-      <textarea id="peer-input" placeholder="rqs:… lub 64-znakowy Node ID"></textarea>
-      <button class="mobile-only" id="btn-peer-scan" style="align-self:flex-start">📷 Skanuj kod QR</button>
+      <label for="peer-input" data-i18n="ticket_or_id"></label>
+      <textarea id="peer-input" data-i18n-ph="ticket_or_id_ph"></textarea>
+      <button class="mobile-only" id="btn-peer-scan" style="align-self:flex-start" data-i18n="scan_qr"></button>
     </div>
     <div class="field">
-      <label for="peer-alias">Nazwa własna (Alias)</label>
-      <input type="text" id="peer-alias" placeholder="np. Laptop Biurowy" maxlength="60">
+      <label for="peer-alias" data-i18n="alias"></label>
+      <input type="text" id="peer-alias" data-i18n-ph="alias_ph" maxlength="60">
     </div>
     <div class="toggle">
-      <div><div>Auto-Accept</div><div class="muted">Pliki od tego urządzenia będą przyjmowane bez pytania</div></div>
+      <div><div>Auto-Accept</div><div class="muted" data-i18n="auto_accept_hint"></div></div>
       <label class="switch"><input type="checkbox" id="peer-auto"><span></span></label>
     </div>
-    <p class="muted" id="peer-pair-hint">Po zapisaniu drugie urządzenie dostanie prośbę o sparowanie (z kodem) – po jej akceptacji również doda to urządzenie do zaufanych.</p>
+    <p class="muted" id="peer-pair-hint" data-i18n="pair_after_add_hint"></p>
     <div class="modal-actions">
-      <button id="btn-peer-cancel">Anuluj</button>
-      <button class="primary" id="btn-peer-save">Zapisz</button>
+      <button id="btn-peer-cancel" data-i18n="cancel"></button>
+      <button class="primary" id="btn-peer-save" data-i18n="save"></button>
     </div>
   </div>
 </div>
 
-<!-- Wybór odbiorcy -->
 <div class="modal-overlay" id="modal-recipient" role="dialog" aria-modal="true" aria-labelledby="recipient-title">
   <div class="modal">
-    <h3 id="recipient-title">Wybierz odbiorcę</h3>
+    <h3 id="recipient-title" data-i18n="choose_recipient"></h3>
     <p class="muted" id="recipient-files"></p>
     <div class="recipients" id="recipients"></div>
-    <button id="btn-share-ticket">🔗 Udostępnij przez jednorazowy TICKET / QR</button>
-    <div class="modal-actions"><button id="btn-recipient-cancel">Anuluj</button></div>
+    <button id="btn-share-ticket" data-i18n="share_by_ticket"></button>
+    <div class="modal-actions"><button id="btn-recipient-cancel" data-i18n="cancel"></button></div>
   </div>
 </div>
 
-<!-- Kod QR / TICKET -->
 <div class="modal-overlay" id="modal-ticket" role="dialog" aria-modal="true" aria-labelledby="ticket-title">
   <div class="modal">
     <h3 id="ticket-title">TICKET</h3>
@@ -190,68 +188,64 @@
     <div class="qr" id="ticket-qr"></div>
     <div class="ticket-box mono" id="ticket-text"></div>
     <div class="modal-actions">
-      <button class="primary" id="btn-ticket-copy">Kopiuj</button>
-      <button id="btn-ticket-close">Zamknij</button>
+      <button class="primary" id="btn-ticket-copy" data-i18n="copy"></button>
+      <button id="btn-ticket-close" data-i18n="close"></button>
     </div>
   </div>
 </div>
 
-<!-- Odbiór z TICKETU (wklejenie) -->
 <div class="modal-overlay" id="modal-receive" role="dialog" aria-modal="true" aria-labelledby="receive-title">
   <div class="modal">
-    <h3 id="receive-title">Odbierz plik z TICKETU</h3>
-    <div class="field"><label for="receive-input">TICKET udostępnienia</label><textarea id="receive-input" placeholder="rqs:…"></textarea></div>
-    <div class="modal-actions"><button id="btn-receive-cancel">Anuluj</button><button class="primary" id="btn-receive-go">Pobierz</button></div>
+    <h3 id="receive-title" data-i18n="receive_title"></h3>
+    <div class="field"><label for="receive-input" data-i18n="share_ticket"></label><textarea id="receive-input" placeholder="rqs:…"></textarea></div>
+    <div class="modal-actions"><button id="btn-receive-cancel" data-i18n="cancel"></button><button class="primary" id="btn-receive-go" data-i18n="download"></button></div>
   </div>
 </div>
 
-<!-- Przychodząca oferta -->
 <div class="modal-overlay" id="modal-offer" role="alertdialog" aria-modal="true" aria-labelledby="offer-title">
   <div class="modal">
-    <h3 id="offer-title">Przychodzący plik</h3>
+    <h3 id="offer-title" data-i18n="incoming_file"></h3>
     <div><div style="font-weight:600" id="offer-file"></div><div class="muted" id="offer-meta"></div></div>
     <p class="muted" id="offer-queue"></p>
-    <div class="modal-actions"><button class="danger" id="btn-offer-reject">Odrzuć</button><button class="primary" id="btn-offer-accept">Odbierz</button></div>
+    <div class="modal-actions"><button class="danger" id="btn-offer-reject" data-i18n="reject"></button><button class="primary" id="btn-offer-accept" data-i18n="accept"></button></div>
   </div>
 </div>
 
-<!-- Parowanie (strona inicjująca) -->
 <div class="modal-overlay" id="modal-pairing" role="dialog" aria-modal="true" aria-labelledby="pairing-title">
   <div class="modal">
-    <h3 id="pairing-title">Parowanie</h3>
-    <p class="muted">Potwierdź parowanie na drugim urządzeniu i sprawdź, czy wyświetla ten sam kod:</p>
+    <h3 id="pairing-title"></h3>
+    <p class="muted" data-i18n="pairing_confirm_hint"></p>
     <div class="pair-code" id="pairing-code"></div>
-    <p class="muted" id="pairing-status" role="status">Oczekiwanie na potwierdzenie…</p>
-    <div class="modal-actions"><button id="btn-pairing-close">Zamknij</button></div>
+    <p class="muted" id="pairing-status" role="status"></p>
+    <div class="modal-actions"><button id="btn-pairing-close" data-i18n="close"></button></div>
   </div>
 </div>
 
-<!-- Prośba o sparowanie (strona odbierająca) -->
 <div class="modal-overlay" id="modal-pair-request" role="alertdialog" aria-modal="true" aria-labelledby="pair-req-title">
   <div class="modal">
-    <h3 id="pair-req-title">Prośba o sparowanie</h3>
-    <p><strong id="pair-req-name"></strong> chce dodać to urządzenie do zaufanych.</p>
-    <p class="muted">Sparuj tylko wtedy, gdy drugie urządzenie pokazuje ten sam kod:</p>
+    <h3 id="pair-req-title" data-i18n="pair_request"></h3>
+    <p><strong id="pair-req-name"></strong> <span data-i18n="pair_request_text"></span></p>
+    <p class="muted" data-i18n="pair_request_hint"></p>
     <div class="pair-code" id="pair-req-code"></div>
     <p class="muted" id="pair-req-queue"></p>
-    <div class="modal-actions"><button class="danger" id="btn-pair-reject">Odrzuć</button><button class="primary" id="btn-pair-accept">Sparuj</button></div>
+    <div class="modal-actions"><button class="danger" id="btn-pair-reject" data-i18n="reject"></button><button class="primary" id="btn-pair-accept" data-i18n="pair"></button></div>
   </div>
 </div>
 
-<!-- Ustawienia -->
 <div class="modal-overlay" id="modal-settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
   <div class="modal">
-    <h3 id="settings-title">Ustawienia</h3>
-    <div class="field"><label for="device-name">Nazwa tego urządzenia (widoczna w pobliżu)</label>
-      <div style="display:flex; gap:8px"><input type="text" id="device-name" maxlength="64" style="flex:1; min-width:0"><button id="btn-device-name-save">Zapisz</button></div></div>
-    <div class="field"><label>Node ID tego urządzenia</label><div class="ticket-box mono" id="settings-node"></div></div>
-    <div class="field"><label>Katalog odbieranych plików</label><div class="ticket-box mono" id="settings-dir"></div>
-      <button class="desktop-only" id="btn-change-dir" style="align-self:flex-start">Zmień katalog…</button></div>
+    <h3 id="settings-title" data-i18n="settings"></h3>
+    <div class="field"><label for="device-name" data-i18n="device_name"></label>
+      <div style="display:flex; gap:8px"><input type="text" id="device-name" maxlength="64" style="flex:1; min-width:0"><button id="btn-device-name-save" data-i18n="save"></button></div></div>
+    <div class="field"><label for="language" data-i18n="language"></label><select id="language"></select></div>
+    <div class="field"><label data-i18n="node_id_label"></label><div class="ticket-box mono" id="settings-node"></div></div>
+    <div class="field"><label data-i18n="download_dir"></label><div class="ticket-box mono" id="settings-dir"></div>
+      <button class="desktop-only" id="btn-change-dir" style="align-self:flex-start" data-i18n="change_dir"></button></div>
     <div class="toggle desktop-only">
-      <div><div>Uruchamiaj przy starcie systemu</div><div class="muted">Aplikacja startuje ukryta w zasobniku i odbiera pliki w tle</div></div>
+      <div><div data-i18n="autostart"></div><div class="muted" data-i18n="autostart_hint"></div></div>
       <label class="switch"><input type="checkbox" id="autostart"><span></span></label>
     </div>
-    <div class="modal-actions"><button id="btn-settings-close">Zamknij</button></div>
+    <div class="modal-actions"><button id="btn-settings-close" data-i18n="close"></button></div>
   </div>
 </div>
 
@@ -266,7 +260,133 @@
   const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
   if (isMobile) document.body.classList.add('mobile');
 
-  // ---------- Pomocnicze ----------
+  // ---------- Translations ----------
+  const filesPl = (n) => n === 1 ? 'plik' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'pliki' : 'plików';
+  const I18N = {
+    en: {
+      node_starting: 'Starting node…', node_active: 'Node active · {id}', node_unavailable: 'Node unavailable',
+      my_ticket: 'My TICKET', settings: 'Settings',
+      drop_here: 'Drag and drop files here', send_files: 'Send files',
+      drop_hint: 'Drop a file on a device card to send it right away, or pick a recipient after choosing a file.',
+      select_file: 'Choose a file', scan_qr: '📷 Scan QR code', receive_ticket: 'Receive from TICKET',
+      nearby: 'Nearby devices', search: '↻ Search',
+      nearby_hint: 'RQS apps on the same network – pair with one button, no codes to type.',
+      trusted: 'Trusted devices', add_device_btn: '+ Add device', add_device: 'Add device',
+      transfers: 'Transfers', clear_finished: 'Clear finished', no_transfers: 'No transfers.',
+      ticket_or_id: 'TICKET or Node ID', ticket_or_id_ph: 'rqs:… or a 64-character Node ID',
+      alias: 'Alias', alias_ph: 'e.g. Office laptop',
+      auto_accept_hint: 'Files from this device are accepted without asking',
+      pair_after_add_hint: 'After saving, the other device gets a pairing request (with a code) – once accepted, it trusts this device too.',
+      cancel: 'Cancel', save: 'Save', copy: 'Copy', close: 'Close', download: 'Download',
+      choose_recipient: 'Choose a recipient', share_by_ticket: '🔗 Share by one-time TICKET / QR',
+      receive_title: 'Receive a file from a TICKET', share_ticket: 'Share TICKET',
+      incoming_file: 'Incoming file', reject: 'Reject', accept: 'Accept', pair: 'Pair',
+      pairing_confirm_hint: 'Confirm the pairing on the other device and check that it shows the same code:',
+      pair_request: 'Pairing request', pair_request_text: 'wants to add this device to its trusted devices.',
+      pair_request_hint: 'Pair only if the other device shows the same code:',
+      device_name: 'Name of this device (visible to nearby devices)', language: 'Language',
+      node_id_label: 'Node ID of this device', download_dir: 'Folder for received files', change_dir: 'Change folder…',
+      autostart: 'Start at login', autostart_hint: 'The app starts hidden in the tray and receives files in the background',
+      copied: 'Copied to clipboard',
+      own_ticket_title: 'TICKET of this device',
+      own_ticket_desc: 'Scan this code on another device or paste the TICKET into "+ Add device" to pair.',
+      no_peers: 'No trusted devices. Add a device by scanning or pasting its TICKET.',
+      device_options: 'Device options', send_to: 'Send a file to {name}',
+      peer_online: 'Available · click to send', peer_offline: 'Unreachable (start RQS on that device)', peer_checking: 'Checking…',
+      send_file_menu: 'Send a file…', edit_peer: 'Edit name and settings',
+      auto_accept_off: 'Disable Auto-Accept', auto_accept_on: 'Enable Auto-Accept',
+      auto_accept_enabled: 'Auto-Accept enabled for {name}', auto_accept_disabled: 'Auto-Accept disabled for {name}',
+      copy_node_id: 'Copy Node ID', remove_device: 'Remove device', confirm_remove: 'Remove device "{name}"?', device_removed: 'Device removed',
+      edit_title: 'Edit: {name}', changes_saved: 'Changes saved', paste_ticket: 'Paste a TICKET or Node ID',
+      device_added: 'Device added – pairing request sent',
+      searching_nearby: 'Looking for RQS devices on the local network… Start the app on another device on the same network. If a VPN blocks the local network, use "My TICKET".',
+      send_file: 'Send file', paired_as: ' · Paired as "{name}"',
+      pairing_with: 'Pairing with "{name}"', waiting_confirmation: 'Waiting for confirmation on the other device…',
+      paired_status: 'Paired ✓ – "{name}" is now a trusted device.', paired_with: 'Paired with {name}', not_paired: 'Not paired: {error}',
+      searching: 'Searching the local network…', queued: 'In queue: {n}',
+      sending: 'Sending {what} → {name}', n_files: '{n} files', n_files_list: '{n} files: {list}',
+      no_devices: 'No devices – use a TICKET below.', nearby_unpaired: 'Nearby (not paired – the recipient will confirm the transfer)',
+      ticket_one_file: 'A TICKET carries a single file',
+      shared_title: 'Shared: {name}',
+      shared_desc: 'The recipient scans the code or pastes the TICKET into "Receive from TICKET" (or runs: rqs receive <TICKET>). Keep the app running until the transfer finishes.',
+      downloading: 'Downloading file…',
+      st_preparing: 'Computing BLAKE3 hash…', st_awaiting_decision: 'Waiting for a decision…', st_completed: 'Completed ✓', st_rejected: 'Rejected', st_failed: 'Error',
+      tr_failed: 'Error: {error}', tr_rejected: 'Rejected: {reason}', tr_saved: 'Saved: {path}',
+      open: 'Open', show_in_folder: 'Show in folder',
+      from: '{size} · from {name}', unknown_device: 'Unknown device ({id})',
+      name_saved: 'Device name saved', saved: 'Saved', dir_changed: 'Download folder changed',
+      lan_granted: 'Local network access granted – searching for devices…',
+      no_tauri: 'Tauri API missing – start the app through Tauri', pair_expired: 'The pairing request expired',
+    },
+    pl: {
+      node_starting: 'Uruchamianie węzła…', node_active: 'Węzeł aktywny · {id}', node_unavailable: 'Węzeł niedostępny',
+      my_ticket: 'Mój TICKET', settings: 'Ustawienia',
+      drop_here: 'Przeciągnij i upuść pliki tutaj', send_files: 'Wyślij pliki',
+      drop_hint: 'Upuść plik na kartę urządzenia, aby wysłać go od razu, lub wybierz odbiorcę po wybraniu pliku.',
+      select_file: 'Wybierz plik z dysku', scan_qr: '📷 Skanuj kod QR', receive_ticket: 'Odbierz z TICKETU',
+      nearby: 'Urządzenia w pobliżu', search: '↻ Szukaj',
+      nearby_hint: 'Aplikacje RQS w tej samej sieci – sparuj jednym przyciskiem, bez przepisywania kodu.',
+      trusted: 'Zaufane urządzenia', add_device_btn: '+ Dodaj urządzenie', add_device: 'Dodaj urządzenie',
+      transfers: 'Transfery', clear_finished: 'Wyczyść zakończone', no_transfers: 'Brak transferów.',
+      ticket_or_id: 'TICKET lub Node ID', ticket_or_id_ph: 'rqs:… lub 64-znakowy Node ID',
+      alias: 'Nazwa własna (alias)', alias_ph: 'np. Laptop biurowy',
+      auto_accept_hint: 'Pliki od tego urządzenia będą przyjmowane bez pytania',
+      pair_after_add_hint: 'Po zapisaniu drugie urządzenie dostanie prośbę o sparowanie (z kodem) – po jej akceptacji również doda to urządzenie do zaufanych.',
+      cancel: 'Anuluj', save: 'Zapisz', copy: 'Kopiuj', close: 'Zamknij', download: 'Pobierz',
+      choose_recipient: 'Wybierz odbiorcę', share_by_ticket: '🔗 Udostępnij przez jednorazowy TICKET / QR',
+      receive_title: 'Odbierz plik z TICKETU', share_ticket: 'TICKET udostępnienia',
+      incoming_file: 'Przychodzący plik', reject: 'Odrzuć', accept: 'Odbierz', pair: 'Sparuj',
+      pairing_confirm_hint: 'Potwierdź parowanie na drugim urządzeniu i sprawdź, czy wyświetla ten sam kod:',
+      pair_request: 'Prośba o sparowanie', pair_request_text: 'chce dodać to urządzenie do zaufanych.',
+      pair_request_hint: 'Sparuj tylko wtedy, gdy drugie urządzenie pokazuje ten sam kod:',
+      device_name: 'Nazwa tego urządzenia (widoczna w pobliżu)', language: 'Język',
+      node_id_label: 'Node ID tego urządzenia', download_dir: 'Katalog odbieranych plików', change_dir: 'Zmień katalog…',
+      autostart: 'Uruchamiaj przy starcie systemu', autostart_hint: 'Aplikacja startuje ukryta w zasobniku i odbiera pliki w tle',
+      copied: 'Skopiowano do schowka',
+      own_ticket_title: 'TICKET tego urządzenia',
+      own_ticket_desc: 'Zeskanuj ten kod na innym urządzeniu lub wklej TICKET w „+ Dodaj urządzenie”, aby sparować.',
+      no_peers: 'Brak zaufanych urządzeń. Dodaj urządzenie, skanując lub wklejając jego TICKET.',
+      device_options: 'Opcje urządzenia', send_to: 'Wyślij plik do {name}',
+      peer_online: 'Dostępne · kliknij, aby wysłać', peer_offline: 'Nieosiągalne (uruchom RQS na urządzeniu)', peer_checking: 'Sprawdzanie…',
+      send_file_menu: 'Wyślij plik…', edit_peer: 'Edytuj nazwę i ustawienia',
+      auto_accept_off: 'Wyłącz Auto-Accept', auto_accept_on: 'Włącz Auto-Accept',
+      auto_accept_enabled: 'Auto-Accept włączony dla {name}', auto_accept_disabled: 'Auto-Accept wyłączony dla {name}',
+      copy_node_id: 'Kopiuj Node ID', remove_device: 'Usuń urządzenie', confirm_remove: 'Usunąć urządzenie „{name}”?', device_removed: 'Usunięto urządzenie',
+      edit_title: 'Edytuj: {name}', changes_saved: 'Zapisano zmiany', paste_ticket: 'Wklej TICKET lub Node ID',
+      device_added: 'Dodano urządzenie – wysłano prośbę o sparowanie',
+      searching_nearby: 'Szukanie urządzeń RQS w sieci lokalnej… Uruchom aplikację na drugim urządzeniu w tej samej sieci. Gdy VPN blokuje sieć lokalną, użyj „Mój TICKET”.',
+      send_file: 'Wyślij plik', paired_as: ' · Sparowane jako „{name}”',
+      pairing_with: 'Parowanie z „{name}”', waiting_confirmation: 'Oczekiwanie na potwierdzenie na drugim urządzeniu…',
+      paired_status: 'Sparowano ✓ – „{name}” jest teraz zaufanym urządzeniem.', paired_with: 'Sparowano z {name}', not_paired: 'Nie sparowano: {error}',
+      searching: 'Szukanie urządzeń w sieci lokalnej…', queued: 'W kolejce: {n}',
+      sending: 'Wysyłanie {what} → {name}', n_files: (v) => `${v.n} ${filesPl(v.n)}`, n_files_list: (v) => `${v.n} ${filesPl(v.n)}: ${v.list}`,
+      no_devices: 'Brak urządzeń — użyj TICKETU poniżej.', nearby_unpaired: 'W pobliżu (niesparowane – odbiorca potwierdzi transfer)',
+      ticket_one_file: 'TICKET obsługuje jeden plik',
+      shared_title: 'Udostępniono: {name}',
+      shared_desc: 'Odbiorca skanuje kod lub wkleja TICKET w „Odbierz z TICKETU” (albo: rqs receive <TICKET>). Pozostaw aplikację włączoną do końca transferu.',
+      downloading: 'Pobieranie pliku…',
+      st_preparing: 'Liczenie haszu BLAKE3…', st_awaiting_decision: 'Oczekiwanie na decyzję…', st_completed: 'Zakończono ✓', st_rejected: 'Odrzucono', st_failed: 'Błąd',
+      tr_failed: 'Błąd: {error}', tr_rejected: 'Odrzucono: {reason}', tr_saved: 'Zapisano: {path}',
+      open: 'Otwórz', show_in_folder: 'Pokaż w folderze',
+      from: '{size} · od {name}', unknown_device: 'Nieznane urządzenie ({id})',
+      name_saved: 'Zapisano nazwę urządzenia', saved: 'Zapisano', dir_changed: 'Zmieniono katalog odbioru',
+      lan_granted: 'Dostęp do sieci lokalnej przyznany – szukanie urządzeń…',
+      no_tauri: 'Brak API Tauri – uruchom aplikację przez Tauri', pair_expired: 'Prośba o sparowanie wygasła',
+    },
+  };
+  let lang = 'en';
+  function t(key, vars = {}) {
+    const v = I18N[lang]?.[key] ?? I18N.en[key] ?? key;
+    return typeof v === 'function' ? v(vars) : v.replace(/\{(\w+)\}/g, (m, k) => k in vars ? String(vars[k]) : m);
+  }
+  function applyStaticText() {
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-i18n]').forEach(e => { e.textContent = t(e.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-ph]').forEach(e => { e.placeholder = t(e.dataset.i18nPh); });
+    document.querySelectorAll('[data-i18n-aria]').forEach(e => { e.setAttribute('aria-label', t(e.dataset.i18nAria)); });
+  }
+
+  // ---------- Helpers ----------
   let toastTimer;
   function toast(msg, isError = false) {
     const el = $('toast');
@@ -296,7 +416,7 @@
       if (T?.clipboardManager?.writeText) await T.clipboardManager.writeText(text);
       else await invoke('plugin:clipboard-manager|write_text', { text });
     } catch { await navigator.clipboard.writeText(text); }
-    toast('Skopiowano do schowka');
+    toast(t('copied'));
   }
 
   async function pickFiles() {
@@ -312,35 +432,40 @@
     return res?.content?.trim();
   }
 
-  // ---------- Węzeł ----------
+  // ---------- Node ----------
   let nodeInfo = null;
+  let nodeState = 'starting';
+  function renderNodeStatus() {
+    $('node-dot').className = 'dot ' + (nodeState === 'ok' ? 'ok' : nodeState === 'bad' ? 'bad' : 'wait');
+    $('node-status').textContent = nodeState === 'ok' ? t('node_active', { id: shortId(nodeInfo.node_id) })
+      : nodeState === 'bad' ? t('node_unavailable') : t('node_starting');
+  }
   async function loadNodeInfo() {
     try {
       nodeInfo = await invoke('get_node_info');
-      $('node-dot').className = 'dot ok';
-      $('node-status').textContent = 'Węzeł aktywny · ' + shortId(nodeInfo.node_id);
+      nodeState = 'ok';
     } catch (e) {
-      $('node-dot').className = 'dot bad';
-      $('node-status').textContent = 'Węzeł niedostępny';
+      nodeState = 'bad';
       fail(e);
     }
+    renderNodeStatus();
   }
 
   function showTicket(title, desc, ticket, svg) {
     $('ticket-title').textContent = title;
     $('ticket-desc').textContent = desc;
-    $('ticket-qr').innerHTML = svg; // SVG generowany przez backend (qrcode), nie dane od użytkownika
+    $('ticket-qr').innerHTML = svg; // generated by the backend (qrcode crate), never user input
     $('ticket-text').textContent = ticket;
     open('modal-ticket');
   }
   $('btn-my-ticket').onclick = async () => {
     if (!nodeInfo) await loadNodeInfo();
-    if (nodeInfo) showTicket('TICKET tego urządzenia', 'Zeskanuj ten kod na innym urządzeniu lub wklej TICKET w „+ Dodaj Urządzenie”, aby sparować.', nodeInfo.ticket, nodeInfo.qr_svg);
+    if (nodeInfo) showTicket(t('own_ticket_title'), t('own_ticket_desc'), nodeInfo.ticket, nodeInfo.qr_svg);
   };
   $('btn-ticket-copy').onclick = () => copyText($('ticket-text').textContent);
   $('btn-ticket-close').onclick = () => close('modal-ticket');
 
-  // ---------- Urządzenia ----------
+  // ---------- Trusted devices ----------
   let peers = [];
   const online = new Map();
   let openMenu = null;
@@ -355,22 +480,22 @@
     const box = $('peers');
     box.replaceChildren();
     if (!peers.length) {
-      box.append(el('p', { class: 'empty' }, 'Brak zaufanych urządzeń. Dodaj urządzenie, skanując lub wklejając jego TICKET.'));
+      box.append(el('p', { class: 'empty' }, t('no_peers')));
       return;
     }
     for (const p of peers) {
       const state = online.get(p.node_id);
       const dot = el('span', { class: 'dot ' + (state === true ? 'ok' : state === false ? 'bad' : 'wait') });
-      const menuBtn = el('button', { class: 'ghost card-menu-btn', 'aria-label': 'Opcje urządzenia', onclick: (e) => { e.stopPropagation(); showMenu(card, p); } }, '⋮');
+      const menuBtn = el('button', { class: 'ghost card-menu-btn', 'aria-label': t('device_options'), onclick: (e) => { e.stopPropagation(); showMenu(card, p); } }, '⋮');
       const card = el('div', { class: 'peer-card', tabindex: '0', 'data-node': p.node_id, role: 'button',
-          'aria-label': `Wyślij plik do ${p.alias}`,
+          'aria-label': t('send_to', { name: p.alias }),
           onclick: () => sendToPeer(p),
           onkeydown: (e) => { if (e.key === 'Enter') sendToPeer(p); } },
         menuBtn,
         el('div', { class: 'title' }, dot, el('span', {}, p.alias)),
         el('div', { class: 'node-id mono' }, p.node_id),
         el('div', { class: 'meta' },
-          state === true ? 'Dostępne · kliknij, aby wysłać' : state === false ? 'Nieosiągalne (uruchom RQS na urządzeniu)' : 'Sprawdzanie…',
+          state === true ? t('peer_online') : state === false ? t('peer_offline') : t('peer_checking'),
           p.auto_accept ? el('span', { class: 'badge' }, ' · Auto-Accept') : ''));
       box.append(card);
     }
@@ -388,20 +513,20 @@
     openMenu?.remove();
     const item = (label, fn, cls = '') => el('button', { class: cls, onclick: async (e) => { e.stopPropagation(); openMenu?.remove(); openMenu = null; try { await fn(); } catch (err) { fail(err); } } }, label);
     openMenu = el('div', { class: 'menu', onclick: (e) => e.stopPropagation() },
-      item('Wyślij plik…', () => sendToPeer(p)),
-      item('Edytuj nazwę i ustawienia', () => openPeerModal(p)),
-      item(p.auto_accept ? 'Wyłącz Auto-Accept' : 'Włącz Auto-Accept', async () => {
+      item(t('send_file_menu'), () => sendToPeer(p)),
+      item(t('edit_peer'), () => openPeerModal(p)),
+      item(p.auto_accept ? t('auto_accept_off') : t('auto_accept_on'), async () => {
         await invoke('update_peer', { nodeId: p.node_id, alias: null, autoAccept: !p.auto_accept });
         await refreshPeers();
-        toast(`Auto-Accept ${!p.auto_accept ? 'włączony' : 'wyłączony'} dla ${p.alias}`);
+        toast(t(p.auto_accept ? 'auto_accept_disabled' : 'auto_accept_enabled', { name: p.alias }));
       }),
-      item('Kopiuj Node ID', () => copyText(p.node_id)),
-      item('Usuń urządzenie', async () => {
-        if (!confirm(`Usunąć urządzenie „${p.alias}”?`)) return;
+      item(t('copy_node_id'), () => copyText(p.node_id)),
+      item(t('remove_device'), async () => {
+        if (!confirm(t('confirm_remove', { name: p.alias }))) return;
         await invoke('remove_peer', { nodeId: p.node_id });
         online.delete(p.node_id);
         await refreshPeers();
-        toast('Usunięto urządzenie');
+        toast(t('device_removed'));
       }, 'danger'));
     card.append(openMenu);
   }
@@ -409,7 +534,7 @@
   let editing = null;
   function openPeerModal(peer = null, prefill = '') {
     editing = peer;
-    $('peer-title').textContent = peer ? `Edytuj: ${peer.alias}` : 'Dodaj Urządzenie';
+    $('peer-title').textContent = peer ? t('edit_title', { name: peer.alias }) : t('add_device');
     $('peer-input-field').style.display = peer ? 'none' : '';
     $('peer-pair-hint').style.display = peer ? 'none' : '';
     $('peer-input').value = prefill;
@@ -420,20 +545,20 @@
   }
   $('btn-add-peer').onclick = () => openPeerModal();
   $('btn-peer-cancel').onclick = () => close('modal-peer');
-  $('btn-peer-scan').onclick = async () => { try { const t = await scanQr(); if (t) $('peer-input').value = t; } catch (e) { fail(e); } };
+  $('btn-peer-scan').onclick = async () => { try { const v = await scanQr(); if (v) $('peer-input').value = v; } catch (e) { fail(e); } };
   $('btn-peer-save').onclick = async () => {
     const alias = $('peer-alias').value.trim();
     const autoAccept = $('peer-auto').checked;
     try {
       if (editing) {
         await invoke('update_peer', { nodeId: editing.node_id, alias, autoAccept });
-        toast('Zapisano zmiany');
+        toast(t('changes_saved'));
       } else {
         const input = $('peer-input').value.trim();
-        if (!input) return toast('Wklej TICKET lub Node ID', true);
+        if (!input) return toast(t('paste_ticket'), true);
         const id = await invoke('add_peer', { input, alias, autoAccept });
         online.delete(id);
-        toast('Dodano urządzenie – wysłano prośbę o sparowanie');
+        toast(t('device_added'));
       }
       close('modal-peer');
       await refreshPeers();
@@ -441,7 +566,7 @@
     } catch (e) { fail(e); }
   };
 
-  // ---------- Urządzenia w pobliżu i parowanie ----------
+  // ---------- Nearby devices and pairing ----------
   let nearby = [];
   const PLATFORMS = { linux: 'Linux', windows: 'Windows', macos: 'macOS', android: 'Android', ios: 'iOS' };
   const platformLabel = (p) => PLATFORMS[p] ?? p;
@@ -449,7 +574,6 @@
 
   function setNearby(list) {
     nearby = list || [];
-    // Urządzenie widoczne w sieci lokalnej jest na pewno dostępne.
     for (const d of nearby) if (isTrusted(d.node_id)) online.set(d.node_id, true);
     renderNearby();
     renderPeers();
@@ -460,20 +584,20 @@
     box.replaceChildren();
     if (!nearby.length) {
       const hint = el('p', { class: 'empty', style: 'color: var(--warn)' });
-      box.append(el('p', { class: 'empty' }, 'Szukanie urządzeń RQS w sieci lokalnej… Uruchom aplikację na drugim urządzeniu w tej samej sieci. Gdy VPN blokuje sieć lokalną, użyj „Mój TICKET”.'), hint);
+      box.append(el('p', { class: 'empty' }, t('searching_nearby')), hint);
       invoke('discovery_health').then(h => { if (h) hint.textContent = h; }).catch(() => {});
       return;
     }
     for (const d of nearby) {
       const peer = peers.find(p => p.node_id === d.node_id);
-      const send = el('button', { onclick: (e) => { e.stopPropagation(); sendToDevice(d.node_id, peer?.alias ?? d.name); } }, 'Wyślij plik');
+      const send = el('button', { onclick: (e) => { e.stopPropagation(); sendToDevice(d.node_id, peer?.alias ?? d.name); } }, t('send_file'));
       const actions = peer
         ? el('div', { class: 'card-actions' }, send)
         : el('div', { class: 'card-actions' },
-            el('button', { class: 'primary', onclick: (e) => { e.stopPropagation(); pairWith(d); } }, 'Sparuj'), send);
+            el('button', { class: 'primary', onclick: (e) => { e.stopPropagation(); pairWith(d); } }, t('pair')), send);
       box.append(el('div', { class: 'peer-card', 'data-node': d.node_id },
         el('div', { class: 'title' }, el('span', { class: 'dot ok' }), el('span', {}, d.name)),
-        el('div', { class: 'meta' }, platformLabel(d.platform), peer ? el('span', { class: 'badge' }, ` · Sparowane jako „${peer.alias}”`) : ''),
+        el('div', { class: 'meta' }, platformLabel(d.platform), peer ? el('span', { class: 'badge' }, t('paired_as', { name: peer.alias })) : ''),
         el('div', { class: 'node-id mono' }, shortId(d.node_id)),
         actions));
     }
@@ -487,26 +611,26 @@
   async function pairWith(d) {
     try {
       pairingWith = d.node_id;
-      $('pairing-title').textContent = `Parowanie z „${d.name}”`;
+      $('pairing-title').textContent = t('pairing_with', { name: d.name });
       $('pairing-code').textContent = await invoke('pair_code', { nodeId: d.node_id });
-      $('pairing-status').textContent = 'Oczekiwanie na potwierdzenie na drugim urządzeniu…';
+      $('pairing-status').textContent = t('waiting_confirmation');
       open('modal-pairing');
       const alias = await invoke('pair_device', { nodeId: d.node_id });
       await refreshPeers();
       renderNearby();
       if (pairingWith === d.node_id) {
-        $('pairing-status').textContent = `Sparowano ✓ – „${alias}” jest teraz zaufanym urządzeniem.`;
+        $('pairing-status').textContent = t('paired_status', { name: alias });
         setTimeout(() => close('modal-pairing'), 1500);
       }
-      toast(`Sparowano z ${alias}`);
+      toast(t('paired_with', { name: alias }));
     } catch (e) {
-      if (pairingWith === d.node_id) $('pairing-status').textContent = 'Nie sparowano: ' + String(e?.message ?? e);
+      if (pairingWith === d.node_id) $('pairing-status').textContent = t('not_paired', { error: String(e?.message ?? e) });
       else fail(e);
     }
   }
   $('btn-pairing-close').onclick = () => { pairingWith = null; close('modal-pairing'); };
   $('btn-nearby-refresh').onclick = async () => {
-    try { await invoke('refresh_nearby'); toast('Szukanie urządzeń w sieci lokalnej…'); } catch (e) { fail(e); }
+    try { await invoke('refresh_nearby'); toast(t('searching')); } catch (e) { fail(e); }
   };
 
   const pairRequests = [];
@@ -515,7 +639,7 @@
     if (!r) return close('modal-pair-request');
     $('pair-req-name').textContent = r.name;
     $('pair-req-code').textContent = r.code;
-    $('pair-req-queue').textContent = pairRequests.length > 1 ? `W kolejce: ${pairRequests.length - 1}` : '';
+    $('pair-req-queue').textContent = pairRequests.length > 1 ? t('queued', { n: pairRequests.length - 1 }) : '';
     open('modal-pair-request');
   }
   async function answerPairRequest(accept) {
@@ -523,7 +647,7 @@
     if (r) {
       try {
         await invoke('respond_to_offer', { transferId: r.id, accept });
-        if (accept) toast(`Sparowano z ${r.name}`);
+        if (accept) toast(t('paired_with', { name: r.name }));
       } catch (e) { fail(e); }
     }
     showNextPairRequest();
@@ -531,7 +655,7 @@
   $('btn-pair-accept').onclick = () => answerPairRequest(true);
   $('btn-pair-reject').onclick = () => answerPairRequest(false);
 
-  // Na Androidzie nazwa hosta to „localhost” – domyślnie używamy modelu telefonu.
+  /** The Android host name is "localhost", so the phone model is used as the default device name. */
   async function detectDeviceModel() {
     try {
       const v = await navigator.userAgentData?.getHighEntropyValues?.(['model']);
@@ -548,15 +672,16 @@
         const model = await detectDeviceModel();
         if (model) await invoke('set_device_name', { name: model });
       }
-    } catch (e) { console.warn('Nazwa urządzenia:', e); }
+    } catch (e) { console.warn('Device name:', e); }
   }
 
-  // ---------- Wysyłanie ----------
+  // ---------- Sending ----------
   async function sendFiles(paths, target, label) {
     if (!paths.length) return;
     try {
       await invoke('send_files', { paths, target });
-      toast(`Wysyłanie ${paths.length > 1 ? paths.length + ' plików' : baseName(paths[0])} → ${label}`);
+      const what = paths.length > 1 ? t('n_files', { n: paths.length }) : baseName(paths[0]);
+      toast(t('sending', { what, name: label }));
     } catch (e) { fail(e); }
   }
 
@@ -568,25 +693,25 @@
   function chooseRecipient(paths) {
     if (!paths.length) return;
     pendingFiles = paths;
-    $('recipient-files').textContent = paths.length === 1 ? baseName(paths[0]) : `${paths.length} plików: ${paths.map(baseName).join(', ')}`;
+    $('recipient-files').textContent = paths.length === 1 ? baseName(paths[0]) : t('n_files_list', { n: paths.length, list: paths.map(baseName).join(', ') });
     const box = $('recipients');
     box.replaceChildren();
     const unpaired = nearby.filter(d => !isTrusted(d.node_id));
-    if (!peers.length && !unpaired.length) box.append(el('p', { class: 'empty' }, 'Brak urządzeń — użyj TICKETU poniżej.'));
+    if (!peers.length && !unpaired.length) box.append(el('p', { class: 'empty' }, t('no_devices')));
     for (const p of peers) {
       const state = online.get(p.node_id);
       box.append(el('button', { class: 'recipient', onclick: () => { close('modal-recipient'); sendFiles(pendingFiles, p.node_id, p.alias); } },
         el('span', { class: 'dot ' + (state === true ? 'ok' : state === false ? 'bad' : 'wait') }),
         el('div', { class: 'grow' }, el('div', {}, p.alias), el('div', { class: 'muted mono' }, shortId(p.node_id)))));
     }
-    if (unpaired.length) box.append(el('div', { class: 'group' }, 'W pobliżu (niesparowane – odbiorca potwierdzi transfer)'));
+    if (unpaired.length) box.append(el('div', { class: 'group' }, t('nearby_unpaired')));
     for (const d of unpaired) {
       box.append(el('button', { class: 'recipient', onclick: () => { close('modal-recipient'); sendFiles(pendingFiles, d.node_id, d.name); } },
         el('span', { class: 'dot ok' }),
         el('div', { class: 'grow' }, el('div', {}, d.name), el('div', { class: 'muted' }, platformLabel(d.platform)))));
     }
     $('btn-share-ticket').disabled = paths.length !== 1;
-    $('btn-share-ticket').title = paths.length !== 1 ? 'TICKET obsługuje jeden plik' : '';
+    $('btn-share-ticket').title = paths.length !== 1 ? t('ticket_one_file') : '';
     open('modal-recipient');
   }
   $('btn-recipient-cancel').onclick = () => close('modal-recipient');
@@ -594,18 +719,18 @@
     close('modal-recipient');
     try {
       const s = await invoke('share_file', { path: pendingFiles[0] });
-      showTicket(`Udostępniono: ${s.file_name}`, 'Odbiorca skanuje kod lub wkleja TICKET w „Odbierz z TICKETU” (albo: rqs receive <TICKET>). Pozostaw aplikację włączoną do końca transferu.', s.ticket, s.qr_svg);
+      showTicket(t('shared_title', { name: s.file_name }), t('shared_desc'), s.ticket, s.qr_svg);
     } catch (e) { fail(e); }
   };
   $('btn-select-file').onclick = async () => { try { chooseRecipient(await pickFiles()); } catch (e) { fail(e); } };
 
-  // ---------- Odbiór z TICKETU / QR ----------
+  // ---------- Receiving from a TICKET / QR code ----------
   async function handleScannedTicket(text) {
     if (!text) return;
     const info = await invoke('inspect_ticket', { ticket: text });
     if (info.has_share) {
       await invoke('receive_from_ticket', { ticket: text });
-      toast('Pobieranie pliku…');
+      toast(t('downloading'));
     } else {
       openPeerModal(null, text);
     }
@@ -617,7 +742,7 @@
     try { await handleScannedTicket($('receive-input').value.trim()); close('modal-receive'); } catch (e) { fail(e); }
   };
 
-  // ---------- Natywne przeciąganie i upuszczanie (Tauri) ----------
+  // ---------- Native drag and drop (Tauri) ----------
   function targetAt(pos) {
     if (!pos) return null;
     const ratio = window.devicePixelRatio || 1;
@@ -653,12 +778,8 @@
     });
   }
 
-  // ---------- Transfery ----------
+  // ---------- Transfers ----------
   const transfers = new Map();
-  const STATUS = {
-    preparing: 'Liczenie haszu BLAKE3…', awaiting_decision: 'Oczekiwanie na decyzję…', running: '',
-    completed: 'Zakończono ✓', rejected: 'Odrzucono', failed: 'Błąd',
-  };
   function renderTransfer(ev) {
     let row = transfers.get(ev.id);
     if (!row) {
@@ -673,8 +794,8 @@
     const pct = ev.total ? Math.min(100, Math.round(ev.done / ev.total * 100)) : (kind === 'completed' ? 100 : 0);
     const peer = peers.find(p => p.node_id === ev.peer)?.alias ?? shortId(ev.peer);
     const detail = kind === 'running' ? `${pct}% · ${fmtSize(ev.done)} / ${fmtSize(ev.total)}`
-      : kind === 'failed' ? `Błąd: ${ev.status.error}` : kind === 'rejected' ? `Odrzucono: ${ev.status.reason}`
-      : kind === 'completed' && ev.status.path ? `Zapisano: ${ev.status.path}` : STATUS[kind];
+      : kind === 'failed' ? t('tr_failed', { error: ev.status.error }) : kind === 'rejected' ? t('tr_rejected', { reason: ev.status.reason })
+      : kind === 'completed' && ev.status.path ? t('tr_saved', { path: ev.status.path }) : t('st_' + kind);
     row.el.className = 'transfer' + (kind === 'completed' ? ' done' : kind === 'failed' || kind === 'rejected' ? ' failed' : '');
     const bar = el('div', { class: 'bar' }, el('div'));
     bar.firstChild.style.width = pct + '%';
@@ -685,26 +806,29 @@
     if (kind === 'completed' && ev.direction === 'download' && ev.status.path && !isMobile) {
       const openFile = (reveal) => invoke('open_received', { path: ev.status.path, reveal }).catch(fail);
       parts.push(el('div', { class: 'card-actions' },
-        el('button', { onclick: () => openFile(false) }, 'Otwórz'),
-        el('button', { onclick: () => openFile(true) }, 'Pokaż w folderze')));
+        el('button', { onclick: () => openFile(false) }, t('open')),
+        el('button', { onclick: () => openFile(true) }, t('show_in_folder'))));
     }
     row.el.replaceChildren(...parts);
+  }
+  function renderNoTransfers() {
+    if (!transfers.size) $('transfers').replaceChildren(el('p', { class: 'empty' }, t('no_transfers')));
   }
   $('btn-clear').onclick = () => {
     for (const [id, row] of transfers) {
       if (['completed', 'failed', 'rejected'].includes(row.ev.status.kind)) { row.el.remove(); transfers.delete(id); }
     }
-    if (!transfers.size) $('transfers').replaceChildren(el('p', { class: 'empty' }, 'Brak transferów.'));
+    renderNoTransfers();
   };
 
-  // ---------- Oferty przychodzące ----------
+  // ---------- Incoming offers ----------
   const offers = [];
   function showNextOffer() {
     const o = offers[0];
     if (!o) return close('modal-offer');
     $('offer-file').textContent = o.file_name;
-    $('offer-meta').textContent = `${fmtSize(o.size)} · od ${o.alias ?? 'Nieznane urządzenie (' + shortId(o.peer) + ')'}`;
-    $('offer-queue').textContent = offers.length > 1 ? `W kolejce: ${offers.length - 1}` : '';
+    $('offer-meta').textContent = t('from', { size: fmtSize(o.size), name: o.alias ?? t('unknown_device', { id: shortId(o.peer) }) });
+    $('offer-queue').textContent = offers.length > 1 ? t('queued', { n: offers.length - 1 }) : '';
     open('modal-offer');
   }
   async function answerOffer(accept) {
@@ -715,22 +839,49 @@
   $('btn-offer-accept').onclick = () => answerOffer(true);
   $('btn-offer-reject').onclick = () => answerOffer(false);
 
-  // ---------- Ustawienia ----------
+  // ---------- Language ----------
+  function rerender() {
+    applyStaticText();
+    renderNodeStatus();
+    renderPeers();
+    renderNearby();
+    for (const row of transfers.values()) renderTransfer(row.ev);
+    renderNoTransfers();
+    if (offers.length) showNextOffer();
+    if (pairRequests.length) showNextPairRequest();
+  }
+  async function loadLanguage() {
+    try {
+      const info = await invoke('get_language');
+      lang = info.code;
+      $('language').replaceChildren(...info.available.map(l => el('option', { value: l.code }, l.name)));
+      $('language').value = lang;
+    } catch (e) { console.warn('Language:', e); }
+  }
+  $('language').onchange = async (e) => {
+    try {
+      lang = await invoke('set_language', { code: e.target.value });
+      rerender();
+    } catch (err) { e.target.value = lang; fail(err); }
+  };
+
+  // ---------- Settings ----------
   $('btn-settings').onclick = async () => {
     if (!nodeInfo) await loadNodeInfo();
     $('settings-node').textContent = nodeInfo?.node_id ?? '—';
     try { $('device-name').value = (await invoke('get_device_name')).name; } catch {}
     $('settings-dir').textContent = nodeInfo?.download_dir ?? '—';
+    $('language').value = lang;
     if (!isMobile) { try { $('autostart').checked = await invoke('plugin:autostart|is_enabled'); } catch {} }
     open('modal-settings');
   };
   $('btn-settings-close').onclick = () => close('modal-settings');
   $('btn-device-name-save').onclick = async () => {
-    try { $('device-name').value = await invoke('set_device_name', { name: $('device-name').value }); toast('Zapisano nazwę urządzenia'); }
+    try { $('device-name').value = await invoke('set_device_name', { name: $('device-name').value }); toast(t('name_saved')); }
     catch (e) { fail(e); }
   };
   $('autostart').onchange = async (e) => {
-    try { await invoke(e.target.checked ? 'plugin:autostart|enable' : 'plugin:autostart|disable'); toast('Zapisano'); }
+    try { await invoke(e.target.checked ? 'plugin:autostart|enable' : 'plugin:autostart|disable'); toast(t('saved')); }
     catch (err) { e.target.checked = !e.target.checked; fail(err); }
   };
   $('btn-change-dir').onclick = async () => {
@@ -740,11 +891,11 @@
       await invoke('set_download_dir', { path: String(dir) });
       await loadNodeInfo();
       $('settings-dir').textContent = nodeInfo?.download_dir ?? String(dir);
-      toast('Zmieniono katalog odbioru');
+      toast(t('dir_changed'));
     } catch (e) { fail(e); }
   };
 
-  // ---------- Udostępnianie z Androida ----------
+  // ---------- Android integration ----------
   async function checkSharedFiles() {
     try {
       const files = await invoke('take_shared_files');
@@ -752,18 +903,24 @@
     } catch (e) { fail(e); }
   }
   window.addEventListener('rqs-share', checkSharedFiles);
-  // Android 17: po nadaniu uprawnienia do sieci lokalnej od razu szukamy urządzeń.
   window.addEventListener('rqs-lan-permission', async () => {
-    try { await invoke('refresh_nearby'); toast('Dostęp do sieci lokalnej przyznany – szukanie urządzeń…'); }
+    try { await invoke('refresh_nearby'); toast(t('lan_granted')); }
     catch (e) { fail(e); }
   });
 
-  // ---------- Start ----------
+  // ---------- Startup ----------
   document.addEventListener('DOMContentLoaded', async () => {
-    if (!invoke) { toast('Brak API Tauri – uruchom aplikację przez Tauri', true); return; }
+    applyStaticText();
+    renderNodeStatus();
+    renderNoTransfers();
+    if (!invoke) { toast(t('no_tauri'), true); return; }
+    await loadLanguage();
+    applyStaticText();
+    renderNodeStatus();
+    renderNoTransfers();
     await listen('transfer', ({ payload }) => renderTransfer(payload));
     await listen('transfer-error', ({ payload }) => fail(payload.message));
-    await listen('incoming-offer', ({ payload }) => { offers.push(payload); if (offers.length === 1) showNextOffer(); else $('offer-queue').textContent = `W kolejce: ${offers.length - 1}`; });
+    await listen('incoming-offer', ({ payload }) => { offers.push(payload); if (offers.length === 1) showNextOffer(); else $('offer-queue').textContent = t('queued', { n: offers.length - 1 }); });
     await listen('node-error', ({ payload }) => fail(payload));
     await listen('nearby', ({ payload }) => setNearby(payload));
     await listen('peers-changed', async () => { await refreshPeers(); renderNearby(); });
@@ -772,13 +929,13 @@
       await refreshPeers();
       renderNearby();
     });
-    await listen('pair-request', ({ payload }) => { pairRequests.push(payload); if (pairRequests.length === 1) showNextPairRequest(); else $('pair-req-queue').textContent = `W kolejce: ${pairRequests.length - 1}`; });
+    await listen('pair-request', ({ payload }) => { pairRequests.push(payload); if (pairRequests.length === 1) showNextPairRequest(); else $('pair-req-queue').textContent = t('queued', { n: pairRequests.length - 1 }); });
     await listen('pair-cancelled', ({ payload }) => {
       const i = pairRequests.findIndex(r => r.id === payload);
       if (i < 0) return;
       pairRequests.splice(i, 1);
       if (i === 0) showNextPairRequest();
-      toast('Prośba o sparowanie wygasła', true);
+      toast(t('pair_expired'), true);
     });
     await setupDragDrop();
     await refreshPeers();
@@ -787,7 +944,6 @@
     await loadNodeInfo();
     checkOnline();
     setInterval(checkOnline, 60000);
-    // Podpowiedź diagnostyczna przy pustej liście „W pobliżu” odświeżana na bieżąco.
     setInterval(() => { if (!nearby.length) renderNearby(); }, 5000);
     if (isMobile) checkSharedFiles();
   });

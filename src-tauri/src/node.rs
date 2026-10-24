@@ -1,6 +1,9 @@
-//! Węzeł P2P działający przez cały czas życia aplikacji GUI, wykrywanie urządzeń
-//! w sieci lokalnej oraz handler, który przekazuje oferty, prośby o sparowanie
-//! i postęp transferów do frontendu.
+//! The P2P node living for the whole lifetime of the GUI, local network
+//! discovery and the handler forwarding offers, pairing requests and transfer
+//! progress to the frontend.
+//!
+//! Events emitted to the frontend: `node-ready`, `node-error`, `nearby`,
+//! `incoming-offer`, `pair-request`, `pair-cancelled`, `peers-changed` and `transfer`.
 
 use iroh::EndpointId;
 use rqs_p2p::config::Config;
@@ -12,8 +15,9 @@ use rqs_p2p::transfer::sender::PreparedFile;
 use rqs_p2p::transfer::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
+use rust_i18n::t;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -22,25 +26,31 @@ use tauri_plugin_notification::NotificationExt;
 use tokio::sync::{Mutex, OnceCell, oneshot};
 use tracing::warn;
 
-/// Po tym czasie oferta bez odpowiedzi jest odrzucana.
+/// An offer without an answer is rejected after this time.
 const DECISION_TIMEOUT: Duration = Duration::from_secs(120);
-/// Czas na potwierdzenie parowania w interfejsie (rdzeń czeka 60 s).
+/// Time to confirm a pairing request in the GUI; shorter than the core's 60 s,
+/// so the dialog can be closed and the pending entry cleaned up.
 const PAIR_UI_TIMEOUT: Duration = Duration::from_secs(55);
 
+/// State shared by all Tauri commands.
 pub struct AppState {
     engine: OnceCell<NodeEngine>,
+    /// Current configuration; saved after every change.
     pub config: Mutex<Config>,
+    /// Pending offer and pairing decisions keyed by their ID.
     pub pending: Mutex<HashMap<String, oneshot::Sender<bool>>>,
+    /// Files shared by TICKET, keyed by share token.
     pub shares: std::sync::Mutex<HashMap<ShareToken, PreparedFile>>,
-    /// Katalog odbioru ustalony przy starcie (na Androidzie zależny od uprawnień).
+    /// Download folder chosen at startup (on Android it depends on permissions).
     pub platform_download_dir: OnceLock<PathBuf>,
-    /// Wykrywanie w sieci lokalnej (brak, gdy nie udało się otworzyć gniazda UDP).
+    /// Local network discovery; unset when the UDP socket could not be opened.
     pub discovery: OnceLock<Discovery>,
-    /// Odebrane pliki – tylko je wolno otworzyć z poziomu interfejsu.
-    pub received: std::sync::Mutex<std::collections::HashSet<PathBuf>>,
+    /// Received files; only these may be opened from the interface.
+    pub received: std::sync::Mutex<HashSet<PathBuf>>,
 }
 
 impl AppState {
+    /// Empty state; the node starts in [`start`].
     pub fn new() -> Self {
         Self {
             engine: OnceCell::new(),
@@ -49,11 +59,11 @@ impl AppState {
             shares: std::sync::Mutex::new(HashMap::new()),
             platform_download_dir: OnceLock::new(),
             discovery: OnceLock::new(),
-            received: std::sync::Mutex::new(std::collections::HashSet::new()),
+            received: std::sync::Mutex::new(HashSet::new()),
         }
     }
 
-    /// Zapamiętuje ścieżkę ukończonego pobrania (zezwolenie na „Otwórz”).
+    /// Remembers the path of a completed download, allowing it to be opened.
     pub fn record_download(&self, event: &TransferEvent) {
         if event.direction == Direction::Download
             && let TransferStatus::Completed { path: Some(p) } = &event.status
@@ -63,14 +73,20 @@ impl AppState {
         }
     }
 
-    /// Węzeł ze stałą tożsamością; uruchamiany leniwie przy pierwszym użyciu.
+    /// The node with the persistent identity, started lazily on first use.
+    ///
+    /// # Errors
+    ///
+    /// A localized message when the node cannot start.
     pub async fn engine(&self) -> Result<&NodeEngine, String> {
         self.engine
             .get_or_try_init(NodeEngine::with_persistent_identity)
             .await
-            .map_err(|e| format!("Nie udało się uruchomić węzła P2P: {e:#}"))
+            .map_err(|e| t!("gui.node_failed", error = format!("{e:#}")).into_owned())
     }
 
+    /// Folder for received files: the user's setting, the platform default or
+    /// the configuration default, in this order.
     pub async fn download_dir(&self) -> PathBuf {
         let config = self.config.lock().await;
         match (
@@ -84,24 +100,37 @@ impl AppState {
     }
 }
 
+/// Payload of the `pair-request` event.
 #[derive(Clone, Serialize)]
 pub struct IncomingPair {
+    /// ID to answer with `respond_to_offer`.
     pub id: String,
+    /// Node ID of the requesting device.
     pub peer: String,
+    /// Its device name.
     pub name: String,
+    /// Verification code.
     pub code: String,
 }
 
+/// Payload of the `incoming-offer` event.
 #[derive(Clone, Serialize)]
 pub struct IncomingOffer {
+    /// Transfer ID to answer with `respond_to_offer`.
     pub id: String,
+    /// Node ID of the sender.
     pub peer: String,
+    /// Alias of the sender if it is trusted.
     pub alias: Option<String>,
+    /// Offered file name.
     pub file_name: String,
+    /// Offered file size in bytes.
     pub size: u64,
 }
 
+/// [`TransferHandler`] of the GUI.
 pub struct GuiHandler {
+    /// Handle used to emit events and access [`AppState`].
     pub app: AppHandle,
 }
 
@@ -110,7 +139,7 @@ impl GuiHandler {
         self.app.state::<AppState>()
     }
 
-    /// Powiadomienie systemowe, gdy okno nie jest na pierwszym planie.
+    /// Shows a system notification when the window is not focused.
     fn notify(&self, title: &str, body: &str) {
         let focused = self
             .app
@@ -126,7 +155,7 @@ impl GuiHandler {
                 .body(body)
                 .show()
         {
-            warn!("Nie udało się wyświetlić powiadomienia: {e}");
+            warn!("Could not show a notification: {e}");
         }
     }
 }
@@ -167,13 +196,10 @@ impl TransferHandler for GuiHandler {
                 size: offer.file_size,
             },
         );
+        let sender = alias.unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
         self.notify(
-            "Przychodzący plik",
-            &format!(
-                "{} chce wysłać „{}”",
-                alias.as_deref().unwrap_or("Nieznane urządzenie"),
-                offer.file_name
-            ),
+            &t!("gui.notify_offer_title"),
+            &t!("gui.notify_offer", sender = sender, name = &offer.file_name),
         );
 
         let accepted = matches!(
@@ -185,7 +211,7 @@ impl TransferHandler for GuiHandler {
             OfferDecision::Accept { dest_dir }
         } else {
             OfferDecision::Reject {
-                reason: "Użytkownik odrzucił transfer".into(),
+                reason: t!("transfer.user_rejected").into_owned(),
             }
         }
     }
@@ -194,8 +220,8 @@ impl TransferHandler for GuiHandler {
         self.state().shares.lock().ok()?.get(token).cloned()
     }
 
+    /// Called from async code, so it never blocks on a busy configuration lock.
     fn device_name(&self) -> String {
-        // Wywoływane w kontekście async – nie blokujemy, gdy konfiguracja jest zajęta.
         self.state()
             .config
             .try_lock()
@@ -205,7 +231,7 @@ impl TransferHandler for GuiHandler {
 
     async fn confirm_pair(&self, req: PairRequest) -> bool {
         let state = self.state();
-        let id = uuid_like(&req);
+        let id = pair_request_id(&req);
         let (tx, rx) = oneshot::channel();
         state.pending.lock().await.insert(id.clone(), tx);
         let _ = self.app.emit(
@@ -218,11 +244,10 @@ impl TransferHandler for GuiHandler {
             },
         );
         self.notify(
-            "Prośba o sparowanie",
-            &format!("{} – kod {}", req.name, req.code),
+            &t!("gui.notify_pair_title"),
+            &t!("gui.notify_pair", name = &req.name, code = &req.code),
         );
 
-        // Nieco krócej niż limit rdzenia, aby posprzątać i zamknąć okno dialogowe.
         let accepted = matches!(
             tokio::time::timeout(PAIR_UI_TIMEOUT, rx).await,
             Ok(Ok(true))
@@ -244,7 +269,7 @@ impl TransferHandler for GuiHandler {
                 true
             }
             Err(e) => {
-                warn!("Nie udało się zapisać sparowanego urządzenia: {e:#}");
+                warn!("Could not save the paired device: {e:#}");
                 false
             }
         }
@@ -255,14 +280,14 @@ impl TransferHandler for GuiHandler {
         if event.direction == Direction::Download
             && let TransferStatus::Completed { .. } = event.status
         {
-            self.notify("Plik odebrany", &event.file_name);
+            self.notify(&t!("gui.notify_received"), &event.file_name);
         }
         let _ = self.app.emit("transfer", event);
     }
 }
 
-/// Identyfikator prośby o sparowanie (unikalny dla urządzenia i chwili).
-fn uuid_like(req: &PairRequest) -> String {
+/// Unique ID of a pairing request (device and moment).
+fn pair_request_id(req: &PairRequest) -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
@@ -270,12 +295,12 @@ fn uuid_like(req: &PairRequest) -> String {
     format!("pair-{}-{nanos}", req.peer.fmt_short())
 }
 
-/// Uruchamia wykrywanie w sieci lokalnej i przekazuje zmiany listy do frontendu (`nearby`).
+/// Starts local network discovery and forwards list changes as `nearby` events.
 fn start_discovery(app: &AppHandle, engine: &NodeEngine, name: &str) {
     let discovery = match Discovery::start(engine.clone(), name, DiscoveryOptions::default()) {
         Ok(d) => d,
         Err(e) => {
-            warn!("Wykrywanie w sieci lokalnej niedostępne: {e:#}");
+            warn!("Local network discovery unavailable: {e:#}");
             return;
         }
     };
@@ -293,7 +318,7 @@ fn start_discovery(app: &AppHandle, engine: &NodeEngine, name: &str) {
     });
 }
 
-/// Uruchamia węzeł i pętlę nasłuchu w tle (wywoływane w `setup`).
+/// Starts the node, discovery and the accept loop in the background (called from `setup`).
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();

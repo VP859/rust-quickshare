@@ -9,14 +9,18 @@ import androidx.core.content.IntentCompat
 import java.io.File
 
 /**
- * Przejmuje pliki z menu „Udostępnij”. URI `content://` nie mają ścieżki na dysku,
- * więc ich zawartość jest kopiowana do `cacheDir/share-in/`, a ścieżki dopisywane do
- * `pending.txt`, skąd odczytuje je backend Rust (`take_shared_files`).
+ * Receives files shared to the app through the system "Share" menu.
+ *
+ * `content://` URIs have no path on disk, so their contents are copied into
+ * `cacheDir/share-in/` and the resulting paths are appended to `pending.txt`,
+ * which the Rust backend reads with the `take_shared_files` command.
  */
 object ShareIntake {
   private const val TAG = "RqsShare"
+  private const val FALLBACK_NAME = "file"
   private val lock = Any()
 
+  /** Returns the URIs carried by an `ACTION_SEND` / `ACTION_SEND_MULTIPLE` intent. */
   fun extractUris(intent: Intent?): List<Uri> {
     if (intent == null) return emptyList()
     val uris = mutableListOf<Uri>()
@@ -33,7 +37,13 @@ object ShareIntake {
     return uris.distinct()
   }
 
-  /** Zwraca liczbę skopiowanych plików. Wywoływać poza wątkiem UI. */
+  /**
+   * Copies the given URIs into the share cache and records them in `pending.txt`.
+   *
+   * Performs blocking I/O and must not be called on the UI thread.
+   *
+   * @return the number of files copied successfully.
+   */
   fun copyToCache(context: Context, uris: List<Uri>): Int {
     val dir = File(context.cacheDir, "share-in").apply { mkdirs() }
     val copied = uris.mapNotNull { uri ->
@@ -44,7 +54,7 @@ object ShareIntake {
         } ?: return@mapNotNull null
         target.absolutePath
       } catch (e: Exception) {
-        Log.w(TAG, "Nie udało się skopiować $uri", e)
+        Log.w(TAG, "Could not copy $uri", e)
         null
       }
     }
@@ -60,11 +70,11 @@ object ShareIntake {
     context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
       if (c.moveToFirst()) c.getString(0)?.let { return it }
     }
-    return uri.lastPathSegment ?: "plik"
+    return uri.lastPathSegment ?: FALLBACK_NAME
   }
 
   private fun sanitize(name: String): String =
-    name.replace(Regex("[/\\\\:*?\"<>|\\p{Cntrl}]"), "_").trimStart('.').ifBlank { "plik" }.take(200)
+    name.replace(Regex("[/\\\\:*?\"<>|\\p{Cntrl}]"), "_").trimStart('.').ifBlank { FALLBACK_NAME }.take(200)
 
   private fun uniqueFile(dir: File, name: String): File {
     var file = File(dir, name)

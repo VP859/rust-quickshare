@@ -10,11 +10,21 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
+/**
+ * Entry activity hosting the Tauri WebView.
+ *
+ * Requests runtime permissions, keeps the P2P node alive through [RqsTransferService]
+ * and forwards files from the system "Share" menu to the frontend.
+ *
+ * Events dispatched to the WebView (`window`):
+ * - `rqs-share` – shared files are ready to be fetched with `take_shared_files`;
+ * - `rqs-lan-permission` – local network access was granted (Android 17+).
+ */
 class MainActivity : TauriActivity() {
   companion object {
     private const val PERMISSIONS_REQUEST = 1
-    /** Android 17 (API 37): ruch w sieci lokalnej (broadcast, multicast, połączenia do
-     *  adresów LAN) wymaga uprawnienia z grupy „Urządzenia w pobliżu”. */
+
+    /** Required on Android 17 (API 37) for any local network traffic. */
     private const val ACCESS_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
     private const val API_ANDROID_17 = 37
   }
@@ -25,7 +35,6 @@ class MainActivity : TauriActivity() {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     requestRuntimePermissions()
-    // Węzeł P2P żyje w tym procesie – usługa pierwszoplanowa chroni go przed zabiciem w tle.
     RqsTransferService.start(this)
     if (savedInstanceState == null) handleShareIntent(intent)
   }
@@ -40,7 +49,7 @@ class MainActivity : TauriActivity() {
     handleShareIntent(intent)
   }
 
-  /** ACTION_SEND / ACTION_SEND_MULTIPLE: kopiuje pliki i otwiera ekran wyboru odbiorcy. */
+  /** Copies files from `ACTION_SEND` / `ACTION_SEND_MULTIPLE` and notifies the frontend. */
   private fun handleShareIntent(intent: Intent?) {
     val uris = ShareIntake.extractUris(intent)
     if (uris.isEmpty()) return
@@ -57,8 +66,6 @@ class MainActivity : TauriActivity() {
     val wanted = buildList {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
       if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-      // Bez tego Android 17 blokuje wykrywanie urządzeń i bezpośrednie transfery w LAN
-      // (zostaje tylko relay przez internet).
       if (Build.VERSION.SDK_INT >= API_ANDROID_17) add(ACCESS_LOCAL_NETWORK)
     }.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
     if (wanted.isNotEmpty()) ActivityCompat.requestPermissions(this, wanted.toTypedArray(), PERMISSIONS_REQUEST)
@@ -70,7 +77,6 @@ class MainActivity : TauriActivity() {
     val lanGranted = permissions.indices.any {
       permissions[it] == ACCESS_LOCAL_NETWORK && grantResults.getOrNull(it) == PackageManager.PERMISSION_GRANTED
     }
-    // Interfejs od razu ponawia wyszukiwanie urządzeń w sieci lokalnej.
     if (lanGranted) {
       webView?.evaluateJavascript("window.dispatchEvent(new Event('rqs-lan-permission'))", null)
     }

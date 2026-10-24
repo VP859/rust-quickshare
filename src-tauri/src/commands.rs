@@ -1,9 +1,20 @@
+//! Tauri commands invoked by the frontend with `invoke("<name>", { … })`.
+//!
+//! Argument names are camelCase on the JavaScript side (`nodeId` for `node_id`).
+//! Errors are returned as localized strings. Long operations (sending,
+//! downloading, pairing after adding a device) run in the background and report
+//! through events: `transfer`, `transfer-error` and `pair-result`.
+
 use qrcode::QrCode;
 use qrcode::render::svg;
 use rqs_p2p::config::Config;
+use rqs_p2p::discovery::NearbyDevice;
+use rqs_p2p::i18n::{self, Language};
 use rqs_p2p::node::NodeTicket;
+use rqs_p2p::pairing::{PairOutcome, clean_device_name, pairing_code, request_pairing};
 use rqs_p2p::transfer::sender::prepare_file;
 use rqs_p2p::transfer::service;
+use rust_i18n::t;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -11,8 +22,6 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::node::AppState;
-use rqs_p2p::discovery::NearbyDevice;
-use rqs_p2p::pairing::{PairOutcome, clean_device_name, pairing_code, request_pairing};
 
 type CmdResult<T> = Result<T, String>;
 
@@ -20,39 +29,90 @@ fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
-/// Czas na sprawdzenie, czy urządzenie odpowiada.
+/// How long to wait when checking whether a device responds.
 const PING_TIMEOUT: Duration = Duration::from_secs(6);
 
+/// Information about this device.
 #[derive(Serialize)]
 pub struct NodeInfo {
+    /// Node ID.
     pub node_id: String,
+    /// Pairing TICKET.
     pub ticket: String,
+    /// QR code of the TICKET as an SVG document.
     pub qr_svg: String,
+    /// Folder for received files.
     pub download_dir: String,
 }
 
+/// A trusted device as shown in the frontend.
 #[derive(Serialize)]
 pub struct TrustedPeer {
+    /// Node ID.
     pub node_id: String,
+    /// Device name chosen by the user.
     pub alias: String,
+    /// Whether files are accepted without asking.
     pub auto_accept: bool,
 }
 
+/// A file shared by TICKET.
 #[derive(Serialize)]
 pub struct ShareInfo {
+    /// Shared file name.
     pub file_name: String,
+    /// Share TICKET.
     pub ticket: String,
+    /// QR code of the TICKET as an SVG document.
     pub qr_svg: String,
 }
 
+/// What a pasted or scanned TICKET refers to.
 #[derive(Serialize)]
 pub struct TicketInfo {
+    /// Node ID of the device.
     pub node_id: String,
+    /// `true` for a file share TICKET, `false` for a pairing TICKET or Node ID.
     pub has_share: bool,
+}
+
+/// Name of this device.
+#[derive(Serialize)]
+pub struct DeviceName {
+    /// Effective name.
+    pub name: String,
+    /// `true` when the user has not set a name (the Android frontend then uses the phone model).
+    pub is_default: bool,
+}
+
+/// A selectable interface language.
+#[derive(Serialize)]
+pub struct LanguageOption {
+    /// Language code (`en`, `pl`).
+    pub code: &'static str,
+    /// Name of the language in that language.
+    pub name: &'static str,
+}
+
+/// Current interface language and the supported ones.
+#[derive(Serialize)]
+pub struct LanguageInfo {
+    /// Code of the active language.
+    pub code: &'static str,
+    /// All supported languages.
+    pub available: Vec<LanguageOption>,
 }
 
 #[derive(Clone, Serialize)]
 struct TransferError {
+    message: String,
+}
+
+#[derive(Clone, Serialize)]
+struct PairResult {
+    node_id: String,
+    alias: String,
+    ok: bool,
     message: String,
 }
 
@@ -75,6 +135,7 @@ fn emit_error(app: &AppHandle, e: anyhow::Error) {
     );
 }
 
+/// Node ID, TICKET (with QR code) and download folder of this device.
 #[tauri::command]
 pub async fn get_node_info(state: State<'_, AppState>) -> CmdResult<NodeInfo> {
     let engine = state.engine().await?;
@@ -92,6 +153,7 @@ pub async fn get_node_info(state: State<'_, AppState>) -> CmdResult<NodeInfo> {
     })
 }
 
+/// Trusted devices sorted by alias.
 #[tauri::command]
 pub async fn list_peers(state: State<'_, AppState>) -> CmdResult<Vec<TrustedPeer>> {
     let config = state.config.lock().await;
@@ -108,6 +170,11 @@ pub async fn list_peers(state: State<'_, AppState>) -> CmdResult<Vec<TrustedPeer
     Ok(peers)
 }
 
+/// Adds a device from a TICKET or Node ID and returns its Node ID.
+///
+/// A pairing request is then sent in the background so that, once accepted,
+/// the other device trusts this one too; the result arrives as a
+/// `pair-result` event.
 #[tauri::command]
 pub async fn add_peer(
     input: String,
@@ -119,12 +186,12 @@ pub async fn add_peer(
     let mut config = state.config.lock().await;
     let node_id = config
         .add_from_input(&input, &alias, auto_accept)
-        .map_err(err)?;
+        .map_err(|e| format!("{e:#}"))?;
     if let Ok(engine) = state.engine().await
         && node_id == engine.node_id().to_string()
     {
         config.peers.remove(&node_id);
-        return Err("To jest TICKET tego urządzenia".into());
+        return Err(t!("tui.own_ticket").into_owned());
     }
     config.save().map_err(err)?;
     let saved_alias = config
@@ -132,18 +199,8 @@ pub async fn add_peer(
         .map(|p| p.alias.clone())
         .unwrap_or_default();
     drop(config);
-    // Prośba o sparowanie: po akceptacji druga strona też zapisze to urządzenie
-    // jako zaufane (bez niej zaufanie byłoby tylko jednostronne).
     start_pairing_after_add(app, node_id.clone(), saved_alias, auto_accept);
     Ok(node_id)
-}
-
-#[derive(Clone, Serialize)]
-struct PairResult {
-    node_id: String,
-    alias: String,
-    ok: bool,
-    message: String,
 }
 
 fn start_pairing_after_add(app: AppHandle, node_id: String, alias: String, auto_accept: bool) {
@@ -166,17 +223,20 @@ fn start_pairing_after_add(app: AppHandle, node_id: String, alias: String, auto_
                     .add_paired(addr.id, &alias, remote, auto_accept)
                     .and_then(|()| config.save());
                 match saved {
-                    Ok(()) => (true, format!("Sparowano obustronnie z „{alias}”")),
-                    Err(e) => (false, format!("Błąd zapisu: {e:#}")),
+                    Ok(()) => (true, t!("tui.paired_mutual", name = &alias).into_owned()),
+                    Err(e) => (
+                        false,
+                        t!("tui.error", error = format!("{e:#}")).into_owned(),
+                    ),
                 }
             }
             Ok((_, PairOutcome::Rejected)) => (
                 false,
-                format!("„{alias}” odrzuciło parowanie – dodano tylko na tym urządzeniu"),
+                t!("gui.pair_one_sided_rejected", alias = &alias).into_owned(),
             ),
             Err(e) => (
                 false,
-                format!("„{alias}” dodano tylko na tym urządzeniu (parowanie nieudane: {e})"),
+                t!("gui.pair_one_sided_failed", alias = &alias, error = e).into_owned(),
             ),
         };
         let _ = app.emit(
@@ -191,7 +251,9 @@ fn start_pairing_after_add(app: AppHandle, node_id: String, alias: String, auto_
     });
 }
 
-/// Otwiera odebrany plik (`reveal` – folder z plikiem). Tylko pliki odebrane w tej sesji.
+/// Opens a received file, or its folder when `reveal` is set.
+///
+/// Only files received during this session may be opened.
 #[tauri::command]
 pub fn open_received(path: String, reveal: bool, state: State<'_, AppState>) -> CmdResult<()> {
     let path = PathBuf::from(path);
@@ -201,7 +263,7 @@ pub fn open_received(path: String, reveal: bool, state: State<'_, AppState>) -> 
         .map(|r| r.contains(&path))
         .unwrap_or(false);
     if !allowed {
-        return Err("Można otwierać tylko odebrane pliki".into());
+        return Err(t!("gui.open_only_received").into_owned());
     }
     let result = if reveal {
         rqs_p2p::system::reveal_path(&path)
@@ -211,14 +273,16 @@ pub fn open_received(path: String, reveal: bool, state: State<'_, AppState>) -> 
     result.map_err(err)
 }
 
+/// Explanation why no nearby devices are visible, if discovery has a problem.
 #[tauri::command]
 pub fn discovery_health(state: State<'_, AppState>) -> Option<String> {
     match state.discovery.get() {
         Some(d) => d.health().hint(),
-        None => Some("Wykrywanie w sieci lokalnej jest niedostępne na tym urządzeniu.".into()),
+        None => Some(t!("tui.discovery_unavailable").into_owned()),
     }
 }
 
+/// Changes the alias and/or Auto-Accept setting of a trusted device.
 #[tauri::command]
 pub async fn update_peer(
     node_id: String,
@@ -230,7 +294,7 @@ pub async fn update_peer(
     let peer = config
         .peers
         .get_mut(&node_id)
-        .ok_or("Nie znaleziono urządzenia")?;
+        .ok_or_else(|| t!("peer.not_found", target = &node_id).into_owned())?;
     if let Some(alias) = alias
         .map(|a| a.trim().to_string())
         .filter(|a| !a.is_empty())
@@ -243,6 +307,7 @@ pub async fn update_peer(
     config.save().map_err(err)
 }
 
+/// Removes a trusted device.
 #[tauri::command]
 pub async fn remove_peer(node_id: String, state: State<'_, AppState>) -> CmdResult<()> {
     let mut config = state.config.lock().await;
@@ -250,6 +315,7 @@ pub async fn remove_peer(node_id: String, state: State<'_, AppState>) -> CmdResu
     config.save().map_err(err)
 }
 
+/// Whether a trusted device responds within a few seconds.
 #[tauri::command]
 pub async fn peer_online(node_id: String, state: State<'_, AppState>) -> CmdResult<bool> {
     let target = state
@@ -261,7 +327,10 @@ pub async fn peer_online(node_id: String, state: State<'_, AppState>) -> CmdResu
     Ok(state.engine().await?.ping(target, PING_TIMEOUT).await)
 }
 
-/// Wysyła pliki do urządzenia (alias / Node ID / TICKET). Postęp przez zdarzenia `transfer`.
+/// Sends files to a device given by alias, nearby name, Node ID or TICKET.
+///
+/// Returns immediately; progress arrives as `transfer` events and a failure as
+/// a `transfer-error` event. On Android `content://` URIs are accepted.
 #[tauri::command]
 pub async fn send_files(
     paths: Vec<String>,
@@ -270,7 +339,7 @@ pub async fn send_files(
     state: State<'_, AppState>,
 ) -> CmdResult<()> {
     if paths.is_empty() {
-        return Err("Nie wybrano plików".into());
+        return Err(t!("gui.no_files").into_owned());
     }
     let addr = resolve_with_nearby(&state, &target).await?;
     let engine = state.engine().await?.clone();
@@ -278,19 +347,18 @@ pub async fn send_files(
     for p in &paths {
         local.push(crate::platform::local_path(&app, p).await?);
     }
-    let paths = local;
     tauri::async_runtime::spawn(async move {
         let sink = |ev| {
             let _ = app.emit("transfer", ev);
         };
-        if let Err(e) = service::send_files(&engine, addr, &paths, &sink).await {
+        if let Err(e) = service::send_files(&engine, addr, &local, &sink).await {
             emit_error(&app, e);
         }
     });
     Ok(())
 }
 
-/// Udostępnia plik przez jednorazowy TICKET (odbiorca: skan QR lub `rqs receive`).
+/// Shares a file by a one-time TICKET (the receiver scans the QR code or runs `rqs receive`).
 #[tauri::command]
 pub async fn share_file(
     path: String,
@@ -313,6 +381,7 @@ pub async fn share_file(
     })
 }
 
+/// Tells whether a TICKET shares a file or identifies a device to pair with.
 #[tauri::command]
 pub fn inspect_ticket(ticket: String) -> CmdResult<TicketInfo> {
     if let Ok(t) = NodeTicket::deserialize_from_str(&ticket) {
@@ -322,14 +391,14 @@ pub fn inspect_ticket(ticket: String) -> CmdResult<TicketInfo> {
         });
     }
     let id = iroh::EndpointId::from_str(ticket.trim())
-        .map_err(|_| "Nieprawidłowy TICKET lub Node ID".to_string())?;
+        .map_err(|_| t!("ticket.invalid_target").into_owned())?;
     Ok(TicketInfo {
         node_id: id.to_string(),
         has_share: false,
     })
 }
 
-/// Pobiera plik z TICKETU udostępnienia.
+/// Downloads a file from a share TICKET in the background (`transfer` events).
 #[tauri::command]
 pub async fn receive_from_ticket(
     ticket: String,
@@ -338,7 +407,7 @@ pub async fn receive_from_ticket(
 ) -> CmdResult<()> {
     let ticket = NodeTicket::deserialize_from_str(&ticket).map_err(err)?;
     if ticket.share.is_none() {
-        return Err("To TICKET urządzenia – dodaj je jako zaufane urządzenie".into());
+        return Err(t!("gui.pairing_ticket").into_owned());
     }
     let engine = state.engine().await?.clone();
     let dest_dir = state.download_dir().await;
@@ -354,6 +423,7 @@ pub async fn receive_from_ticket(
     Ok(())
 }
 
+/// Answers an `incoming-offer` or `pair-request` event by its ID.
 #[tauri::command]
 pub async fn respond_to_offer(
     transfer_id: String,
@@ -366,6 +436,7 @@ pub async fn respond_to_offer(
     Ok(())
 }
 
+/// Sets the folder for received files, creating it if needed.
 #[tauri::command]
 pub async fn set_download_dir(path: String, state: State<'_, AppState>) -> CmdResult<()> {
     let dir = PathBuf::from(path);
@@ -375,8 +446,9 @@ pub async fn set_download_dir(path: String, state: State<'_, AppState>) -> CmdRe
     config.save().map_err(err)
 }
 
-/// Adres urządzenia: najpierw świeży z sieci lokalnej (działa bez internetu),
-/// potem zapisany w konfiguracji. Przyjmuje Node ID, alias, nazwę z „W pobliżu” lub TICKET.
+/// Address of a device: a fresh LAN address from discovery when available
+/// (works without internet), otherwise the stored one. Accepts a Node ID,
+/// alias, nearby device name or TICKET.
 async fn resolve_with_nearby(state: &AppState, target: &str) -> CmdResult<iroh::EndpointAddr> {
     let resolved = state.config.lock().await.resolve_target(target);
     let nearby = state.discovery.get().and_then(|d| match &resolved {
@@ -386,10 +458,11 @@ async fn resolve_with_nearby(state: &AppState, target: &str) -> CmdResult<iroh::
     match (nearby, resolved) {
         (Some(addr), _) => Ok(addr),
         (None, Ok(addr)) => Ok(addr),
-        (None, Err(e)) => Err(err(e)),
+        (None, Err(e)) => Err(format!("{e:#}")),
     }
 }
 
+/// Devices currently visible on the local network (updates arrive as `nearby` events).
 #[tauri::command]
 pub fn list_nearby(state: State<'_, AppState>) -> Vec<NearbyDevice> {
     state
@@ -399,25 +472,25 @@ pub fn list_nearby(state: State<'_, AppState>) -> Vec<NearbyDevice> {
         .unwrap_or_default()
 }
 
-/// Natychmiastowe ogłoszenie w sieci (przycisk „Szukaj”).
+/// Announces this device immediately ("Search" button).
 #[tauri::command]
 pub fn refresh_nearby(state: State<'_, AppState>) -> CmdResult<()> {
     let discovery = state
         .discovery
         .get()
-        .ok_or("Wykrywanie w sieci lokalnej jest niedostępne")?;
+        .ok_or_else(|| t!("tui.discovery_unavailable").into_owned())?;
     discovery.probe();
     Ok(())
 }
 
-/// Kod weryfikacyjny wyświetlany przed wysłaniem prośby o sparowanie.
+/// Verification code shown before a pairing request is sent.
 #[tauri::command]
 pub async fn pair_code(node_id: String, state: State<'_, AppState>) -> CmdResult<String> {
     let peer = iroh::EndpointId::from_str(&node_id).map_err(err)?;
     Ok(pairing_code(&state.engine().await?.node_id(), &peer))
 }
 
-/// Paruje z urządzeniem jednym przyciskiem; zwraca nazwę zapisanego urządzenia.
+/// One-button pairing; waits for the other device and returns the saved alias.
 #[tauri::command]
 pub async fn pair_device(node_id: String, state: State<'_, AppState>) -> CmdResult<String> {
     let addr = resolve_with_nearby(&state, &node_id).await?;
@@ -438,17 +511,11 @@ pub async fn pair_device(node_id: String, state: State<'_, AppState>) -> CmdResu
                 .map(|p| p.alias.clone())
                 .unwrap_or(name))
         }
-        PairOutcome::Rejected => Err("Drugie urządzenie odrzuciło parowanie".into()),
+        PairOutcome::Rejected => Err(t!("pair.rejected").into_owned()),
     }
 }
 
-#[derive(Serialize)]
-pub struct DeviceName {
-    pub name: String,
-    /// `true`, gdy użytkownik nie ustawił nazwy (frontend Androida podstawia model telefonu).
-    pub is_default: bool,
-}
-
+/// Name of this device.
 #[tauri::command]
 pub async fn get_device_name(state: State<'_, AppState>) -> CmdResult<DeviceName> {
     let config = state.config.lock().await;
@@ -458,11 +525,12 @@ pub async fn get_device_name(state: State<'_, AppState>) -> CmdResult<DeviceName
     })
 }
 
+/// Changes the name of this device and announces it immediately.
 #[tauri::command]
 pub async fn set_device_name(name: String, state: State<'_, AppState>) -> CmdResult<String> {
     let clean = clean_device_name(&name);
     if clean.is_empty() {
-        return Err("Nazwa nie może być pusta".into());
+        return Err(t!("settings.name_empty").into_owned());
     }
     let mut config = state.config.lock().await;
     config.device_name = Some(clean.clone());
@@ -473,18 +541,56 @@ pub async fn set_device_name(name: String, state: State<'_, AppState>) -> CmdRes
     Ok(clean)
 }
 
-/// Pliki przekazane z menu „Udostępnij” Androida (pusta lista na desktopie).
+/// The active interface language and the supported ones.
+#[tauri::command]
+pub fn get_language() -> LanguageInfo {
+    LanguageInfo {
+        code: i18n::current().code(),
+        available: Language::ALL
+            .iter()
+            .map(|l| LanguageOption {
+                code: l.code(),
+                name: l.native_name(),
+            })
+            .collect(),
+    }
+}
+
+/// Switches and saves the interface language; backend messages, notifications
+/// and the tray menu follow it too.
+#[tauri::command]
+pub async fn set_language(
+    code: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<&'static str> {
+    let language: Language = code.parse().map_err(err)?;
+    i18n::set_language(language);
+    let mut config = state.config.lock().await;
+    config.language = Some(language.code().to_string());
+    config.save().map_err(err)?;
+    #[cfg(desktop)]
+    crate::tray::refresh(&app);
+    #[cfg(not(desktop))]
+    let _ = app;
+    Ok(language.code())
+}
+
+/// Paths of files shared from the Android "Share" menu (empty on desktop).
 #[tauri::command]
 pub fn take_shared_files(app: AppHandle) -> Vec<String> {
     crate::platform::take_shared_files(&app)
 }
 
-/// Ładuje konfigurację do stanu (po ustawieniu katalogów platformy).
+/// Loads the configuration into the state and activates the saved language.
+///
+/// Called after the platform directories are set.
 pub fn load_config(app: &AppHandle) {
     let config = Config::load().unwrap_or_else(|e| {
-        tracing::warn!("Błąd wczytywania konfiguracji: {e:#}");
+        tracing::warn!("Could not load the configuration: {e:#}");
         Config::default()
     });
+    i18n::init(None, config.language.as_deref());
     let state = app.state::<AppState>();
     tauri::async_runtime::block_on(async {
         *state.config.lock().await = config;

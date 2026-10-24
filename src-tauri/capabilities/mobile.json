@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile",
-  "description": "Uprawnienia Android/iOS: wybór plików, powiadomienia, schowek i skaner QR",
+  "description": "Android/iOS permissions: file picker, notifications, clipboard and QR scanner",
   "windows": ["main"],
   "platforms": ["android", "iOS"],
   "permissions": [

@@ -1,26 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Sieć: węzeł iroh (QUIC/UDP, hole punching, relay) -->
+    <!-- iroh node: QUIC over UDP, hole punching, relay -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Wykrywanie urządzeń w sieci lokalnej (broadcast/multicast UDP, bez mDNS) -->
+    <!-- Local network discovery (UDP broadcast/multicast, no mDNS) -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-    <!-- Android 17+ (targetSdk 37): dostęp do sieci lokalnej – wykrywanie urządzeń i
-         bezpośrednie transfery w LAN. Uprawnienie runtime z grupy „Urządzenia w pobliżu”. -->
+    <!-- Android 17+ (targetSdk 37): runtime permission ("Nearby devices") required for
+         any local network traffic, i.e. discovery and direct LAN transfers. -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
-    <!-- Usługa pierwszoplanowa z powiadomieniem ciągłym – system nie zabija transferów w tle -->
+    <!-- Foreground service with a persistent notification keeps transfers alive -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Pamięć: Android ≤ 12 klasyczne uprawnienia, Android 13+ READ_MEDIA_* -->
+    <!-- Storage: legacy permissions up to Android 12, READ_MEDIA_* on Android 13+ -->
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <!-- Zapis do publicznego katalogu Pobrane na Androidzie ≤ 9 -->
+    <!-- Writing to the public Download folder on Android 9 and older -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
@@ -28,7 +28,7 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
-    <!-- Skaner QR (uprawnienie CAMERA dodaje plugin barcode-scanner) – kamera nie jest wymagana -->
+    <!-- QR scanner (the barcode-scanner plugin adds CAMERA); a camera is optional -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -36,6 +36,7 @@
     <application
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:theme="@style/Theme.rqs_gui"
         android:requestLegacyExternalStorage="true"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
@@ -52,7 +53,7 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
 
-            <!-- Menu „Udostępnij” (Galeria, Menedżer plików…): URI content:// trafiają do MainActivity -->
+            <!-- System "Share" menu: content:// URIs are delivered to MainActivity -->
             <intent-filter android:label="@string/share_target_label">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
