@@ -1,32 +1,43 @@
-//! Otwieranie odebranych plików i folderów w domyślnych aplikacjach systemu.
+//! Opening received files and folders with the system's default applications.
 
+use rust_i18n::t;
 use std::io;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-/// Otwiera plik lub katalog domyślną aplikacją systemu (Linux, macOS, Windows).
+/// Opens a file or folder with the default application (Linux, macOS, Windows).
+///
+/// # Errors
+///
+/// Fails when the path does not exist, the platform is unsupported or the
+/// opener program cannot be started.
 pub fn open_path(path: &Path) -> io::Result<()> {
-    if !path.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("Nie istnieje: {}", path.display()),
-        ));
-    }
+    ensure_exists(path)?;
     spawn_detached(opener(path, false)?)
 }
 
-/// Otwiera katalog zawierający plik (na Windows i macOS z zaznaczeniem pliku).
+/// Opens the folder containing `path`, selecting the file on Windows and macOS.
+///
+/// # Errors
+///
+/// See [`open_path`].
 pub fn reveal_path(path: &Path) -> io::Result<()> {
     if path.is_dir() {
         return open_path(path);
     }
-    if !path.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("Nie istnieje: {}", path.display()),
-        ));
-    }
+    ensure_exists(path)?;
     spawn_detached(opener(path, true)?)
+}
+
+fn ensure_exists(path: &Path) -> io::Result<()> {
+    if path.exists() {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            t!("system.not_found", path = path.display()).into_owned(),
+        ))
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -68,7 +79,7 @@ fn opener(path: &Path, reveal: bool) -> io::Result<Command> {
 fn opener(_path: &Path, _reveal: bool) -> io::Result<Command> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
-        "Otwieranie plików nie jest obsługiwane na tej platformie",
+        t!("system.unsupported").into_owned(),
     ))
 }
 
@@ -78,7 +89,6 @@ fn spawn_detached(mut cmd: Command) -> io::Result<()> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()?;
-    // Odbieramy status w tle, aby nie zostawiać procesów zombie.
     std::thread::spawn(move || {
         let _ = child.wait();
     });

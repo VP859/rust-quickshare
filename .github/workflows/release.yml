@@ -1,11 +1,11 @@
-# Wydanie wieloplatformowe uruchamiane tagiem `v*` (np. `git tag v0.2.0 && git push --tags`).
+# Cross-platform release triggered by a `v*` tag (e.g. `git tag v0.2.0 && git push --tags`).
 #
-#  cli      – cargo-dist: archiwa `rqs` + instalatory shell/PowerShell (Linux/Windows/macOS)
+#  cli      – cargo-dist: `rqs` archives + shell/PowerShell installers (Linux/Windows/macOS)
 #  desktop  – Tauri: .deb/.AppImage/.rpm (Linux), .msi/.exe (Windows), .dmg Universal (macOS)
-#  android  – Tauri Mobile: .apk/.aab (podpisane, jeśli ustawiono sekrety keystore)
-#  publish  – zbiera wszystkie artefakty w szkic wydania GitHub z sumami SHA-256
+#  android  – Tauri Mobile: .apk/.aab (signed when the keystore secrets are set)
+#  publish  – collects all artifacts into a draft GitHub release with SHA-256 sums
 #
-# Opcjonalne sekrety podpisu Androida:
+# Optional Android signing secrets:
 #   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
 
 name: Release
@@ -153,7 +153,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: android
-      # gen/android/buildSrc (BuildTask.kt) wywołuje `cargo tauri` – wymagany tauri-cli z crates.io.
+      # gen/android/buildSrc (BuildTask.kt) calls `cargo tauri`, so tauri-cli from crates.io is required.
       - name: Install tauri-cli
         run: cargo install tauri-cli --version "^2" --locked
       - name: Configure release signing

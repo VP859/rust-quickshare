@@ -17,7 +17,7 @@ blake3 = { version = "1.8.7", features = ["mmap", "rayon"] }
 
 [package]
 name = "rqs_p2p"
-version = "0.1.2"
+version = "0.1.4"
 edition = "2024"
 
 [lib]
@@ -39,7 +39,6 @@ ratatui = "0.30.2"
 crossterm = "0.29.0"
 dirs = "7.0.0"
 toml = "1.1.8"
-thiserror = "2.0.21"
 tokio = { workspace = true }
 serde = { workspace = true }
 anyhow = { workspace = true }
@@ -50,23 +49,24 @@ iroh = { workspace = true }
 qrcode = { version = "0.14.1", default-features = false }
 socket2 = { version = "0.6.5", features = ["all"] }
 gethostname = "1.1.0"
+rust-i18n = "4.2.4"
 
 # ---------------------------------------------------------------------------
-# Zależności specyficzne dla platformy (Android NDK nie obsługuje X11/Wayland
-# ani surowych gniazd netlink – stąd warunkowa kompilacja poniższych crate'ów)
+# Platform-specific dependencies (the Android NDK has no X11/Wayland
+# or raw netlink sockets, so these crates are compiled conditionally)
 # ---------------------------------------------------------------------------
 [target.'cfg(not(target_os = "android"))'.dependencies]
-# Schowek systemowy (TICKET -> clipboard w TUI) – tylko desktop
+# System clipboard (copying the TICKET in the TUI), desktop only
 arboard = "3.7.0"
-# Wykrywanie interfejsów sieciowych przez getifaddrs/netlink – tylko desktop
+# Network interface enumeration via getifaddrs/netlink, desktop only
 network-interface = "2.0.5"
 
 [target.'cfg(target_os = "android")'.dependencies]
-# getifaddrs – adresy i maski interfejsów do wykrywania w sieci lokalnej.
+# getifaddrs: interface addresses and netmasks for local network discovery.
 libc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
-# Test kodu getifaddrs używanego na Androidzie (glibc udostępnia to samo API).
+# Tests of the Android getifaddrs code (glibc provides the same API).
 libc = "0.2"
 
 [dev-dependencies]

@@ -1,6 +1,9 @@
+//! Persistent settings: trusted devices, download folder, device name and language.
+
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use iroh::{EndpointAddr, EndpointId};
+use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -8,59 +11,82 @@ use std::str::FromStr;
 
 use crate::node::NodeTicket;
 
+/// A trusted device stored in the configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfo {
+    /// User-facing name of the device.
     pub alias: String,
+    /// Accept files from this device without asking.
     pub auto_accept: bool,
+    /// When the device was first added.
     pub added_at: DateTime<Utc>,
-    /// Ostatni znany TICKET (adresy bezpośrednie + relay) – przyspiesza łączenie.
+    /// Last known TICKET (relay and direct addresses); speeds up connecting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ticket: Option<String>,
 }
 
+/// Contents of `config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
+    /// Trusted devices keyed by Node ID.
     pub peers: HashMap<String, PeerInfo>,
+    /// Folder for received files; [`default_download_dir`](super::paths::default_download_dir) when unset.
     pub default_download_dir: Option<PathBuf>,
-    /// Nazwa tego urządzenia widoczna przy wykrywaniu i parowaniu.
+    /// Name of this device shown during discovery and pairing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_name: Option<String>,
+    /// User interface language code (`en`, `pl`); English when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 impl Config {
+    /// Path of `config.toml` inside [`config_dir`](super::paths::config_dir).
+    ///
+    /// # Errors
+    ///
+    /// Fails when the configuration directory cannot be determined or created.
     pub fn file_path() -> Result<PathBuf> {
         Ok(super::paths::config_dir()?.join("config.toml"))
     }
 
+    /// Loads the configuration, returning defaults when the file does not exist.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the file exists but cannot be read or parsed.
     pub fn load() -> Result<Self> {
         let path = Self::file_path()?;
         if !path.exists() {
             return Ok(Self::default());
         }
-        let content =
-            std::fs::read_to_string(&path).context("Nie udało się odczytać pliku konfiguracji")?;
-        let config: Config =
-            toml::from_str(&content).context("Błąd parsowania pliku config.toml")?;
-        Ok(config)
+        let content = std::fs::read_to_string(&path).context(t!("config.read"))?;
+        toml::from_str(&content).context(t!("config.parse"))
     }
 
-    /// Zapis atomowy (plik tymczasowy + rename), aby przerwanie nie uszkodziło konfiguracji.
+    /// Saves the configuration atomically (temporary file + rename), so an
+    /// interruption never leaves a corrupted file behind.
+    ///
+    /// # Errors
+    ///
+    /// Fails on serialization or I/O errors.
     pub fn save(&self) -> Result<()> {
         let path = Self::file_path()?;
-        let content =
-            toml::to_string_pretty(self).context("Błąd serializacji konfiguracji do TOML")?;
+        let content = toml::to_string_pretty(self).context(t!("config.serialize"))?;
         let tmp = path.with_extension("toml.tmp");
-        std::fs::write(&tmp, content).context("Nie udało się zapisać pliku konfiguracji")?;
-        std::fs::rename(&tmp, &path).context("Nie udało się podmienić pliku konfiguracji")?;
+        std::fs::write(&tmp, content).context(t!("config.write"))?;
+        std::fs::rename(&tmp, &path).context(t!("config.write"))?;
         Ok(())
     }
 
+    /// Folder for received files.
     pub fn download_dir(&self) -> PathBuf {
         self.default_download_dir
             .clone()
             .unwrap_or_else(super::paths::default_download_dir)
     }
 
+    /// Name of this device, falling back to [`default_device_name`](super::paths::default_device_name).
     pub fn device_name(&self) -> String {
         self.device_name
             .as_deref()
@@ -69,8 +95,15 @@ impl Config {
             .unwrap_or_else(super::paths::default_device_name)
     }
 
-    /// Zapisuje urządzenie po udanym parowaniu. Istniejący wpis zachowuje alias
-    /// i Auto-Accept (zmieniane świadomie przez użytkownika), aktualizuje adres.
+    /// Stores a device after successful pairing.
+    ///
+    /// An existing entry keeps its alias and Auto-Accept setting (both chosen by
+    /// the user); only its address is refreshed. `addr` is ignored unless it
+    /// belongs to `node_id`.
+    ///
+    /// # Errors
+    ///
+    /// Fails only if the address cannot be encoded as a TICKET.
     pub fn add_paired(
         &mut self,
         node_id: EndpointId,
@@ -88,7 +121,7 @@ impl Config {
             None => {
                 let name = crate::pairing::clean_device_name(name);
                 let alias = if name.is_empty() {
-                    format!("Węzeł {}", &key[..8])
+                    fallback_alias(&key)
                 } else {
                     name
                 };
@@ -99,11 +132,12 @@ impl Config {
         Ok(())
     }
 
+    /// Adds a device without a known address.
     pub fn add_peer(&mut self, node_id: String, alias: String, auto_accept: bool) {
         self.upsert_peer(node_id, alias, auto_accept, None);
     }
 
-    /// Dodaje lub aktualizuje urządzenie, zachowując datę dodania istniejącego wpisu.
+    /// Adds or replaces a device, keeping the original `added_at` of an existing entry.
     pub fn upsert_peer(
         &mut self,
         node_id: String,
@@ -127,8 +161,14 @@ impl Config {
         );
     }
 
-    /// Dodaje urządzenie na podstawie TICKETU lub surowego Node ID.
-    /// Zwraca Node ID dodanego urządzenia.
+    /// Adds a device from a TICKET or a raw Node ID and returns its Node ID.
+    ///
+    /// An empty `alias` is replaced with a name derived from the Node ID.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `input` is neither a valid TICKET nor a valid Node ID. A
+    /// truncated TICKET produces a dedicated, user-friendly error.
     pub fn add_from_input(
         &mut self,
         input: &str,
@@ -144,13 +184,11 @@ impl Config {
             Err(ticket_err) => match EndpointId::from_str(input) {
                 Ok(id) => (id.to_string(), None),
                 Err(_) if NodeTicket::looks_like_ticket(input) => return Err(ticket_err),
-                Err(_) => anyhow::bail!(
-                    "Nieprawidłowy Node ID (oczekiwano 64 znaków szesnastkowych) ani TICKET"
-                ),
+                Err(_) => anyhow::bail!(t!("config.bad_node_id")),
             },
         };
         let alias = match alias.trim() {
-            "" => format!("Węzeł {}", &node_id[..8]),
+            "" => fallback_alias(&node_id),
             a => a.to_string(),
         };
         let ticket = ticket.or_else(|| self.peers.get(&node_id).and_then(|p| p.ticket.clone()));
@@ -158,6 +196,7 @@ impl Config {
         Ok(node_id)
     }
 
+    /// Removes a device by Node ID or alias; returns whether anything was removed.
     pub fn remove_peer(&mut self, id_or_alias: &str) -> bool {
         match self.find_key(id_or_alias) {
             Some(key) => self.peers.remove(&key).is_some(),
@@ -165,11 +204,12 @@ impl Config {
         }
     }
 
+    /// Looks up a device by its exact Node ID.
     pub fn find_peer(&self, node_id: &str) -> Option<&PeerInfo> {
         self.peers.get(node_id)
     }
 
-    /// Znajduje klucz (Node ID) po identyfikatorze lub aliasie (bez rozróżniania wielkości liter).
+    /// Finds the Node ID of a device by Node ID or alias (case-insensitive).
     pub fn find_key(&self, id_or_alias: &str) -> Option<String> {
         if self.peers.contains_key(id_or_alias) {
             return Some(id_or_alias.to_string());
@@ -180,7 +220,14 @@ impl Config {
             .map(|(k, _)| k.clone())
     }
 
-    /// Zamienia alias / Node ID / TICKET na adres docelowy połączenia.
+    /// Turns an alias, Node ID or TICKET into a connection address.
+    ///
+    /// Known devices use their stored TICKET when available; otherwise the
+    /// address is resolved later through DNS/pkarr.
+    ///
+    /// # Errors
+    ///
+    /// Fails when `target` matches no device and is not a valid TICKET or Node ID.
     pub fn resolve_target(&self, target: &str) -> Result<EndpointAddr> {
         let target = target.trim();
         if let Some(key) = self.find_key(target) {
@@ -190,11 +237,19 @@ impl Config {
                 return Ok(t.addr);
             }
             return Ok(EndpointId::from_str(&key)
-                .context("Uszkodzony Node ID w konfiguracji")?
+                .context(t!("config.corrupted_node_id"))?
                 .into());
         }
         NodeTicket::parse_target(target)
     }
+}
+
+fn fallback_alias(node_id: &str) -> String {
+    t!(
+        "config.fallback_alias",
+        id = &node_id[..8.min(node_id.len())]
+    )
+    .into_owned()
 }
 
 #[cfg(test)]
@@ -205,10 +260,10 @@ mod tests {
     fn find_by_alias_and_remove() {
         let mut c = Config::default();
         let id = iroh::SecretKey::generate().public().to_string();
-        c.add_from_input(&id, "Laptop Biurowy", true).unwrap();
-        assert_eq!(c.find_key("laptop biurowy"), Some(id.clone()));
-        assert!(c.resolve_target("Laptop Biurowy").is_ok());
-        assert!(c.remove_peer("LAPTOP BIUROWY"));
+        c.add_from_input(&id, "Office Laptop", true).unwrap();
+        assert_eq!(c.find_key("office laptop"), Some(id.clone()));
+        assert!(c.resolve_target("Office Laptop").is_ok());
+        assert!(c.remove_peer("OFFICE LAPTOP"));
         assert!(c.peers.is_empty());
     }
 
@@ -216,15 +271,14 @@ mod tests {
     fn add_paired_keeps_user_settings() -> Result<()> {
         let mut c = Config::default();
         let id = iroh::SecretKey::generate().public();
-        c.add_paired(id, "Laptop\nBiurowy", Some(id.into()), false)?;
+        c.add_paired(id, "Office\nLaptop", Some(id.into()), false)?;
         let key = id.to_string();
-        assert_eq!(c.peers[&key].alias, "Laptop Biurowy");
+        assert_eq!(c.peers[&key].alias, "Office Laptop");
         assert!(c.peers[&key].ticket.is_some());
-        c.peers.get_mut(&key).unwrap().alias = "Mój laptop".into();
-        c.add_paired(id, "Inna nazwa", None, true)?;
-        assert_eq!(c.peers[&key].alias, "Mój laptop");
+        c.peers.get_mut(&key).unwrap().alias = "My laptop".into();
+        c.add_paired(id, "Other name", None, true)?;
+        assert_eq!(c.peers[&key].alias, "My laptop");
         assert!(c.peers[&key].auto_accept);
-        // Adres innego węzła nie może zostać przypisany do tego wpisu.
         let other = iroh::SecretKey::generate().public();
         c.add_paired(other, "X", Some(id.into()), false)?;
         assert!(c.peers[&other.to_string()].ticket.is_none());

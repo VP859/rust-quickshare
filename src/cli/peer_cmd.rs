@@ -1,70 +1,91 @@
-use crate::cli::args::PeerCommands;
-use crate::config::Config;
+//! `rqs peer`: management of trusted devices.
+
 use anyhow::{Context, Result};
+use rust_i18n::t;
 
-pub fn handle_peer_cmd(cmd: PeerCommands) -> Result<()> {
-    let mut config = Config::load()?;
+use crate::cli::args::PeerCommands;
+use crate::cli::nearby_cmd::run_peer_add;
+use crate::config::Config;
 
+/// Runs a `rqs peer` subcommand.
+///
+/// # Errors
+///
+/// Fails when the configuration cannot be loaded or saved, or the device is unknown.
+pub async fn handle_peer_cmd(cmd: PeerCommands) -> Result<()> {
     match cmd {
-        // Dodawanie z prośbą o sparowanie obsługuje `nearby_cmd::run_peer_add` (async).
-        PeerCommands::Add { .. } => {
-            anyhow::bail!("`peer add` jest obsługiwane przez run_peer_add");
-        }
-
-        PeerCommands::List => {
-            if config.peers.is_empty() {
-                println!(
-                    "Brak zapamiętanych urządzeń w konfiguracji ({}).",
-                    Config::file_path()?.display()
-                );
-                return Ok(());
-            }
-
-            println!("\n=================== ZAUFANE URZĄDZENIA ===================");
-            for (node_id, info) in &config.peers {
-                println!(
-                    " • Alias: {:<20} | Node ID: {} | Auto-Accept: {} | Dodano: {}",
-                    info.alias,
-                    node_id,
-                    info.auto_accept,
-                    info.added_at.format("%Y-%m-%d %H:%M")
-                );
-            }
-            println!("==========================================================\n");
-        }
-
+        PeerCommands::Add {
+            ticket,
+            alias,
+            auto_accept,
+            no_pair,
+        } => run_peer_add(&ticket, &alias, auto_accept, no_pair).await,
+        PeerCommands::List => list(),
         PeerCommands::Edit {
             target,
             alias,
             auto_accept,
-        } => {
-            let key = config
-                .find_key(&target)
-                .with_context(|| format!("Nie znaleziono urządzenia: '{target}'"))?;
-            if let Some(peer) = config.peers.get_mut(&key) {
-                if let Some(alias) = alias {
-                    peer.alias = alias;
-                }
-                if let Some(auto_accept) = auto_accept {
-                    peer.auto_accept = auto_accept;
-                }
-                println!(
-                    "[SUKCES] '{}' (Auto-Accept: {})",
-                    peer.alias, peer.auto_accept
-                );
-            }
-            config.save()?;
-        }
+        } => edit(&target, alias, auto_accept),
+        PeerCommands::Remove { target } => remove(&target),
+    }
+}
 
-        PeerCommands::Remove { target } => {
-            if config.remove_peer(&target) {
-                config.save()?;
-                println!("[SUKCES] Usunięto urządzenie: '{}'", target);
-            } else {
-                println!("[BŁĄD] Nie znaleziono urządzenia dla wzorca: '{}'", target);
-            }
-        }
+fn list() -> Result<()> {
+    let config = Config::load()?;
+    if config.peers.is_empty() {
+        println!("{}", t!("peer.none", path = Config::file_path()?.display()));
+        return Ok(());
     }
 
+    println!(
+        "\n=================== {} ===================",
+        t!("peer.title")
+    );
+    let mut peers: Vec<_> = config.peers.iter().collect();
+    peers.sort_by_key(|(_, p)| p.alias.to_lowercase());
+    for (node_id, info) in peers {
+        println!(
+            " • {}",
+            t!(
+                "peer.row",
+                alias = format!("{:<20}", info.alias),
+                id = node_id,
+                auto = info.auto_accept,
+                added = info.added_at.format("%Y-%m-%d %H:%M")
+            )
+        );
+    }
+    println!("==========================================================\n");
+    Ok(())
+}
+
+fn edit(target: &str, alias: Option<String>, auto_accept: Option<bool>) -> Result<()> {
+    let mut config = Config::load()?;
+    let key = config
+        .find_key(target)
+        .with_context(|| t!("peer.not_found", target = target))?;
+    if let Some(peer) = config.peers.get_mut(&key) {
+        if let Some(alias) = alias {
+            peer.alias = alias;
+        }
+        if let Some(auto_accept) = auto_accept {
+            peer.auto_accept = auto_accept;
+        }
+        println!(
+            "{}",
+            t!("peer.updated", alias = &peer.alias, auto = peer.auto_accept)
+        );
+    }
+    config.save()
+}
+
+fn remove(target: &str) -> Result<()> {
+    let mut config = Config::load()?;
+    if config.remove_peer(target) {
+        config.save()?;
+        println!("{}", t!("peer.removed", target = target));
+    } else {
+        println!("{}", t!("peer.not_found", target = target));
+    }
     Ok(())
 }

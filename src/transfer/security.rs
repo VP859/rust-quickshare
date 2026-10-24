@@ -1,40 +1,79 @@
+//! Protection against malicious file names sent by remote peers.
+//!
+//! A received file name is never used as a path: it is reduced to a single
+//! safe file name, joined with the download folder and checked to stay inside it.
+
+use rust_i18n::t;
+use std::fmt;
 use std::path::{Component, Path, PathBuf};
-use thiserror::Error;
 use tracing::warn;
 
-#[derive(Error, Debug, PartialEq, Eq)]
+/// Reasons why a received file name or path was rejected.
+#[derive(Debug, PartialEq, Eq)]
 pub enum SecurityError {
-    #[error("Wykryto próbę ataku Path Traversal: {0}")]
+    /// The name contains `..`, path separators or an absolute path.
     PathTraversalAttempt(String),
-    #[error("Niedozwolona lub pusta nazwa pliku")]
+    /// The name is empty or consists only of forbidden characters.
     InvalidFileName,
-    #[error("Ścieżka wychodzi poza dozwolony katalog bazowy: {0}")]
+    /// The resolved path points outside the download folder.
     OutsideBaseDirectory(String),
-    #[error("Błąd I/O podczas sprawdzania kanoniczności ścieżki: {0}")]
+    /// An I/O error while preparing or canonicalizing the download folder.
     IoError(String),
 }
 
-/// Nazwy zarezerwowane przez Windows (niezależnie od rozszerzenia).
+impl fmt::Display for SecurityError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let message = match self {
+            SecurityError::PathTraversalAttempt(name) => t!("security.traversal", name = name),
+            SecurityError::InvalidFileName => t!("security.invalid_name"),
+            SecurityError::OutsideBaseDirectory(path) => t!("security.outside", path = path),
+            SecurityError::IoError(error) => t!("security.io", error = error),
+        };
+        f.write_str(&message)
+    }
+}
+
+impl std::error::Error for SecurityError {}
+
+/// Names reserved by Windows regardless of extension.
 const WINDOWS_RESERVED: &[&str] = &[
     "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
+/// Turns a file name received from a peer into a safe single file name.
+///
+/// Rejects path traversal and absolute paths, replaces characters that are
+/// invalid on common file systems with `_`, strips leading dots and trailing
+/// dots/spaces, and prefixes Windows reserved names with `_`.
+///
+/// # Errors
+///
+/// [`SecurityError::PathTraversalAttempt`] or [`SecurityError::InvalidFileName`].
+///
+/// # Examples
+///
+/// ```
+/// use rqs_p2p::transfer::security::sanitize_filename;
+///
+/// assert_eq!(sanitize_filename("report.pdf").unwrap(), "report.pdf");
+/// assert_eq!(sanitize_filename("CON.txt").unwrap(), "_CON.txt");
+/// assert!(sanitize_filename("../../.bashrc").is_err());
+/// ```
 pub fn sanitize_filename(raw_name: &str) -> Result<String, SecurityError> {
     let trimmed = raw_name.trim();
     if trimmed.is_empty() {
         return Err(SecurityError::InvalidFileName);
     }
 
-    let raw_path = Path::new(trimmed);
-    for component in raw_path.components() {
+    for component in Path::new(trimmed).components() {
         match component {
             Component::ParentDir => {
-                warn!("Wykryto sekwencję '..' w nazwie pliku: {}", raw_name);
+                warn!("Rejected file name containing '..': {raw_name}");
                 return Err(SecurityError::PathTraversalAttempt(raw_name.to_string()));
             }
             Component::RootDir | Component::Prefix(_) => {
-                warn!("Wykryto ścieżkę bezwzględną w nazwie pliku: {}", raw_name);
+                warn!("Rejected absolute path as file name: {raw_name}");
                 return Err(SecurityError::PathTraversalAttempt(raw_name.to_string()));
             }
             _ => {}
@@ -76,6 +115,13 @@ pub fn sanitize_filename(raw_name: &str) -> Result<String, SecurityError> {
     Ok(final_name)
 }
 
+/// Joins a sanitized `raw_file_name` with `base_dir` and verifies the result
+/// stays inside `base_dir`. Creates `base_dir` when it does not exist.
+///
+/// # Errors
+///
+/// Any [`SecurityError`] from [`sanitize_filename`], plus
+/// [`SecurityError::IoError`] and [`SecurityError::OutsideBaseDirectory`].
 pub fn resolve_secure_target_path(
     base_dir: &Path,
     raw_file_name: &str,
@@ -91,18 +137,17 @@ pub fn resolve_secure_target_path(
         .map_err(|e| SecurityError::IoError(e.to_string()))?;
 
     let target_path = canonical_base.join(&safe_name);
-
     if !target_path.starts_with(&canonical_base) {
         return Err(SecurityError::OutsideBaseDirectory(
             target_path.display().to_string(),
         ));
     }
-
     Ok(target_path)
 }
 
-/// Zwraca ścieżkę, która jeszcze nie istnieje: `plik.txt`, `plik (1).txt`, `plik (2).txt`…
-/// Odebrany plik nigdy nie nadpisuje istniejącego.
+/// Returns a path that does not exist yet: `file.txt`, `file (1).txt`, `file (2).txt`, …
+///
+/// Received files therefore never overwrite existing ones.
 pub fn unique_destination(path: &Path) -> PathBuf {
     if !path.exists() {
         return path.to_path_buf();
@@ -137,7 +182,7 @@ mod tests {
             "...",
             "",
         ] {
-            assert!(sanitize_filename(bad).is_err(), "przepuszczono {bad:?}");
+            assert!(sanitize_filename(bad).is_err(), "accepted {bad:?}");
         }
     }
 

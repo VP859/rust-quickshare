@@ -1,57 +1,69 @@
+//! `rqs doctor`: diagnostics of the network environment and configuration.
+
 use anyhow::Result;
 #[cfg(not(target_os = "android"))]
 use network_interface::NetworkInterfaceConfig;
+use rust_i18n::t;
 use std::net::UdpSocket;
 use tracing::info;
 
+/// Summary of the checks performed by [`run_doctor`].
 pub struct DoctorReport {
+    /// A UDP socket can be opened.
     pub udp_socket_ok: bool,
+    /// A public STUN server is reachable (direct connections are likely to work).
     pub stun_reachable: bool,
+    /// A VPN or tunnel interface is active.
     pub vpn_interface_detected: bool,
+    /// `config.toml` is missing or parses correctly.
     pub config_valid: bool,
 }
 
+/// Runs all checks, prints a human readable report and returns its summary.
+///
+/// # Errors
+///
+/// Currently infallible; individual check failures are part of the report.
 pub async fn run_doctor() -> Result<DoctorReport> {
-    println!("\n=== [RQS DOCTOR] Diagnostyka Środowiska Sieciowego ===");
+    println!("\n=== {} ===", t!("doctor.title"));
 
     let udp_ok = match UdpSocket::bind("0.0.0.0:0") {
         Ok(_) => {
-            println!("[✓] Gniazdo UDP: Można poprawnie otworzyć port UDP.");
+            println!("[✓] {}", t!("doctor.udp_ok"));
             true
         }
         Err(e) => {
-            println!("[✗] Gniazdo UDP: Błąd otwarcia gniazda: {}", e);
+            println!("[✗] {}", t!("doctor.udp_failed", error = e));
             false
         }
     };
 
     let stun_ok = check_stun_reachability().await;
     if stun_ok {
-        println!("[✓] Serwery STUN: Dostępne i odpowiadają poprawnie.");
+        println!("[✓] {}", t!("doctor.stun_ok"));
     } else {
-        println!(
-            "[!] Serwery STUN: Brak odpowiedzi. Połączenia mogą przechodzić przez Relay (DERP)."
-        );
+        println!("[!] {}", t!("doctor.stun_failed"));
     }
 
     let vpn_detected = check_vpn_interfaces();
     if vpn_detected {
-        println!(
-            "[i] Wykryto aktywny interfejs VPN/Tunel. Może to wpływać na Direct UDP Hole Punching."
-        );
+        println!("[i] {}", t!("doctor.vpn_found"));
     } else {
-        println!("[✓] VPN: Brak aktywnych przeszkadzających interfejsów tunelowych.");
+        println!("[✓] {}", t!("doctor.vpn_none"));
     }
 
     check_discovery().await;
 
     let config_ok = match crate::config::Config::load() {
         Ok(_) => {
-            println!("[✓] Konfiguracja: Plik konfiguracyjny jest poprawny.\n");
+            println!("[✓] {}\n", t!("doctor.config_ok"));
             true
         }
         Err(e) => {
-            println!("[✗] Konfiguracja: {e:#}\n");
+            println!(
+                "[✗] {}\n",
+                t!("doctor.config_failed", error = format!("{e:#}"))
+            );
             false
         }
     };
@@ -64,14 +76,16 @@ pub async fn run_doctor() -> Result<DoctorReport> {
     })
 }
 
-/// Sprawdza wykrywanie urządzeń w sieci lokalnej (UDP broadcast/multicast, bez mDNS).
 async fn check_discovery() {
     use crate::discovery::{DISCOVERY_PORT, Discovery, DiscoveryOptions};
     let config = crate::config::Config::load().unwrap_or_default();
     let engine = match crate::node::NodeEngine::with_persistent_identity().await {
         Ok(e) => e,
         Err(e) => {
-            println!("[✗] Wykrywanie: nie uruchomiono węzła ({e:#})");
+            println!(
+                "[✗] {}",
+                t!("doctor.discovery_failed", error = format!("{e:#}"))
+            );
             return;
         }
     };
@@ -85,17 +99,22 @@ async fn check_discovery() {
             tokio::time::sleep(std::time::Duration::from_secs(4)).await;
             let health = discovery.health();
             let devices = discovery.devices();
+            let lan = if health.lan_send_ok {
+                t!("doctor.ok")
+            } else {
+                t!("doctor.blocked")
+            };
             println!(
-                "[{}] Wykrywanie (UDP {DISCOVERY_PORT}): sieci lokalne: {}, wysyłanie do LAN: {}, odebrane ogłoszenia: {}, urządzenia w pobliżu: {}",
+                "[{}] {}",
                 if health.hint().is_none() { "✓" } else { "!" },
-                health.networks,
-                if health.lan_send_ok {
-                    "OK"
-                } else {
-                    "ZABLOKOWANE"
-                },
-                health.beacons_received,
-                devices.len()
+                t!(
+                    "doctor.discovery",
+                    port = DISCOVERY_PORT,
+                    networks = health.networks,
+                    lan = lan,
+                    received = health.beacons_received,
+                    devices = devices.len()
+                )
             );
             for d in &devices {
                 println!("      • {} ({})", d.name, d.platform);
@@ -104,10 +123,14 @@ async fn check_discovery() {
                 println!("      {hint}");
             }
         }
-        Err(e) => println!("[✗] Wykrywanie: {e:#}"),
+        Err(e) => println!(
+            "[✗] {}",
+            t!("doctor.discovery_failed", error = format!("{e:#}"))
+        ),
     }
     engine.close().await;
 }
+
 async fn check_stun_reachability() -> bool {
     if let Ok(socket) = tokio::net::UdpSocket::bind("0.0.0.0:0").await {
         socket.connect("108.177.14.127:19302").await.is_ok()
@@ -115,33 +138,25 @@ async fn check_stun_reachability() -> bool {
         false
     }
 }
-fn check_vpn_interfaces() -> bool {
-    #[cfg(not(target_os = "android"))]
-    {
-        if let Ok(interfaces) = network_interface::NetworkInterface::show() {
-            for iface in interfaces {
-                let name = iface.name.to_lowercase();
-                if name.contains("tun")
-                    || name.contains("tap")
-                    || name.contains("nord")
-                    || name.contains("wireguard")
-                    || name.contains("tailscale")
-                {
-                    info!("Wykryto interfejs VPN: {}", iface.name);
-                    return true;
-                }
-            }
-        }
-        false
-    }
 
-    #[cfg(target_os = "android")]
-    {
-        // Na Androidzie aplikacja nie ma dostępu do listy interfejsów przez
-        // netlink/getifaddrs w sandboxie NDK. Wykrywaniem VPN zajmuje się
-        // warstwa natywna (ConnectivityManager → plugin JNI `is_vpn_active`),
-        // a iroh i tak korzysta z Connection Migration (QUIC) przy zmianie sieci.
-        info!("Android: wykrywanie VPN delegowane do ConnectivityManager (JNI).");
-        false
-    }
+#[cfg(not(target_os = "android"))]
+fn check_vpn_interfaces() -> bool {
+    let Ok(interfaces) = network_interface::NetworkInterface::show() else {
+        return false;
+    };
+    interfaces.iter().any(|iface| {
+        let name = iface.name.to_lowercase();
+        let is_vpn = ["tun", "tap", "nord", "wireguard", "wg", "tailscale"]
+            .iter()
+            .any(|marker| name.contains(marker));
+        if is_vpn {
+            info!("VPN interface detected: {}", iface.name);
+        }
+        is_vpn
+    })
+}
+
+#[cfg(target_os = "android")]
+fn check_vpn_interfaces() -> bool {
+    false
 }

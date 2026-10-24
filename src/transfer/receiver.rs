@@ -1,5 +1,8 @@
+//! Receiving half of the transfer protocol, with resume support.
+
 use anyhow::{Context, Result};
 use iroh::endpoint::{Connection, RecvStream};
+use rust_i18n::t;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use tokio::fs::{File, OpenOptions};
@@ -17,7 +20,11 @@ use crate::transfer::security::{
     resolve_secure_target_path, sanitize_filename, unique_destination,
 };
 
-/// Odczytuje i weryfikuje ofertę (limity rozmiaru, bezpieczna nazwa pliku).
+/// Reads the [`TransferOffer`] from `channel` and validates it.
+///
+/// # Errors
+///
+/// Fails on network errors, offers exceeding protocol limits and unsafe file names.
 pub async fn read_offer(channel: &mut Channel) -> Result<TransferOffer> {
     let offer: TransferOffer = read_msg(&mut channel.recv).await?;
     offer.validate()?;
@@ -25,6 +32,11 @@ pub async fn read_offer(channel: &mut Channel) -> Result<TransferOffer> {
     Ok(offer)
 }
 
+/// Declines the offer with `reason` and closes the control stream.
+///
+/// # Errors
+///
+/// Fails when the decision cannot be sent.
 pub async fn reject(mut channel: Channel, reason: &str) -> Result<()> {
     let decision = TransferDecision::Reject {
         reason: reason.to_string(),
@@ -34,8 +46,14 @@ pub async fn reject(mut channel: Channel, reason: &str) -> Result<()> {
     Ok(())
 }
 
-/// Ścieżka pliku tymczasowego. Fragment haszu w nazwie gwarantuje, że wznowienie
-/// nigdy nie doklei danych innego pliku o tej samej nazwie.
+/// Path of the partial download for `offer` inside `dest_dir`.
+///
+/// The name contains a fragment of the file hash, so resuming never appends
+/// data of a different file that happens to have the same name.
+///
+/// # Errors
+///
+/// Fails when the offered file name is unsafe or `dest_dir` cannot be prepared.
 pub fn part_path_for(dest_dir: &Path, offer: &TransferOffer) -> Result<PathBuf> {
     let safe = sanitize_filename(&offer.file_name)?;
     Ok(resolve_secure_target_path(
@@ -44,9 +62,17 @@ pub fn part_path_for(dest_dir: &Path, offer: &TransferOffer) -> Result<PathBuf> 
     )?)
 }
 
-/// Strona odbierająca protokołu. Zapisuje do `.part`, wznawia od ostatniego pełnego
-/// chunka, weryfikuje BLAKE3 każdego chunka i całego pliku, po czym zmienia nazwę
-/// na docelową (bez nadpisywania istniejących plików).
+/// Runs the receiving side of the protocol after the offer was accepted.
+///
+/// Data is written to a `.part` file. If one already exists the transfer resumes
+/// from its last complete chunk. Every chunk and finally the whole file are
+/// verified with BLAKE3; the verified file is renamed to a destination that
+/// never overwrites an existing file. Returns the final path.
+///
+/// # Errors
+///
+/// Fails on network or I/O errors and hash mismatches. A corrupted `.part`
+/// file is deleted so that the next attempt starts from scratch.
 pub async fn receive_on_channel(
     conn: &Connection,
     mut channel: Channel,
@@ -57,7 +83,7 @@ pub async fn receive_on_channel(
     let safe_name = sanitize_filename(&offer.file_name)?;
     tokio::fs::create_dir_all(dest_dir)
         .await
-        .with_context(|| format!("Nie można utworzyć katalogu {:?}", dest_dir))?;
+        .with_context(|| t!("receiver.create_dir", path = dest_dir.display()))?;
     let final_target = resolve_secure_target_path(dest_dir, &safe_name)?;
     let part_path = part_path_for(dest_dir, offer)?;
 
@@ -70,10 +96,7 @@ pub async fn receive_on_channel(
     let start_chunk_index = (existing / chunk_size).min(total_chunks);
     let valid_bytes = (start_chunk_index * chunk_size).min(offer.file_size);
     if start_chunk_index > 0 {
-        info!(
-            "Wznawianie '{}' od chunka #{} ({} B już na dysku)",
-            safe_name, start_chunk_index, valid_bytes
-        );
+        info!("Resuming '{safe_name}' from chunk #{start_chunk_index} ({valid_bytes} B on disk)");
     }
 
     write_msg(
@@ -88,7 +111,7 @@ pub async fn receive_on_channel(
         .write(true)
         .open(&part_path)
         .await
-        .with_context(|| format!("Nie można otworzyć pliku tymczasowego {:?}", part_path))?;
+        .with_context(|| t!("receiver.open_part", path = part_path.display()))?;
     part_file.set_len(valid_bytes).await?;
     part_file.seek(SeekFrom::Start(valid_bytes)).await?;
     progress(valid_bytes);
@@ -106,9 +129,8 @@ pub async fn receive_on_channel(
     drop(part_file);
 
     if compute_file_hash(&part_path).await? != offer.file_hash {
-        // Uszkodzony plik nie może zostać wznowiony – usuwamy go.
         let _ = tokio::fs::remove_file(&part_path).await;
-        let reason = "Niezgodność końcowego haszu BLAKE3 całego pliku".to_string();
+        let reason = t!("receiver.hash_mismatch").into_owned();
         write_msg(
             &mut channel.send,
             &TransferResult::Failed {
@@ -123,15 +145,15 @@ pub async fn receive_on_channel(
     let final_path = unique_destination(&final_target);
     tokio::fs::rename(&part_path, &final_path)
         .await
-        .context("Błąd podczas zmiany nazwy pliku .part na docelową")?;
+        .context(t!("receiver.rename"))?;
 
     write_msg(&mut channel.send, &TransferResult::Verified).await?;
     channel.finish().await;
-    info!("Odebrano i zweryfikowano: {:?}", final_path);
+    info!("Received and verified {}", final_path.display());
     Ok(final_path)
 }
 
-/// Przerywa zadanie przy upuszczeniu (np. gdy transfer kończy się błędem).
+/// Task reading one chunk; aborted when dropped (e.g. when the transfer fails).
 struct ChunkTask(JoinHandle<Result<Vec<u8>>>);
 
 impl Drop for ChunkTask {
@@ -142,14 +164,12 @@ impl Drop for ChunkTask {
 
 impl ChunkTask {
     async fn join(mut self) -> Result<Vec<u8>> {
-        (&mut self.0)
-            .await
-            .context("Zadanie odbioru chunka zostało przerwane")?
+        (&mut self.0).await.context(t!("transfer.task_aborted"))?
     }
 }
 
-/// Chunki są odczytywane równolegle, ale zapisywane ściśle po kolei, dzięki czemu
-/// `.part` zawsze zawiera ciągły prefiks pliku (podstawa wznawiania).
+/// Reads chunks concurrently but writes them strictly in order, so the `.part`
+/// file always holds a contiguous prefix of the file (the basis for resuming).
 async fn receive_chunks(
     conn: &Connection,
     offer: &TransferOffer,
@@ -172,11 +192,11 @@ async fn receive_chunks(
 
         let expected_len = offer
             .chunk_len(chunk_index)
-            .context("Błąd wyliczenia długości chunka")?;
+            .context(t!("transfer.chunk_len"))?;
         let stream = conn
             .accept_uni()
             .await
-            .context("Połączenie przerwane podczas odbioru chunków")?;
+            .context(t!("receiver.connection_lost"))?;
         pending.push_back(ChunkTask(tokio::spawn(read_chunk(
             stream,
             chunk_index,
@@ -201,33 +221,30 @@ async fn read_chunk(
 ) -> Result<Vec<u8>> {
     let header: ChunkHeader = read_msg(&mut stream).await?;
     if header.chunk_index != chunk_index {
-        anyhow::bail!(
-            "Niezgodność kolejności chunków: oczekiwano {}, odebrano {}",
-            chunk_index,
-            header.chunk_index
-        );
+        anyhow::bail!(t!(
+            "receiver.chunk_order",
+            expected = chunk_index,
+            got = header.chunk_index
+        ));
     }
     if header.payload_len != expected_len {
-        anyhow::bail!(
-            "Chunk #{} ma nieprawidłową długość {} (oczekiwano {})",
-            chunk_index,
-            header.payload_len,
-            expected_len
-        );
+        anyhow::bail!(t!(
+            "receiver.chunk_len",
+            index = chunk_index,
+            got = header.payload_len,
+            expected = expected_len
+        ));
     }
 
     let mut payload = vec![0u8; expected_len as usize];
     stream
         .read_exact(&mut payload)
         .await
-        .context("Błąd odczytu danych chunka z sieci")?;
+        .context(t!("receiver.chunk_read"))?;
 
     if *blake3::hash(&payload).as_bytes() != header.chunk_hash {
-        warn!("Chunk #{} uszkodzony (BLAKE3)", chunk_index);
-        anyhow::bail!(
-            "Błąd spójności chunka #{}. Hash BLAKE3 nie zgadza się!",
-            chunk_index
-        );
+        warn!("Chunk #{chunk_index} failed BLAKE3 verification");
+        anyhow::bail!(t!("receiver.chunk_hash", index = chunk_index));
     }
     Ok(payload)
 }

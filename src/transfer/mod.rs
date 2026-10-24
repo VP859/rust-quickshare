@@ -1,3 +1,6 @@
+//! File transfers: the sending and receiving halves of the protocol, file name
+//! security and the shared node service used by every user interface.
+
 pub mod hash;
 pub mod receiver;
 pub mod security;
@@ -6,37 +9,46 @@ pub mod service;
 
 use anyhow::{Context, Result};
 use iroh::endpoint::{Connection, ConnectionError, RecvStream, SendStream};
+use rust_i18n::t;
 use std::time::Duration;
 use tracing::debug;
 
 use crate::protocol::codec::{read_msg, write_msg};
 use crate::protocol::messages::Hello;
 
-/// Wywoływane z liczbą bajtów już przesłanych/zapisanych.
+/// Progress callback, called with the number of bytes transferred so far.
 pub type ProgressFn<'a> = &'a (dyn Fn(u64) + Send + Sync);
 
-/// Czas oczekiwania na potwierdzenie odbioru ostatnich ramek przed zamknięciem strumienia.
+/// How long to wait for the peer to acknowledge the last frames before closing a stream.
 const LINGER: Duration = Duration::from_secs(5);
 
-/// Dwukierunkowy strumień kontrolny jednego transferu
-/// (Hello → Offer → Decision → … → TransferResult).
+/// Bidirectional control stream of a single transfer or pairing request.
 pub struct Channel {
+    /// Outgoing half.
     pub send: SendStream,
+    /// Incoming half.
     pub recv: RecvStream,
 }
 
 impl Channel {
-    /// Otwiera strumień kontrolny po stronie łączącej się i wysyła `Hello`.
+    /// Opens a control stream on the dialing side and sends `hello`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the stream cannot be opened or written to.
     pub async fn open(conn: &Connection, hello: &Hello) -> Result<Self> {
-        let (mut send, recv) = conn
-            .open_bi()
-            .await
-            .context("Nie udało się otworzyć strumienia kontrolnego")?;
+        let (mut send, recv) = conn.open_bi().await.context(t!("channel.open"))?;
         write_msg(&mut send, hello).await?;
         Ok(Self { send, recv })
     }
 
-    /// Przyjmuje kolejny strumień kontrolny. `Ok(None)` – połączenie zakończone przez drugą stronę.
+    /// Accepts the next control stream and reads its [`Hello`].
+    ///
+    /// Returns `Ok(None)` when the connection was closed by either side.
+    ///
+    /// # Errors
+    ///
+    /// Fails on unexpected connection errors or when the first frame is not a [`Hello`].
     pub async fn accept(conn: &Connection) -> Result<Option<(Self, Hello)>> {
         let (send, mut recv) = match conn.accept_bi().await {
             Ok(pair) => pair,
@@ -46,20 +58,21 @@ impl Channel {
                 | ConnectionError::LocallyClosed
                 | ConnectionError::TimedOut,
             ) => return Ok(None),
-            Err(e) => return Err(e).context("Błąd przyjmowania strumienia kontrolnego"),
+            Err(e) => return Err(e).context(t!("channel.accept")),
         };
         let hello: Hello = read_msg(&mut recv).await?;
         Ok(Some((Self { send, recv }, hello)))
     }
 
-    /// Kończy strumień i czeka (ograniczony czas), aż druga strona potwierdzi odbiór danych.
+    /// Finishes the outgoing half and waits a bounded time until the peer
+    /// acknowledges all data.
     pub async fn finish(mut self) {
         if self.send.finish().is_ok()
             && tokio::time::timeout(LINGER, self.send.stopped())
                 .await
                 .is_err()
         {
-            debug!("Upłynął czas oczekiwania na potwierdzenie zamknięcia strumienia");
+            debug!("Timed out waiting for the peer to acknowledge stream shutdown");
         }
     }
 }

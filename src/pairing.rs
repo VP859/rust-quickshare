@@ -1,9 +1,13 @@
-//! Parowanie urządzeń jednym przyciskiem: strona inicjująca wysyła `Hello::Pair`,
-//! druga strona pyta użytkownika o zgodę, a obie pokazują ten sam kod weryfikacyjny
-//! (liczony z obu Node ID) – bez przepisywania TICKETU i bez skanowania QR.
+//! One-button pairing of devices.
+//!
+//! The initiating device sends [`Hello::Pair`]; the other device asks its user
+//! for consent. Both show the same verification code derived from both Node IDs,
+//! so nothing has to be typed or scanned. After acceptance both devices store
+//! each other as trusted.
 
 use anyhow::{Context, Result};
 use iroh::{EndpointAddr, EndpointId};
+use rust_i18n::t;
 use std::time::Duration;
 
 use crate::node::NodeEngine;
@@ -11,32 +15,48 @@ use crate::protocol::codec::read_msg;
 use crate::protocol::messages::{Hello, MAX_DEVICE_NAME_LEN, PairResponse};
 use crate::transfer::Channel;
 
-/// Czas na potwierdzenie parowania po drugiej stronie.
+/// Time the other device has to confirm a pairing request.
 pub const PAIR_DECISION_TIMEOUT: Duration = Duration::from_secs(60);
-/// Strona inicjująca czeka nieco dłużej niż na samą decyzję (opóźnienia sieci).
+/// The initiator waits a little longer than the decision timeout to cover network delays.
 const PAIR_RESPONSE_TIMEOUT: Duration = Duration::from_secs(75);
 
-/// Prośba o sparowanie przekazywana do interfejsu użytkownika.
+/// Pairing request passed to the user interface for confirmation.
 #[derive(Debug, Clone)]
 pub struct PairRequest {
+    /// Node ID of the requesting device, authenticated by TLS.
     pub peer: EndpointId,
+    /// Device name announced by the requester (already cleaned).
     pub name: String,
-    /// Kod do porównania z ekranem drugiego urządzenia.
+    /// Verification code to compare with the requester's screen.
     pub code: String,
-    /// Adres zgłoszony przez proszącego (zweryfikowany względem Node ID połączenia).
+    /// Requester's address; `None` if it did not match the authenticated Node ID.
     pub addr: Option<EndpointAddr>,
 }
 
+/// Result of [`request_pairing`].
 #[derive(Debug, Clone)]
 pub enum PairOutcome {
+    /// The other device accepted and now trusts this one.
     Accepted {
+        /// Device name of the other side.
         name: String,
+        /// Its address, if provided and valid.
         addr: Option<EndpointAddr>,
     },
+    /// The other device declined.
     Rejected,
 }
 
-/// Nazwa urządzenia bez znaków sterujących, przycięta do [`MAX_DEVICE_NAME_LEN`].
+/// Device name without control characters, whitespace collapsed and truncated
+/// to [`MAX_DEVICE_NAME_LEN`] bytes.
+///
+/// # Examples
+///
+/// ```
+/// use rqs_p2p::pairing::clean_device_name;
+///
+/// assert_eq!(clean_device_name("  Office\n\tLaptop "), "Office Laptop");
+/// ```
 pub fn clean_device_name(raw: &str) -> String {
     let cleaned: String = raw
         .chars()
@@ -49,8 +69,8 @@ pub fn clean_device_name(raw: &str) -> String {
     name
 }
 
-/// Sześciocyfrowy kod weryfikacyjny – identyczny na obu urządzeniach,
-/// niezależnie od tego, które rozpoczęło parowanie.
+/// Six-digit verification code (`"123 456"`), identical on both devices
+/// regardless of which one started the pairing.
 pub fn pairing_code(a: &EndpointId, b: &EndpointId) -> String {
     let (lo, hi) = if a.as_bytes() <= b.as_bytes() {
         (a, b)
@@ -66,7 +86,15 @@ pub fn pairing_code(a: &EndpointId, b: &EndpointId) -> String {
     format!("{:03} {:03}", n / 1000, n % 1000)
 }
 
-/// Wysyła prośbę o sparowanie i czeka na decyzję drugiej strony.
+/// Sends a pairing request to `target` and waits for the user's decision there.
+///
+/// The caller is responsible for storing the device on
+/// [`PairOutcome::Accepted`].
+///
+/// # Errors
+///
+/// Fails when the device cannot be reached, nobody answers in time, or the
+/// connection is interrupted.
 pub async fn request_pairing(
     engine: &NodeEngine,
     target: EndpointAddr,
@@ -82,8 +110,8 @@ pub async fn request_pairing(
     let response: PairResponse =
         tokio::time::timeout(PAIR_RESPONSE_TIMEOUT, read_msg(&mut channel.recv))
             .await
-            .context("Brak odpowiedzi – nikt nie potwierdził parowania na drugim urządzeniu")?
-            .context("Drugie urządzenie przerwało parowanie")?;
+            .context(t!("pairing.no_answer"))?
+            .context(t!("pairing.interrupted"))?;
     channel.finish().await;
     conn.close(0u32.into(), b"paired");
 
@@ -113,7 +141,7 @@ mod tests {
 
     #[test]
     fn cleans_names() {
-        assert_eq!(clean_device_name("  Laptop\n\tKasi  "), "Laptop Kasi");
+        assert_eq!(clean_device_name("  Office\n\tLaptop  "), "Office Laptop");
         assert_eq!(
             clean_device_name(&"ż".repeat(100)).len(),
             MAX_DEVICE_NAME_LEN

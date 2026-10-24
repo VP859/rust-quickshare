@@ -1,3 +1,5 @@
+//! Criterion benchmarks of hashing and protocol framing.
+
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use rqs_p2p::protocol::codec::{read_msg, write_msg};
 use rqs_p2p::protocol::messages::{ChunkHeader, DEFAULT_CHUNK_SIZE, TransferOffer};

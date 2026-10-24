@@ -17,8 +17,9 @@ working with a VPN enabled on either side.
   transfer resumes from the last complete chunk.
 * **Trusted devices** – alias + Auto-Accept per device; untrusted offers require confirmation.
 * **Nearby devices + one-button pairing** – RQS apps on the same network show up
-  automatically; **Sparuj** (Pair) adds a device without retyping a TICKET or scanning a QR code.
+  automatically; **Pair** adds a device without retyping a TICKET or scanning a QR code.
 * **Interfaces** – desktop/Android GUI (Tauri v2), TUI (ratatui), CLI (clap), background daemon.
+* **Languages** – English (default) and Polish in every interface (see [Language](#language)).
 
 ## Usage (CLI)
 
@@ -26,6 +27,7 @@ working with a VPN enabled on either side.
 rqs discover                                 # devices on the local network
 rqs pair "Laptop"                            # pairing: the other side confirms, both show the same code
 rqs name "My laptop"                         # this device's name visible to others
+rqs language pl                              # interface language (en, pl); no argument = show
 
 rqs ticket                                   # this device's TICKET + QR code (pairing outside the LAN)
 rqs peer add <TICKET> --alias "Laptop" --auto-accept   # + pairing request (--no-pair: only on this side)
@@ -57,6 +59,7 @@ Panels: **[1] Trusted devices**, **[2] Nearby**, **[3] Transfers** (`Tab` / `1 2
 | `o` / `f` | open the received file / its folder |
 | `t` / `c` | this device's TICKET with QR code / copy TICKET |
 | `g` / `N` | download folder / device name |
+| `L` | switch the interface language |
 | `y` / `n` | answer a file offer or pairing request |
 | `?` | help |
 
@@ -69,8 +72,23 @@ Panels: **[1] Trusted devices**, **[2] Nearby**, **[3] Transfers** (`Tab` / `1 2
 | Windows | `dist/windows/install-autostart.ps1` | Task Scheduler task at logon |
 
 A daemon without a terminal accepts files **only** from devices with Auto-Accept.
-The GUI has its own "Uruchamiaj przy starcie systemu" (launch at startup) toggle and keeps
+The GUI has its own "Start at login" toggle and keeps
 running in the system tray.
+
+## Language
+
+English is the default. The language is chosen in this order:
+
+1. `--lang <code>` on the command line (`rqs --lang pl tui`),
+2. the `RQS_LANG` environment variable,
+3. `language` in `config.toml`, saved by `rqs language <code>`, the `L` key in the TUI or
+   **Settings → Language** in the GUI (the tray menu follows it too),
+4. English.
+
+The Android parts outside the web view (notification, foreground service) use the phone's system
+or per-app language (Settings → Apps → RQS Quick Share → Language). Log messages are always
+in English. Translations live in `locales/app.yml` (backend) and in `src-tauri/ui/index.html`
+(GUI); a unit test checks that every key has both languages.
 
 ## Discovery and pairing
 
@@ -126,7 +144,8 @@ src/node/       iroh endpoint, persistent identity, TICKET
 src/transfer/   sender, receiver, security, service (shared accept loop + events)
 src/discovery/  local network discovery (UDP broadcast + multicast, no mDNS)
 src/pairing.rs  one-button pairing, verification code
-src/config/     trusted devices, paths
+src/config/     trusted devices, paths, saved language
+src/i18n.rs     interface language selection (locales/app.yml)
 src/cli/ src/tui/ src/daemon/   terminal interfaces
 src-tauri/      GUI (desktop + Android), src-tauri/ui/index.html – frontend
 src-tauri/gen/android/          Android project (Share Target, foreground service)
@@ -137,6 +156,7 @@ src-tauri/gen/android/          Android project (Share Target, foreground servic
 ```bash
 cargo build --release -p rqs_p2p            # CLI `rqs`
 cargo test                                   # unit + end-to-end tests (two iroh nodes)
+cargo doc --no-deps -p rqs_p2p -p rqs-gui --open   # API documentation
 
 # GUI (Linux needs: libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev)
 cd src-tauri && npx @tauri-apps/cli@2 dev

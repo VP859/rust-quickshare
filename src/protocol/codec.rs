@@ -1,41 +1,49 @@
+//! Length-prefixed framing of protocol messages.
+//!
+//! A frame is a 4-byte big-endian length followed by a [`postcard`] payload of at
+//! most [`MAX_FRAME_LEN`] bytes.
+
 use anyhow::{Context, Result};
+use rust_i18n::t;
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::messages::MAX_FRAME_LEN;
 
-/// Zapisuje ramkę postcard poprzedzoną 4-bajtowym prefiksem długości (big-endian).
+/// Serializes `msg` and writes it as a single frame, then flushes `writer`.
+///
+/// # Errors
+///
+/// Fails when serialization fails, the frame exceeds [`MAX_FRAME_LEN`] or the
+/// underlying writer returns an I/O error.
 pub async fn write_msg<W, T>(writer: &mut W, msg: &T) -> Result<()>
 where
     W: AsyncWriteExt + Unpin,
     T: Serialize,
 {
-    let bytes = postcard::to_allocvec(msg).context("Błąd serializacji wiadomości postcard")?;
+    let bytes = postcard::to_allocvec(msg).context(t!("codec.serialize"))?;
     let len = u32::try_from(bytes.len())
         .ok()
         .filter(|l| *l <= MAX_FRAME_LEN)
-        .context("Ramka przekracza maksymalny dozwolony rozmiar")?;
+        .context(t!("codec.frame_too_large"))?;
 
     writer
         .write_all(&len.to_be_bytes())
         .await
-        .context("Błąd zapisu prefiksu długości ramki")?;
-
-    writer
-        .write_all(&bytes)
-        .await
-        .context("Błąd zapisu zawartości ramki")?;
-
-    writer
-        .flush()
-        .await
-        .context("Błąd opróżniania bufora zapisu")?;
-
+        .context(t!("codec.write"))?;
+    writer.write_all(&bytes).await.context(t!("codec.write"))?;
+    writer.flush().await.context(t!("codec.write"))?;
     Ok(())
 }
 
-/// Odczytuje ramkę zapisaną przez [`write_msg`]. Ramki dłuższe niż
-/// [`MAX_FRAME_LEN`] są odrzucane przed alokacją bufora.
+/// Reads one frame written by [`write_msg`] and deserializes it.
+///
+/// Frames longer than [`MAX_FRAME_LEN`] are rejected before any buffer is
+/// allocated, so a malicious peer cannot force a large allocation.
+///
+/// # Errors
+///
+/// Fails on I/O errors, oversized frames and payloads that do not decode as `T`.
 pub async fn read_msg<R, T>(reader: &mut R) -> Result<T>
 where
     R: AsyncReadExt + Unpin,
@@ -45,25 +53,19 @@ where
     reader
         .read_exact(&mut len_buf)
         .await
-        .context("Błąd odczytu prefiksu długości ramki")?;
+        .context(t!("codec.read"))?;
 
     let len = u32::from_be_bytes(len_buf);
     if len > MAX_FRAME_LEN {
-        anyhow::bail!(
-            "Odrzucono ramkę o rozmiarze {} B (limit {} B)",
-            len,
-            MAX_FRAME_LEN
-        );
+        anyhow::bail!(t!("codec.frame_rejected", len = len, max = MAX_FRAME_LEN));
     }
 
     let mut buf = vec![0u8; len as usize];
     reader
         .read_exact(&mut buf)
         .await
-        .context("Błąd odczytu ramki z sieci")?;
-
-    let msg = postcard::from_bytes(&buf).context("Błąd deserializacji struktury postcard")?;
-    Ok(msg)
+        .context(t!("codec.read"))?;
+    postcard::from_bytes(&buf).context(t!("codec.deserialize"))
 }
 
 #[cfg(test)]

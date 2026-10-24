@@ -1,4 +1,4 @@
-//! Testy end-to-end protokołu RQS na dwóch prawdziwych węzłach iroh (QUIC).
+//! End-to-end tests of the RQS protocol on two real iroh nodes (QUIC).
 
 use anyhow::{Context, Result};
 use iroh::EndpointId;
@@ -77,7 +77,7 @@ impl TransferHandler for TestHandler {
     }
 
     fn device_name(&self) -> String {
-        "Odbiorca Testowy".into()
+        "Test Receiver".into()
     }
 
     async fn confirm_pair(&self, request: PairRequest) -> bool {
@@ -94,7 +94,7 @@ async fn engine() -> Result<NodeEngine> {
     NodeEngine::new(load_or_generate_secret_key(None)?).await
 }
 
-/// Uruchamia węzeł odbiorcy z handlerem; zwraca (silnik, adres).
+/// Starts a receiving node with `handler`; returns the engine and its address.
 async fn start_receiver(handler: Arc<TestHandler>) -> Result<(NodeEngine, iroh::EndpointAddr)> {
     let receiver = engine().await?;
     let addr = receiver.node_addr().await?;
@@ -105,7 +105,7 @@ async fn start_receiver(handler: Arc<TestHandler>) -> Result<(NodeEngine, iroh::
 async fn with_timeout<T>(fut: impl std::future::Future<Output = Result<T>>) -> Result<T> {
     tokio::time::timeout(TEST_TIMEOUT, fut)
         .await
-        .context("Test przekroczył limit czasu")?
+        .context("test timed out")?
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -114,7 +114,7 @@ async fn push_multi_chunk_file_to_accepting_peer() -> Result<()> {
         let src = tempdir()?;
         let dst = tempdir()?;
         let data = pattern(5 * DEFAULT_CHUNK_SIZE as usize + 123);
-        let path = src.path().join("raport.bin");
+        let path = src.path().join("report.bin");
         tokio::fs::write(&path, &data).await?;
 
         let handler = Arc::new(TestHandler::new(true, dst.path()));
@@ -123,7 +123,7 @@ async fn push_multi_chunk_file_to_accepting_peer() -> Result<()> {
         let sent = Mutex::new(Vec::new());
         service::send_files(&sender, addr, &[path], &|e| sent.lock().unwrap().push(e)).await?;
 
-        assert_eq!(tokio::fs::read(dst.path().join("raport.bin")).await?, data);
+        assert_eq!(tokio::fs::read(dst.path().join("report.bin")).await?, data);
         assert!(matches!(
             sent.lock().unwrap().last().map(|e| &e.status),
             Some(TransferStatus::Completed { .. })
@@ -143,7 +143,6 @@ async fn resumes_from_existing_part_file() -> Result<()> {
         tokio::fs::write(&path, &data).await?;
         let prepared = prepare_file(&path).await?;
 
-        // 2 pełne chunki + niepełny ogon, który musi zostać obcięty.
         let offer = TransferOffer {
             file_name: prepared.name.clone(),
             file_size: prepared.size,
@@ -164,7 +163,7 @@ async fn resumes_from_existing_part_file() -> Result<()> {
             tokio::fs::read(dst.path().join("big_payload.dat")).await?,
             data
         );
-        assert!(!part.exists(), "plik .part powinien zniknąć po sukcesie");
+        assert!(!part.exists(), "the .part file must be gone after success");
         let first_progress = sent
             .lock()
             .unwrap()
@@ -198,16 +197,14 @@ async fn corrupted_part_file_is_detected_and_discarded() -> Result<()> {
         let handler = Arc::new(TestHandler::new(true, dst.path()));
         let (_rx, addr) = start_receiver(handler.clone()).await?;
         let sender = engine().await?;
-        // Drugi plik w tym samym połączeniu musi dotrzeć mimo błędu pierwszego.
-        let other = src.path().join("drugi.txt");
+        let other = src.path().join("second.txt");
         tokio::fs::write(&other, b"ok").await?;
         let first =
             service::send_files(&sender, addr.clone(), &[path.clone(), other], &|_| {}).await;
-        assert!(first.is_err(), "uszkodzony .part musi zostać wykryty");
-        assert!(!part.exists(), "uszkodzony .part musi zostać usunięty");
-        assert_eq!(tokio::fs::read(dst.path().join("drugi.txt")).await?, b"ok");
+        assert!(first.is_err(), "a corrupted .part file must be detected");
+        assert!(!part.exists(), "a corrupted .part file must be deleted");
+        assert_eq!(tokio::fs::read(dst.path().join("second.txt")).await?, b"ok");
 
-        // Ponowna próba zaczyna od zera i kończy się sukcesem.
         service::send_files(&sender, addr, &[path], &|_| {}).await?;
         assert_eq!(tokio::fs::read(dst.path().join("x.bin")).await?, data);
         Ok(())
@@ -220,8 +217,8 @@ async fn rejected_offer_writes_nothing() -> Result<()> {
     with_timeout(async {
         let src = tempdir()?;
         let dst = tempdir()?;
-        let path = src.path().join("tajne.txt");
-        tokio::fs::write(&path, b"dane").await?;
+        let path = src.path().join("secret.txt");
+        tokio::fs::write(&path, b"data").await?;
 
         let handler = Arc::new(TestHandler::new(false, dst.path()));
         let (_rx, addr) = start_receiver(handler.clone()).await?;
@@ -245,7 +242,7 @@ async fn pull_by_ticket_requires_matching_token() -> Result<()> {
         let src = tempdir()?;
         let dst = tempdir()?;
         let data = pattern(DEFAULT_CHUNK_SIZE as usize * 2 + 7);
-        let path = src.path().join("zdjęcie.jpg");
+        let path = src.path().join("photo-ünïcode.jpg");
         tokio::fs::write(&path, &data).await?;
 
         let token = service::new_share_token();
@@ -266,9 +263,8 @@ async fn pull_by_ticket_requires_matching_token() -> Result<()> {
             &NodeTicket::with_share(addr, token).serialize_to_string()?,
         )?;
         let saved = service::pull_shared(&puller, &ticket, dst.path(), &|_| {}).await?;
-        assert_eq!(saved.file_name().unwrap(), "zdjęcie.jpg");
+        assert_eq!(saved.file_name().unwrap(), "photo-ünïcode.jpg");
         assert_eq!(tokio::fs::read(saved).await?, data);
-        // Sender (serwujący) również raportuje zakończenie.
         tokio::time::sleep(Duration::from_millis(200)).await;
         assert!(
             handler
@@ -293,8 +289,8 @@ async fn malicious_offers_are_refused() -> Result<()> {
         let bad_offers = [
             ("../../.bashrc", DEFAULT_CHUNK_SIZE),
             ("/etc/passwd", DEFAULT_CHUNK_SIZE),
-            ("ok.txt", 0),        // dzielenie przez zero
-            ("ok.txt", u32::MAX), // ogromna alokacja
+            ("ok.txt", 0),
+            ("ok.txt", u32::MAX),
         ];
         for (name, chunk_size) in bad_offers {
             let conn = attacker.connect(addr.clone()).await?;
@@ -309,7 +305,7 @@ async fn malicious_offers_are_refused() -> Result<()> {
             let reply: Result<TransferDecision> = read_msg(&mut ch.recv).await;
             assert!(
                 reply.is_err(),
-                "oferta {name:?}/{chunk_size} powinna zostać zerwana"
+                "offer {name:?}/{chunk_size} must be refused"
             );
         }
         assert!(!dst.path().join(".bashrc").exists());
@@ -324,19 +320,18 @@ async fn discovery_finds_peer_on_local_network() -> Result<()> {
     with_timeout(async {
         let a = engine().await?;
         let b = engine().await?;
-        // Osobne porty na localhost zamiast broadcastu – test nie zależy od sieci.
         let (pa, pb) = (free_udp_port()?, free_udp_port()?);
         let opts = |listen: u16, to: u16| DiscoveryOptions {
             port: listen,
             targets: Some(vec![([127, 0, 0, 1], to).into()]),
         };
         let da = Discovery::start(a.clone(), "Laptop A", opts(pa, pb))?;
-        let db = Discovery::start(b.clone(), "Telefon B", opts(pb, pa))?;
+        let db = Discovery::start(b.clone(), "Phone B", opts(pb, pa))?;
 
         let seen_by_a = da
-            .wait_for("telefon b", Duration::from_secs(10))
+            .wait_for("phone b", Duration::from_secs(10))
             .await
-            .context("A nie wykrył B")?;
+            .context("A did not discover B")?;
         assert_eq!(seen_by_a.id, b.node_id());
         assert!(
             seen_by_a.addr.ip_addrs().next().is_some(),
@@ -345,11 +340,9 @@ async fn discovery_finds_peer_on_local_network() -> Result<()> {
         let seen_by_b = db
             .wait_for(&a.node_id().to_string(), Duration::from_secs(10))
             .await
-            .context("B nie wykrył A")?;
+            .context("B did not discover A")?;
         assert_eq!(seen_by_b.name, "Laptop A");
 
-        // Diagnostyka: ogłoszenia wysłane i odebrane – brak wskazówki o problemie.
-        // Odbiór może wyprzedzić pierwszą rundę własnych ogłoszeń – czekamy na nią.
         let mut health = db.health();
         for _ in 0..50 {
             if health.announced {
@@ -362,10 +355,9 @@ async fn discovery_finds_peer_on_local_network() -> Result<()> {
         assert!(health.beacons_received > 0, "{health:?}");
         assert_eq!(health.hint(), None);
 
-        // Zmiana nazwy jest rozgłaszana od razu.
-        da.set_name("Laptop Biurowy");
+        da.set_name("Office Laptop");
         assert!(
-            db.wait_for("Laptop Biurowy", Duration::from_secs(10))
+            db.wait_for("Office Laptop", Duration::from_secs(10))
                 .await
                 .is_some()
         );
@@ -390,13 +382,12 @@ async fn pairing_with_one_button_accept_and_reject() -> Result<()> {
             assert_eq!(req.peer, initiator.node_id());
             assert_eq!(req.name, "Laptop A");
             assert_eq!(req.addr.as_ref().map(|a| a.id), Some(initiator.node_id()));
-            // Obie strony widzą ten sam kod weryfikacyjny.
             assert_eq!(req.code, pairing_code(&initiator.node_id(), &rx.node_id()));
 
             match outcome {
                 PairOutcome::Accepted { name, addr } => {
                     assert!(accept);
-                    assert_eq!(name, "Odbiorca Testowy");
+                    assert_eq!(name, "Test Receiver");
                     assert_eq!(addr.map(|a| a.id), Some(rx.node_id()));
                 }
                 PairOutcome::Rejected => assert!(!accept),
@@ -419,7 +410,7 @@ async fn test_path_traversal_exploit_blocked() -> Result<()> {
     let result = resolve_secure_target_path(base_sandbox.path(), "../../.bashrc");
     assert!(
         result.is_err(),
-        "Zabezpieczenie przed Path Traversal nie zablokowało niebezpiecznej nazwy pliku!"
+        "path traversal protection accepted a malicious file name"
     );
     Ok(())
 }

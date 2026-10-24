@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Agent launchd (macOS) uruchamiający demona RQS po zalogowaniu.
+  launchd agent (macOS) starting the RQS daemon at login.
 
-  Instalacja (podmienia __HOME__ na katalog domowy):
+  Installation (replaces __HOME__ with the home directory):
     sed "s|__HOME__|$HOME|g" com.rqs.daemon.plist > ~/Library/LaunchAgents/com.rqs.daemon.plist
     launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.rqs.daemon.plist
 
-  Usunięcie:
+  Removal:
     launchctl bootout gui/$(id -u)/com.rqs.daemon && rm ~/Library/LaunchAgents/com.rqs.daemon.plist
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

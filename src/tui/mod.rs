@@ -1,3 +1,9 @@
+//! `rqs tui`: interactive terminal user interface built with ratatui.
+//!
+//! Three panels (trusted devices, nearby devices, transfers) plus dialogs for
+//! decisions, text input, the TICKET with its QR code and help. Press `?` in
+//! the interface for the list of keyboard shortcuts.
+
 pub mod app;
 pub mod ui;
 
@@ -11,6 +17,7 @@ use crossterm::terminal::{
 };
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
+use rust_i18n::t;
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
@@ -20,11 +27,17 @@ use app::{App, Focus, Popup, TuiHandler, UiMessage};
 
 use crate::transfer::service;
 
+/// Runs the TUI until the user quits.
+///
+/// The node starts before the terminal switches to the alternate screen, so
+/// startup errors stay readable.
+///
+/// # Errors
+///
+/// Fails when the node cannot start or the terminal cannot be controlled.
 pub async fn run_tui() -> Result<()> {
-    // Węzeł startujemy przed przełączeniem terminala, aby błędy były czytelne.
     let (tx, rx) = mpsc::unbounded_channel();
     let app = App::new(tx.clone()).await?;
-    // Zmiany listy urządzeń w pobliżu trafiają do pętli TUI.
     let nearby_task = app.discovery.as_ref().map(|d| {
         let mut watch = d.subscribe();
         let tx = tx.clone();
@@ -80,7 +93,6 @@ where
         app.tick();
         terminal.draw(|f| ui::render(f, &app))?;
 
-        // Odczyt klawiatury blokuje – wykonujemy go poza wątkami runtime'u.
         let event = tokio::task::spawn_blocking(|| -> io::Result<Option<Event>> {
             if event::poll(Duration::from_millis(100))? {
                 return Ok(Some(event::read()?));
@@ -98,7 +110,6 @@ where
                     return Ok(());
                 }
             }
-            // Wklejanie (TICKET, ścieżki przeciągniętych plików) trafia do pola tekstowego.
             Some(Event::Paste(text)) => {
                 if let Some(input) = app.input.as_mut() {
                     input
@@ -112,9 +123,11 @@ where
     }
 }
 
-/// Zwraca `true`, gdy użytkownik zamyka aplikację.
+/// Handles a key press; returns `true` when the user quits.
+///
+/// Priority: pending decision, then the input dialog, then an informational
+/// dialog, then the panels.
 fn handle_key(app: &mut App, key: KeyEvent) -> bool {
-    // 1. Oczekujące decyzje (oferta pliku / parowanie) mają pierwszeństwo.
     if !app.pending.is_empty() {
         match key.code {
             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => app.answer_pending(true),
@@ -124,7 +137,6 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         return false;
     }
 
-    // 2. Pole tekstowe.
     if let Some(input) = app.input.as_mut() {
         match key.code {
             KeyCode::Esc => app.input = None,
@@ -146,7 +158,6 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         return false;
     }
 
-    // 3. Okna (TICKET, pomoc, potwierdzenie usunięcia).
     if let Some(popup) = app.popup.take() {
         match popup {
             Popup::ConfirmRemove { node_id, .. } => {
@@ -165,7 +176,6 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         return false;
     }
 
-    // 4. Tryb normalny.
     match key.code {
         KeyCode::Char('q') | KeyCode::Esc => return true,
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => return true,
@@ -184,8 +194,7 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
             if app.focus == Focus::Nearby {
                 app.pair_selected();
             } else {
-                app.status_msg =
-                    "Parowanie: przejdź do „W pobliżu” ([2] lub Tab) i naciśnij [p].".into();
+                app.status_msg = t!("tui.pair_where").into_owned();
             }
         }
         KeyCode::Char('e') => app.open_rename(),
@@ -194,6 +203,7 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Char('i') | KeyCode::Char('+') => app.open_add_device(),
         KeyCode::Char('g') => app.open_download_dir(),
         KeyCode::Char('N') => app.open_device_name(),
+        KeyCode::Char('L') => app.cycle_language(),
         KeyCode::Char('r') => app.refresh_nearby(),
         KeyCode::Char('t') => app.popup = Some(Popup::Ticket),
         KeyCode::Char('c') => app.copy_ticket_to_clipboard(),

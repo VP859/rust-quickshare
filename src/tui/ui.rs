@@ -1,3 +1,5 @@
+//! Rendering of the terminal user interface.
+
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
@@ -5,6 +7,7 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
+use rust_i18n::t;
 
 use super::app::{App, Focus, PendingKind, Popup, display_path};
 use crate::cli::display::{human_size, qr_terminal};
@@ -12,6 +15,8 @@ use crate::transfer::service::{Direction as TransferDirection, TransferStatus};
 
 const BAR_WIDTH: usize = 16;
 
+/// Draws the whole interface: header, three panels, footer and dialogs
+/// (informational dialog, then input, then a pending decision on top).
 pub fn render(f: &mut Frame, app: &App) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
@@ -36,7 +41,6 @@ pub fn render(f: &mut Frame, app: &App) {
     render_transfers(f, app, body[1]);
     render_footer(f, app, rows[2]);
 
-    // Nakładki: okno → pole tekstowe → decyzja (najwyżej).
     if let Some(popup) = &app.popup {
         render_popup(f, app, popup);
     }
@@ -79,15 +83,18 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::raw(format!(
-                "  ·  Node ID {}…  ·  zapis: {}",
+                "  ·  Node ID {}…  ·  {}",
                 &app.node_id[..12],
-                display_path(&app.config.download_dir())
+                t!(
+                    "tui.header_folder",
+                    path = display_path(&app.config.download_dir())
+                )
             )),
         ]),
         Line::styled(app.status_msg.clone(), Style::default().fg(Color::Yellow)),
     ];
     let block = Block::default()
-        .title(" RQS P2P Quick Share  [?] pomoc  [t] TICKET  [q] wyjście ")
+        .title(format!(" RQS P2P Quick Share  {} ", t!("tui.header_keys")))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
     f.render_widget(
@@ -100,13 +107,12 @@ fn render_trusted(f: &mut Frame, app: &App, area: Rect) {
     let focused = app.focus == Focus::Trusted;
     let trusted = app.trusted();
     let block = panel(
-        format!(" [1] Zaufane urządzenia ({}) ", trusted.len()),
+        format!(" [1] {} ({}) ", t!("tui.trusted_title"), trusted.len()),
         focused,
     );
     if trusted.is_empty() {
-        let text = "Brak.\n[i] dodaj przez TICKET / Node ID\nalbo sparuj z „W pobliżu” ([2], [p]).";
         f.render_widget(
-            Paragraph::new(text)
+            Paragraph::new(t!("tui.trusted_empty").into_owned())
                 .block(block)
                 .style(Style::default().fg(Color::DarkGray))
                 .wrap(Wrap { trim: true }),
@@ -153,12 +159,12 @@ fn render_trusted(f: &mut Frame, app: &App, area: Rect) {
 fn render_nearby(f: &mut Frame, app: &App, area: Rect) {
     let focused = app.focus == Focus::Nearby;
     let block = panel(
-        format!(" [2] W pobliżu ({})  [p] sparuj ", app.nearby.len()),
+        format!(" [2] {} ({}) ", t!("tui.nearby_title"), app.nearby.len()),
         focused,
     );
     if app.nearby.is_empty() {
         let mut text = vec![Line::styled(
-            "Szukanie urządzeń RQS w sieci lokalnej… [r] odśwież",
+            t!("tui.nearby_searching").into_owned(),
             Style::default().fg(Color::DarkGray),
         )];
         if let Some(hint) = &app.discovery_hint {
@@ -188,7 +194,7 @@ fn render_nearby(f: &mut Frame, app: &App, area: Rect) {
             ];
             if let Some(p) = app.config.find_peer(&d.node_id) {
                 spans.push(Span::styled(
-                    format!("  ✓ sparowane jako „{}”", p.alias),
+                    format!("  ✓ {}", t!("tui.paired_as", alias = &p.alias)),
                     Style::default().fg(Color::Green),
                 ));
             }
@@ -210,18 +216,13 @@ fn progress_bar(pct: u64) -> String {
 
 fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
     let focused = app.focus == Focus::Transfers;
-    let block = panel(
-        " [3] Transfery  [o] otwórz  [f] folder  [C] wyczyść ".to_string(),
-        focused,
-    );
+    let block = panel(format!(" [3] {} ", t!("tui.transfers_title")), focused);
     if app.transfers.is_empty() {
         f.render_widget(
-            Paragraph::new(
-                "Brak transferów. Wybierz urządzenie i naciśnij Enter, aby wysłać plik.",
-            )
-            .block(block)
-            .style(Style::default().fg(Color::DarkGray))
-            .wrap(Wrap { trim: true }),
+            Paragraph::new(t!("tui.transfers_empty").into_owned())
+                .block(block)
+                .style(Style::default().fg(Color::DarkGray))
+                .wrap(Wrap { trim: true }),
             area,
         );
         return;
@@ -256,9 +257,9 @@ fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
                 })
                 .unwrap_or_else(|| format!("{}…", &ev.peer[..8.min(ev.peer.len())]));
             let (detail, color) = match &ev.status {
-                TransferStatus::Preparing => ("liczenie haszu BLAKE3…".to_string(), Color::Blue),
+                TransferStatus::Preparing => (t!("tui.st_hashing").into_owned(), Color::Blue),
                 TransferStatus::AwaitingDecision => {
-                    ("oczekiwanie na akceptację…".to_string(), Color::Yellow)
+                    (t!("tui.st_awaiting").into_owned(), Color::Yellow)
                 }
                 TransferStatus::Running => {
                     let speed = if row.speed > 0.0 {
@@ -273,17 +274,23 @@ fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
                 }
                 TransferStatus::Completed { path } => (
                     match path {
-                        Some(p) => format!(
-                            "{} · zakończono ✓ · {}",
-                            human_size(ev.total),
-                            display_path(std::path::Path::new(p))
+                        Some(p) => t!(
+                            "tui.st_saved",
+                            size = human_size(ev.total),
+                            path = display_path(std::path::Path::new(p))
                         ),
-                        None => format!("{} · dostarczono ✓", human_size(ev.total)),
-                    },
+                        None => t!("tui.st_delivered", size = human_size(ev.total)),
+                    }
+                    .into_owned(),
                     Color::Green,
                 ),
-                TransferStatus::Rejected { reason } => (format!("odrzucono: {reason}"), Color::Red),
-                TransferStatus::Failed { error } => (format!("błąd: {error}"), Color::Red),
+                TransferStatus::Rejected { reason } => (
+                    t!("tui.st_rejected", reason = reason).into_owned(),
+                    Color::Red,
+                ),
+                TransferStatus::Failed { error } => {
+                    (t!("tui.st_failed", error = error).into_owned(), Color::Red)
+                }
             };
             let line1 = Line::from(vec![
                 Span::raw(format!("{arrow} {}  ", ev.file_name)),
@@ -305,23 +312,17 @@ fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let hints = match app.focus {
-        Focus::Trusted => {
-            "Enter wyślij plik · e nazwa · a Auto-Accept · x usuń · i dodaj · Tab panel · g katalog · N nazwa urządzenia"
-        }
-        Focus::Nearby => {
-            "p sparuj · Enter wyślij plik · r szukaj · i dodaj przez TICKET · Tab panel"
-        }
-        Focus::Transfers => {
-            "Enter/o otwórz plik · f otwórz folder · C wyczyść zakończone · Tab panel"
-        }
+        Focus::Trusted => t!("tui.footer_trusted"),
+        Focus::Nearby => t!("tui.footer_nearby"),
+        Focus::Transfers => t!("tui.footer_transfers"),
     };
     f.render_widget(
-        Paragraph::new(hints).style(Style::default().fg(Color::DarkGray)),
+        Paragraph::new(hints.into_owned()).style(Style::default().fg(Color::DarkGray)),
         area,
     );
 }
 
-/// Prostokąt na środku ekranu, przycięty do dostępnej przestrzeni.
+/// A rectangle centered on the screen, clamped to the available space.
 fn centered(area: Rect, width: u16, height: u16) -> Rect {
     let w = width.min(area.width);
     let h = height.min(area.height);
@@ -338,7 +339,7 @@ fn render_pending(f: &mut Frame, app: &App) {
         return;
     };
     let queue = if app.pending.len() > 1 {
-        format!(" (w kolejce: {})", app.pending.len() - 1)
+        format!(" ({})", t!("tui.queued", count = app.pending.len() - 1))
     } else {
         String::new()
     };
@@ -348,25 +349,32 @@ fn render_pending(f: &mut Frame, app: &App) {
             file_name,
             file_size,
         } => (
-            format!(" Przychodzący plik{queue} "),
+            format!(" {}{queue} ", t!("tui.offer_title")),
             vec![
                 Line::styled(
                     file_name.clone(),
                     Style::default().add_modifier(Modifier::BOLD),
                 ),
-                Line::raw(format!("{} · od: {peer_label}", human_size(*file_size))),
+                Line::raw(
+                    t!(
+                        "tui.offer_from",
+                        size = human_size(*file_size),
+                        from = peer_label
+                    )
+                    .into_owned(),
+                ),
                 Line::raw(""),
                 Line::styled(
-                    "[y] odbierz    [n] odrzuć",
+                    t!("tui.offer_keys").into_owned(),
                     Style::default().fg(Color::Yellow),
                 ),
             ],
         ),
         PendingKind::Pair { name, code } => (
-            format!(" Prośba o sparowanie{queue} "),
+            format!(" {}{queue} ", t!("tui.pair_title")),
             vec![
-                Line::raw(format!("„{name}” chce dodać to urządzenie do zaufanych.")),
-                Line::raw("Sparuj tylko, gdy drugie urządzenie pokazuje ten sam kod:"),
+                Line::raw(t!("tui.pair_wants", name = name).into_owned()),
+                Line::raw(t!("tui.pair_compare").into_owned()),
                 Line::raw(""),
                 Line::styled(
                     code.clone(),
@@ -376,7 +384,7 @@ fn render_pending(f: &mut Frame, app: &App) {
                 ),
                 Line::raw(""),
                 Line::styled(
-                    "[y] sparuj    [n] odrzuć",
+                    t!("tui.pair_keys").into_owned(),
                     Style::default().fg(Color::Yellow),
                 ),
             ],
@@ -415,14 +423,13 @@ fn render_input(f: &mut Frame, app: &App) {
         lines.push(Line::styled(err.clone(), Style::default().fg(Color::Red)));
     }
     lines.push(Line::raw(""));
-    let mut keys = "Enter zatwierdź · Esc anuluj · Ctrl+U wyczyść".to_string();
+    let mut keys = t!("tui.input_keys").into_owned();
     if input.kind.is_path() {
-        keys.push_str(" · Tab podpowiedź");
+        keys.push_str(&t!("tui.input_keys_path"));
     }
     lines.push(Line::styled(keys, Style::default().fg(Color::DarkGray)));
 
     let width = f.area().width.saturating_sub(8).clamp(40, 100);
-    // Wysokość z zapasem na zawinięcie długich wartości (np. TICKET).
     let wrapped = (input.value.chars().count() as u16 + 4) / width.saturating_sub(4).max(1);
     let area = centered(f.area(), width, lines.len() as u16 + 2 + wrapped);
     f.render_widget(Clear, area);
@@ -448,15 +455,15 @@ fn render_popup(f: &mut Frame, app: &App, popup: &Popup) {
             f.render_widget(Clear, area);
             f.render_widget(
                 Paragraph::new(vec![
-                    Line::raw(format!("Usunąć „{alias}” z zaufanych urządzeń?")),
+                    Line::raw(t!("tui.remove_question", alias = alias).into_owned()),
                     Line::styled(
-                        "[y] usuń    dowolny klawisz – anuluj",
+                        t!("tui.remove_keys").into_owned(),
                         Style::default().fg(Color::Yellow),
                     ),
                 ])
                 .block(
                     Block::default()
-                        .title(" Usuń urządzenie ")
+                        .title(format!(" {} ", t!("tui.remove_title")))
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(Color::Red)),
                 ),
@@ -466,6 +473,7 @@ fn render_popup(f: &mut Frame, app: &App, popup: &Popup) {
     }
 }
 
+/// Shows the TICKET; the QR code only when it fits in the terminal.
 fn render_ticket(f: &mut Frame, app: &App) {
     let screen = f.area();
     let qr = qr_terminal(&app.ticket_str);
@@ -480,7 +488,6 @@ fn render_ticket(f: &mut Frame, app: &App) {
         .saturating_sub(4)
         .clamp(40, qr_width.max(90) + 4);
     let ticket_rows = (app.ticket_str.len() as u16).div_ceil(width.saturating_sub(4).max(1));
-    // Kod QR tylko wtedy, gdy zmieści się w oknie terminala.
     let show_qr =
         qr_width + 4 <= screen.width && qr_lines.len() as u16 + ticket_rows + 8 <= screen.height;
 
@@ -489,7 +496,7 @@ fn render_ticket(f: &mut Frame, app: &App) {
         lines.extend(qr_lines.iter().map(|l| Line::raw(l.to_string())));
     } else {
         lines.push(Line::styled(
-            "Powiększ okno terminala, aby zobaczyć kod QR.",
+            t!("tui.ticket_enlarge").into_owned(),
             Style::default().fg(Color::DarkGray),
         ));
     }
@@ -500,7 +507,7 @@ fn render_ticket(f: &mut Frame, app: &App) {
     ));
     lines.push(Line::raw(""));
     lines.push(Line::styled(
-        "[c] kopiuj do schowka · dowolny klawisz – zamknij",
+        t!("tui.ticket_keys").into_owned(),
         Style::default().fg(Color::Yellow),
     ));
 
@@ -511,7 +518,7 @@ fn render_ticket(f: &mut Frame, app: &App) {
         Paragraph::new(lines)
             .block(
                 Block::default()
-                    .title(" TICKET tego urządzenia – zeskanuj lub wklej w „Dodaj urządzenie” ")
+                    .title(format!(" {} ", t!("cli.ticket_title")))
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(Color::Cyan)),
             )
@@ -522,44 +529,33 @@ fn render_ticket(f: &mut Frame, app: &App) {
 
 fn render_help(f: &mut Frame) {
     let rows = [
-        (
-            "Tab / 1 2 3",
-            "przełącz panel (zaufane / w pobliżu / transfery)",
-        ),
-        ("↑ ↓", "wybór na liście"),
-        (
-            "Enter / s",
-            "wyślij plik do wybranego urządzenia / otwórz transfer",
-        ),
-        ("p", "sparuj z urządzeniem w pobliżu"),
-        (
-            "i / +",
-            "dodaj urządzenie przez TICKET lub Node ID (+ prośba o sparowanie)",
-        ),
-        (
-            "e / a / x",
-            "zmień nazwę / przełącz Auto-Accept / usuń urządzenie",
-        ),
-        ("o / f", "otwórz odebrany plik / jego folder"),
-        ("C", "usuń zakończone transfery z listy"),
-        ("t / c", "pokaż TICKET z kodem QR / kopiuj TICKET"),
-        ("g / N", "katalog zapisu / nazwa tego urządzenia"),
-        ("r", "szukaj urządzeń w sieci lokalnej"),
-        ("y / n", "odpowiedź na ofertę pliku lub prośbę o sparowanie"),
-        ("q / Esc", "wyjście"),
+        ("Tab / 1 2 3", t!("tui.help_panels")),
+        ("↑ ↓", t!("tui.help_select")),
+        ("Enter / s", t!("tui.help_send")),
+        ("p", t!("tui.help_pair")),
+        ("i / +", t!("tui.help_add")),
+        ("e / a / x", t!("tui.help_manage")),
+        ("o / f", t!("tui.help_open")),
+        ("C", t!("tui.help_clear")),
+        ("t / c", t!("tui.help_ticket")),
+        ("g / N", t!("tui.help_settings")),
+        ("L", t!("tui.help_language")),
+        ("r", t!("tui.help_search")),
+        ("y / n", t!("tui.help_answer")),
+        ("q / Esc", t!("tui.help_quit")),
     ];
     let mut lines: Vec<Line> = rows
         .iter()
         .map(|(k, d)| {
             Line::from(vec![
                 Span::styled(format!("{k:<14}"), Style::default().fg(Color::Cyan)),
-                Span::raw(*d),
+                Span::raw(d.to_string()),
             ])
         })
         .collect();
     lines.push(Line::raw(""));
     lines.push(Line::styled(
-        "W polu tekstowym: Tab podpowiada ścieżkę; plik można przeciągnąć do okna terminala.",
+        t!("tui.help_input").into_owned(),
         Style::default().fg(Color::DarkGray),
     ));
     let area = centered(f.area(), 92, lines.len() as u16 + 2);
@@ -568,7 +564,7 @@ fn render_help(f: &mut Frame) {
         Paragraph::new(lines)
             .block(
                 Block::default()
-                    .title(" Pomoc – dowolny klawisz zamyka ")
+                    .title(format!(" {} ", t!("tui.help_title")))
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(Color::Cyan)),
             )

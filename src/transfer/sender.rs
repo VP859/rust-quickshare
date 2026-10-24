@@ -1,5 +1,8 @@
+//! Sending half of the transfer protocol.
+
 use anyhow::{Context, Result};
 use iroh::endpoint::Connection;
+use rust_i18n::t;
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
@@ -15,27 +18,36 @@ use crate::protocol::messages::{
 use crate::transfer::hash::compute_file_hash;
 use crate::transfer::security::sanitize_filename;
 
-/// Plik gotowy do wysłania – z policzonym haszem BLAKE3 (liczonym raz, także przy wznowieniu).
+/// A file ready to be sent, with its BLAKE3 hash computed once up front.
 #[derive(Debug, Clone)]
 pub struct PreparedFile {
+    /// Local path of the file.
     pub path: PathBuf,
+    /// Sanitized file name announced to the receiver.
     pub name: String,
+    /// File size in bytes.
     pub size: u64,
+    /// BLAKE3 hash of the whole file.
     pub hash: [u8; 32],
 }
 
+/// Reads metadata of the file at `path` and computes its hash.
+///
+/// # Errors
+///
+/// Fails when the path does not exist, is not a regular file or cannot be read.
 pub async fn prepare_file(path: &Path) -> Result<PreparedFile> {
     let metadata = tokio::fs::metadata(path)
         .await
-        .with_context(|| format!("Nie można odczytać pliku {:?}", path))?;
+        .with_context(|| t!("sender.read", path = path.display()))?;
     if !metadata.is_file() {
-        anyhow::bail!("Podana ścieżka nie jest plikiem: {:?}", path);
+        anyhow::bail!(t!("sender.not_a_file", path = path.display()));
     }
     let raw_name = path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let name = sanitize_filename(&raw_name).unwrap_or_else(|_| "plik".to_string());
+    let name = sanitize_filename(&raw_name).unwrap_or_else(|_| "file".to_string());
     let hash = compute_file_hash(path).await?;
     Ok(PreparedFile {
         path: path.to_path_buf(),
@@ -45,13 +57,20 @@ pub async fn prepare_file(path: &Path) -> Result<PreparedFile> {
     })
 }
 
+/// How a send attempt ended (errors are reported through `Result`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SendOutcome {
+    /// The receiver saved the file and verified its hash.
     Delivered,
+    /// The receiver declined the offer with the given reason.
     Rejected(String),
 }
 
-/// Otwiera nowy strumień kontrolny (`Hello::Push`) i wysyła plik.
+/// Opens a new control stream with [`Hello::Push`] and sends `file` over it.
+///
+/// # Errors
+///
+/// See [`send_on_channel`].
 pub async fn push_file(
     conn: &Connection,
     file: &PreparedFile,
@@ -63,8 +82,16 @@ pub async fn push_file(
     Ok(outcome)
 }
 
-/// Strona wysyłająca protokołu: oferta → decyzja → chunki na osobnych strumieniach
-/// jednokierunkowych (do [`CHUNK_WINDOW`] równolegle) → werdykt odbiorcy.
+/// Runs the sending side of the protocol on an already opened control stream.
+///
+/// Sends the offer, waits for the decision, streams the remaining chunks on
+/// separate unidirectional streams (up to [`CHUNK_WINDOW`] in flight) and waits
+/// for the receiver's verdict.
+///
+/// # Errors
+///
+/// Fails on network or I/O errors, when the receiver asks for a chunk past the
+/// end of the file, or when the receiver reports a failed verification.
 pub async fn send_on_channel(
     conn: &Connection,
     channel: &mut Channel,
@@ -85,10 +112,10 @@ pub async fn send_on_channel(
     };
     let total_chunks = offer.total_chunks();
     if start_chunk_index > total_chunks {
-        anyhow::bail!("Odbiorca zażądał nieistniejącego chunka #{start_chunk_index}");
+        anyhow::bail!(t!("sender.bad_start", index = start_chunk_index));
     }
     info!(
-        "Wysyłanie '{}' od chunka {}/{}",
+        "Sending '{}' from chunk {}/{}",
         file.name, start_chunk_index, total_chunks
     );
 
@@ -98,7 +125,6 @@ pub async fn send_on_channel(
     let mut done = start_offset.min(file.size);
     progress(done);
 
-    // Upuszczenie JoinSet (np. przy błędzie) przerywa wszystkie zadania w locie.
     let mut in_flight: JoinSet<Result<u32>> = JoinSet::new();
     for chunk_index in start_chunk_index..total_chunks {
         while in_flight.len() >= CHUNK_WINDOW {
@@ -108,18 +134,14 @@ pub async fn send_on_channel(
 
         let len = offer
             .chunk_len(chunk_index)
-            .context("Błąd wyliczenia długości chunka")?;
+            .context(t!("transfer.chunk_len"))?;
         let mut payload = vec![0u8; len as usize];
         source
             .read_exact(&mut payload)
             .await
-            .context("Plik źródłowy zmienił się w trakcie wysyłania")?;
+            .context(t!("sender.file_changed"))?;
 
-        // Strumienie są otwierane po kolei, więc odbiorca przyjmuje je w kolejności chunków.
-        let mut stream = conn
-            .open_uni()
-            .await
-            .context("Nie udało się otworzyć strumienia chunka")?;
+        let mut stream = conn.open_uni().await.context(t!("sender.open_stream"))?;
         in_flight.spawn(async move {
             let header = ChunkHeader {
                 chunk_index,
@@ -140,7 +162,7 @@ pub async fn send_on_channel(
     match read_msg(&mut channel.recv).await? {
         TransferResult::Verified => Ok(SendOutcome::Delivered),
         TransferResult::Failed { reason } => {
-            anyhow::bail!("Odbiorca odrzucił plik po weryfikacji: {reason}")
+            anyhow::bail!(t!("sender.verify_failed", reason = reason))
         }
     }
 }
@@ -148,6 +170,6 @@ pub async fn send_on_channel(
 async fn join_next(set: &mut JoinSet<Result<u32>>) -> Result<u32> {
     set.join_next()
         .await
-        .context("Brak zadań do oczekiwania")?
-        .context("Zadanie wysyłania chunka zostało przerwane")?
+        .context(t!("transfer.task_aborted"))?
+        .context(t!("transfer.task_aborted"))?
 }

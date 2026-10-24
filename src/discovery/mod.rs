@@ -1,19 +1,22 @@
-//! Automatyczne wykrywanie urządzeń RQS w sieci lokalnej.
+//! Automatic discovery of RQS devices on the local network.
 //!
-//! Nie korzysta z mDNS ani Bluetooth: każdy węzeł co kilka sekund rozgłasza mały
-//! pakiet UDP (`RQSd`, port [`DISCOVERY_PORT`]) na adresy broadcast swoich sieci
-//! oraz na własną grupę multicast [`MULTICAST_GROUP`] (TTL 1, także przez loopback –
-//! kilka instancji na jednym komputerze widzi się nawet przy VPN blokującym LAN).
-//! Na pierwszy pakiet od nowego urządzenia odpowiada bezpośrednio (unicast) –
-//! wystarczy więc, że ogłoszenie przejdzie w jedną stronę.
+//! No mDNS or Bluetooth is used. Every node announces itself every few seconds
+//! with a small UDP packet (`RQSd`, port [`DISCOVERY_PORT`]) sent to the
+//! broadcast address of each of its networks and to the multicast group
+//! [`MULTICAST_GROUP`] (TTL 1, also over loopback, so several instances on one
+//! computer see each other even behind a VPN that blocks the LAN). The first
+//! packet from a new device is answered directly with unicast, so it is enough
+//! for announcements to get through in one direction.
 //!
-//! Pakiet zawiera nazwę urządzenia i adres iroh. Nie jest to dowód tożsamości:
-//! połączenie i tak uwierzytelnia Node ID w TLS, a parowanie wymaga zgody
-//! drugiej strony i porównania kodu weryfikacyjnego.
-//! Gdy sieć lokalna jest niedostępna (np. VPN z blokadą LAN), działa TICKET/QR.
+//! An announcement carries the device name and its iroh address. It is not a
+//! proof of identity: connections still authenticate the Node ID with TLS and
+//! pairing requires consent and a matching verification code. When the local
+//! network is unavailable (e.g. a VPN with LAN blocking), TICKETs and QR codes
+//! keep working.
 
 use anyhow::{Context, Result};
 use iroh::{EndpointAddr, EndpointId, TransportAddr};
+use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
@@ -26,15 +29,15 @@ use tracing::{debug, info, warn};
 use crate::node::NodeEngine;
 use crate::pairing::clean_device_name;
 
-/// Port UDP pakietów wykrywania (musi być przepuszczany przez zaporę w sieci lokalnej).
+/// UDP port of discovery packets; must be allowed by firewalls on the LAN.
 pub const DISCOVERY_PORT: u16 = 47823;
 
-/// Grupa multicast z zakresu administracyjnego (lokalnego) – nie jest to mDNS.
+/// Administratively scoped multicast group used for announcements (not mDNS).
 pub const MULTICAST_GROUP: Ipv4Addr = Ipv4Addr::new(239, 255, 71, 83);
 
 const MAGIC: [u8; 4] = *b"RQSd";
 const ANNOUNCE_INTERVAL: Duration = Duration::from_secs(5);
-/// Urządzenie znika z listy po ~3 pominiętych ogłoszeniach.
+/// A device disappears from the list after about three missed announcements.
 const DEVICE_TTL: Duration = Duration::from_secs(17);
 const MAX_DEVICES: usize = 256;
 const MAX_BEACON_LEN: usize = 2048;
@@ -46,30 +49,37 @@ struct Beacon {
     name: String,
     platform: String,
     addr: EndpointAddr,
-    /// Porty QUIC (IPv4) – w połączeniu z adresem źródłowym pakietu dają adres w LAN,
-    /// nawet zanim iroh wykryje własne adresy.
+    /// IPv4 QUIC ports; combined with the packet's source address they give a
+    /// LAN address even before iroh has discovered its own addresses.
     quic_ports: Vec<u16>,
-    /// Odpowiedź unicast na cudzy pakiet (na odpowiedzi się nie odpowiada).
+    /// Unicast answer to someone else's announcement (answers are not answered).
     reply: bool,
 }
 
-/// Urządzenie widoczne w sieci lokalnej.
+/// A device visible on the local network.
 #[derive(Debug, Clone, Serialize)]
 pub struct NearbyDevice {
+    /// Node ID as text.
     pub node_id: String,
+    /// Announced device name.
     pub name: String,
+    /// Operating system (`linux`, `windows`, `macos`, `android`, …).
     pub platform: String,
+    /// Node ID.
     #[serde(skip)]
     pub id: EndpointId,
+    /// Current address including the LAN address the announcement came from.
     #[serde(skip)]
     pub addr: EndpointAddr,
 }
 
+/// Configuration of a [`Discovery`] service.
 #[derive(Debug, Clone)]
 pub struct DiscoveryOptions {
-    /// Port nasłuchu i docelowy port ogłoszeń.
+    /// Port to listen on and to send announcements to.
     pub port: u16,
-    /// Stałe adresy ogłoszeń zamiast adresów broadcast (testy, sieci bez broadcastu).
+    /// Fixed announcement targets instead of broadcast/multicast (tests,
+    /// networks without broadcast).
     pub targets: Option<Vec<SocketAddr>>,
 }
 
@@ -87,57 +97,48 @@ struct Entry {
     seen: Instant,
 }
 
-/// Stan wykrywania – pozwala interfejsom wyjaśnić, dlaczego lista jest pusta.
+/// State of the discovery service, used to explain an empty device list.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct DiscoveryHealth {
-    /// Gniazdo nasłuchuje na standardowym porcie (inaczej nie odbieramy ogłoszeń).
+    /// The socket listens on [`DISCOVERY_PORT`]; otherwise announcements are not received.
     pub listening: bool,
-    /// Zakończono pierwszą rundę ogłoszeń – wcześniej stan sieci jest jeszcze nieznany.
+    /// The first announcement round has completed; before that the state is unknown.
     pub announced: bool,
-    /// Liczba sieci lokalnych IPv4 (Wi-Fi/LAN) w ostatniej rundzie ogłoszeń.
+    /// Number of local IPv4 networks (Wi-Fi/LAN) in the last round.
     pub networks: usize,
-    /// W ostatniej rundzie przynajmniej jedno ogłoszenie trafiło do sieci lokalnej.
+    /// At least one announcement reached a local network in the last round.
     pub lan_send_ok: bool,
-    /// Ostatni błąd wysyłki do sieci lokalnej (np. EPERM przy VPN lub zaporze).
+    /// Last error of sending to a local network (e.g. EPERM caused by a VPN or firewall).
     pub lan_send_error: Option<String>,
-    /// Liczba odebranych ogłoszeń od innych urządzeń.
+    /// Number of announcements received from other devices.
     pub beacons_received: u64,
 }
 
 impl DiscoveryHealth {
-    /// Wskazówka dla użytkownika, gdy wykrywanie nie może działać w pełni.
+    /// A hint for the user when discovery cannot fully work, in the active language.
     pub fn hint(&self) -> Option<String> {
         if !self.listening {
-            return Some(format!(
-                "Port UDP {DISCOVERY_PORT} jest zajęty przez inny program – to urządzenie nie odbiera ogłoszeń."
-            ));
+            return Some(t!("discovery.port_busy", port = DISCOVERY_PORT).into_owned());
         }
         if !self.announced {
             return None;
         }
         if self.networks == 0 {
-            return Some("Brak połączenia z siecią lokalną (Wi-Fi/LAN).".into());
+            return Some(t!("discovery.no_network").into_owned());
         }
+        let error = || {
+            self.lan_send_error
+                .clone()
+                .unwrap_or_else(|| t!("discovery.unknown_error").into_owned())
+        };
         if !self.lan_send_ok && cfg!(target_os = "android") {
-            return Some(format!(
-                "Android blokuje dostęp do sieci lokalnej ({}). Nadaj aplikacji uprawnienie \
-                 „Urządzenia w pobliżu” (Ustawienia → Aplikacje → RQS Quick Share → Uprawnienia) \
-                 i sprawdź, czy VPN na telefonie zezwala na sieć lokalną.",
-                self.lan_send_error.as_deref().unwrap_or("nieznany błąd")
-            ));
+            return Some(t!("discovery.android_blocked", error = error()).into_owned());
         }
         if !self.lan_send_ok {
-            return Some(format!(
-                "Wysyłanie do sieci lokalnej jest blokowane ({}) – zwykle przez VPN lub zaporę. \
-                 NordVPN: nordvpn set lan-discovery on. Możesz też użyć TICKETU.",
-                self.lan_send_error.as_deref().unwrap_or("nieznany błąd")
-            ));
+            return Some(t!("discovery.lan_blocked", error = error()).into_owned());
         }
         if self.beacons_received == 0 {
-            return Some(format!(
-                "Nie odebrano jeszcze żadnych ogłoszeń. Sprawdź, czy drugie urządzenie jest w tej samej \
-                 sieci, a zapory na obu urządzeniach przepuszczają UDP {DISCOVERY_PORT}."
-            ));
+            return Some(t!("discovery.nothing_received", port = DISCOVERY_PORT).into_owned());
         }
         None
     }
@@ -159,7 +160,7 @@ impl Shared {
     }
 }
 
-/// Usługa wykrywania; zatrzymuje się po upuszczeniu.
+/// The discovery service; stops when dropped.
 pub struct Discovery {
     shared: Arc<Shared>,
     task: tokio::task::JoinHandle<()>,
@@ -172,20 +173,26 @@ impl Drop for Discovery {
 }
 
 impl Discovery {
-    /// Uruchamia ogłaszanie i nasłuch (wymaga środowiska tokio).
+    /// Starts announcing and listening. Must be called within a Tokio runtime.
+    ///
+    /// When the port is taken by a program that does not share it, discovery
+    /// runs in a limited mode: it still announces and receives direct answers.
+    ///
+    /// # Errors
+    ///
+    /// Fails when no UDP socket can be opened at all.
     pub fn start(engine: NodeEngine, name: &str, opts: DiscoveryOptions) -> Result<Self> {
         let mut listening = true;
         let std_socket = bind(opts.port)
             .or_else(|e| {
                 listening = false;
-                // Port zajęty bez SO_REUSEADDR – nadal możemy ogłaszać i odbierać odpowiedzi.
                 warn!(
-                    "Port wykrywania {} niedostępny ({e}) – tryb ograniczony",
+                    "Discovery port {} unavailable ({e}), running in limited mode",
                     opts.port
                 );
                 bind(0)
             })
-            .context("Nie udało się otworzyć gniazda wykrywania UDP")?;
+            .context(t!("discovery.socket"))?;
         let socket = UdpSocket::from_std(std_socket)?;
         let (tx, _) = watch::channel(Vec::new());
         let shared = Arc::new(Shared {
@@ -199,18 +206,15 @@ impl Discovery {
             }),
         });
         info!(
-            "Wykrywanie: nasłuch UDP {} ({})",
+            "Discovery listening on UDP {} ({})",
             opts.port,
-            if listening {
-                "OK"
-            } else {
-                "port zajęty – tryb ograniczony"
-            }
+            if listening { "ok" } else { "limited mode" }
         );
         let task = tokio::spawn(run(engine, socket, opts, shared.clone()));
         Ok(Self { shared, task })
     }
 
+    /// Current state of the service.
     pub fn health(&self) -> DiscoveryHealth {
         self.shared
             .health
@@ -219,20 +223,22 @@ impl Discovery {
             .unwrap_or_default()
     }
 
+    /// Devices currently visible, sorted by name.
     pub fn devices(&self) -> Vec<NearbyDevice> {
         self.shared.tx.borrow().clone()
     }
 
-    /// Zmiany listy urządzeń (np. do odświeżania interfejsu).
+    /// Receiver notified whenever the device list changes.
     pub fn subscribe(&self) -> watch::Receiver<Vec<NearbyDevice>> {
         self.shared.tx.subscribe()
     }
 
-    /// Natychmiastowe ogłoszenie (przycisk „Szukaj”).
+    /// Announces this device immediately (e.g. the "Search" button).
     pub fn probe(&self) {
         self.shared.probe.notify_one();
     }
 
+    /// Changes the announced device name and announces it immediately.
     pub fn set_name(&self, name: &str) {
         if let Ok(mut current) = self.shared.name.write() {
             *current = clean_device_name(name);
@@ -240,11 +246,12 @@ impl Discovery {
         self.probe();
     }
 
+    /// Finds a visible device; see [`find_in`].
     pub fn find(&self, query: &str) -> Option<NearbyDevice> {
         find_in(&self.devices(), query)
     }
 
-    /// Aktualny adres urządzenia, jeśli jest widoczne w sieci lokalnej.
+    /// Current address of a device if it is visible on the local network.
     pub fn addr_of(&self, id: &EndpointId) -> Option<EndpointAddr> {
         self.devices()
             .into_iter()
@@ -252,7 +259,7 @@ impl Discovery {
             .map(|d| d.addr)
     }
 
-    /// Czeka (maks. `timeout`) na urządzenie o podanej nazwie lub Node ID.
+    /// Waits at most `timeout` for a device matching `query` (see [`find_in`]).
     pub async fn wait_for(&self, query: &str, timeout: Duration) -> Option<NearbyDevice> {
         let mut rx = self.subscribe();
         self.probe();
@@ -271,7 +278,8 @@ impl Discovery {
     }
 }
 
-/// Dopasowanie po Node ID (pełnym lub prefiksie ≥ 8 znaków) albo nazwie (bez wielkości liter).
+/// Finds a device by full Node ID, a Node ID prefix of at least 8 characters,
+/// or its name (case-insensitive).
 pub fn find_in(devices: &[NearbyDevice], query: &str) -> Option<NearbyDevice> {
     let q = query.trim();
     devices
@@ -287,7 +295,6 @@ pub fn find_in(devices: &[NearbyDevice], query: &str) -> Option<NearbyDevice> {
 fn bind(port: u16) -> std::io::Result<std::net::UdpSocket> {
     use socket2::{Domain, Protocol, Socket, Type};
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-    // Kilka instancji na jednym komputerze (np. GUI + `rqs discover`) może słuchać jednocześnie.
     socket.set_reuse_address(true)?;
     #[cfg(unix)]
     socket.set_reuse_port(true)?;
@@ -309,7 +316,6 @@ async fn run(engine: NodeEngine, socket: UdpSocket, opts: DiscoveryOptions, shar
         tokio::select! {
             _ = tick.tick() => {
                 if opts.targets.is_none() {
-                    // Interfejsy mogą pojawić się później (Wi-Fi, zmiana sieci).
                     join_multicast(&engine, &socket, &mut joined);
                 }
                 announce(&engine, &socket, &opts, &shared).await;
@@ -318,9 +324,8 @@ async fn run(engine: NodeEngine, socket: UdpSocket, opts: DiscoveryOptions, shar
             _ = shared.probe.notified() => announce(&engine, &socket, &opts, &shared).await,
             res = socket.recv_from(&mut buf) => match res {
                 Ok((len, from)) => handle_packet(&engine, &socket, &shared, &buf[..len], from).await,
-                // Np. ICMP „port unreachable” zgłaszany przez Windows po wysyłce – ignorujemy.
                 Err(e) => {
-                    debug!("Błąd odbioru pakietu wykrywania: {e}");
+                    debug!("Discovery receive error: {e}");
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
             }
@@ -349,6 +354,10 @@ fn encode_beacon(engine: &NodeEngine, shared: &Shared, reply: bool) -> Option<Ve
         .filter(|b| b.len() <= MAX_BEACON_LEN)
 }
 
+/// Sends one announcement round and updates [`DiscoveryHealth`].
+///
+/// Only sends to local networks count towards `lan_send_ok`; loopback and
+/// `255.255.255.255` (usually routed into a VPN tunnel) are ignored.
 async fn announce(
     engine: &NodeEngine,
     socket: &UdpSocket,
@@ -358,8 +367,6 @@ async fn announce(
     let Some(bytes) = encode_beacon(engine, shared, false) else {
         return;
     };
-    // Wyniki wysyłek do sieci lokalnej (bez loopbacku i 255.255.255.255, który
-    // przy VPN trafia zwykle do tunelu) – na ich podstawie powstaje diagnostyka.
     let mut lan = LanSendStats::default();
     let networks = match &opts.targets {
         Some(targets) => {
@@ -385,7 +392,6 @@ async fn announce(
                 lan.record(send(socket, &bytes, SocketAddrV4::new(ip, opts.port).into()).await);
             }
 
-            // Multicast przez każdy interfejs, w tym loopback (instancje na tym komputerze).
             let group: SocketAddr = SocketAddrV4::new(MULTICAST_GROUP, opts.port).into();
             if socket2::SockRef::from(socket)
                 .set_multicast_if_v4(&Ipv4Addr::LOCALHOST)
@@ -412,11 +418,11 @@ async fn announce(
             || health.lan_send_error != error
         {
             if lan.ok {
-                info!("Wykrywanie: ogłoszenia wysyłane do {networks} sieci lokalnych");
+                info!("Discovery: announcing on {networks} local network(s)");
             } else {
                 warn!(
-                    "Wykrywanie: brak wysyłki do sieci lokalnej (sieci: {networks}, błąd: {})",
-                    error.as_deref().unwrap_or("brak interfejsu")
+                    "Discovery: cannot send to the local network (networks: {networks}, error: {})",
+                    error.as_deref().unwrap_or("no interface")
                 );
             }
         }
@@ -448,11 +454,13 @@ async fn send(socket: &UdpSocket, bytes: &[u8], target: SocketAddr) -> std::io::
         .await
         .map(|_| ())
         .inspect_err(|e| {
-            debug!("Nie wysłano ogłoszenia do {target}: {e}");
+            debug!("Could not send an announcement to {target}: {e}");
         })
 }
 
-/// Dołącza do grupy multicast na loopbacku i każdym interfejsie (pomija już dołączone).
+/// Joins the multicast group on loopback and every local interface not joined yet.
+///
+/// `AddrInUse` means the default interface was already joined through `0.0.0.0`.
 fn join_multicast(engine: &NodeEngine, socket: &UdpSocket, joined: &mut BTreeSet<Ipv4Addr>) {
     let interfaces = [Ipv4Addr::UNSPECIFIED, Ipv4Addr::LOCALHOST]
         .into_iter()
@@ -460,14 +468,13 @@ fn join_multicast(engine: &NodeEngine, socket: &UdpSocket, joined: &mut BTreeSet
     for iface in interfaces {
         if !joined.contains(&iface) {
             match socket.join_multicast_v4(MULTICAST_GROUP, iface) {
-                // AddrInUse: interfejs domyślny został już dołączony przez 0.0.0.0.
                 Ok(()) => {
                     joined.insert(iface);
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
                     joined.insert(iface);
                 }
-                Err(e) => debug!("Nie dołączono do grupy multicast na {iface}: {e}"),
+                Err(e) => debug!("Could not join the multicast group on {iface}: {e}"),
             }
         }
     }
@@ -497,7 +504,7 @@ async fn handle_packet(
             .insert(TransportAddr::Ip(SocketAddr::new(from.ip(), *port)));
     }
     let name = match clean_device_name(&beacon.name) {
-        n if n.is_empty() => format!("Węzeł {}", id.fmt_short()),
+        n if n.is_empty() => t!("config.fallback_alias", id = id.fmt_short()).into_owned(),
         n => n,
     };
     let platform: String = beacon
@@ -527,7 +534,7 @@ async fn handle_packet(
             None if devices.len() >= MAX_DEVICES => return,
             None => {
                 info!(
-                    "Wykrywanie: nowe urządzenie '{}' ({}) z {from}",
+                    "Discovery: new device '{}' ({}) from {from}",
                     device.name, device.platform
                 );
                 true
@@ -546,13 +553,12 @@ async fn handle_packet(
         changed
     };
 
-    // Nowe urządzenie dowiaduje się o nas od razu, nawet gdy nasz broadcast do niego nie dociera.
     if changed
         && !beacon.reply
         && let Some(bytes) = encode_beacon(engine, shared, true)
         && let Err(e) = socket.send_to(&bytes, from).await
     {
-        debug!("Nie wysłano odpowiedzi do {from}: {e}");
+        debug!("Could not answer {from}: {e}");
     }
 }
 
@@ -567,7 +573,7 @@ fn expire(shared: &Shared) {
     }
 }
 
-/// Adresy IPv4 tego urządzenia w sieciach lokalnych wraz z adresem broadcast sieci.
+/// IPv4 addresses of this device on local networks, with each network's broadcast address.
 fn local_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
     let mut networks = platform_networks(engine);
     networks.sort();
@@ -595,13 +601,14 @@ fn platform_networks(_engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> 
     networks
 }
 
+/// Android variant; falls back to a `/24` guess from iroh's addresses when
+/// `getifaddrs` returns nothing.
 #[cfg(target_os = "android")]
 fn platform_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
     let networks = android::interfaces();
     if !networks.is_empty() {
         return networks;
     }
-    // Gdy getifaddrs nic nie zwróci – przybliżenie /24 z adresów wykrytych przez iroh.
     engine
         .endpoint()
         .addr()
@@ -616,33 +623,36 @@ fn platform_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
         .collect()
 }
 
-/// Lista interfejsów na Androidzie. `getifaddrs` z bioniki działa bez dodatkowych
-/// uprawnień (od Androida 11 bez adresów MAC, ale z adresami IP i maskami).
-/// Kompilowane także w testach na Linuksie (glibc ma to samo API), aby je sprawdzić.
+/// Interface listing for Android through `getifaddrs`, which bionic allows
+/// without extra permissions (without MAC addresses since Android 11).
+///
+/// Also compiled in Linux tests, where glibc provides the same API.
 #[cfg(any(target_os = "android", all(test, target_os = "linux")))]
 mod android {
     use std::net::Ipv4Addr;
 
+    /// IPv4 address of every non-loopback interface and its broadcast address;
+    /// point-to-point interfaces (VPN tunnels) have no broadcast address.
     pub fn interfaces() -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
         let mut networks = Vec::new();
         let mut head: *mut libc::ifaddrs = std::ptr::null_mut();
-        // SAFETY: przy sukcesie getifaddrs zwraca listę zwalnianą niżej przez freeifaddrs.
+        // SAFETY: on success getifaddrs returns a list that is freed below with freeifaddrs.
         if unsafe { libc::getifaddrs(&mut head) } != 0 {
             return networks;
         }
         let mut current = head;
         while !current.is_null() {
-            // SAFETY: `current` wskazuje element listy zwróconej przez getifaddrs.
+            // SAFETY: `current` points to an element of the list returned by getifaddrs.
             let ifa = unsafe { &*current };
             current = ifa.ifa_next;
             if ifa.ifa_addr.is_null() || ifa.ifa_netmask.is_null() {
                 continue;
             }
-            // SAFETY: ifa_addr nie jest pusty; rodzina adresu decyduje o typie struktury.
+            // SAFETY: ifa_addr is non-null; its family determines the concrete type.
             if i32::from(unsafe { (*ifa.ifa_addr).sa_family }) != libc::AF_INET {
                 continue;
             }
-            // SAFETY: dla AF_INET adres i maska są typu sockaddr_in.
+            // SAFETY: for AF_INET both the address and the netmask are sockaddr_in.
             let (ip, mask) = unsafe {
                 let ip = &*(ifa.ifa_addr as *const libc::sockaddr_in);
                 let mask = &*(ifa.ifa_netmask as *const libc::sockaddr_in);
@@ -655,7 +665,6 @@ mod android {
             if addr.is_loopback() || addr.is_unspecified() {
                 continue;
             }
-            // Interfejsy punkt-punkt (VPN: tun0, wg0) nie mają adresu broadcast.
             let has_broadcast = ifa.ifa_flags & libc::IFF_BROADCAST as u32 != 0;
             let broadcast = Ipv4Addr::from(ip | !mask);
             networks.push((
@@ -663,7 +672,7 @@ mod android {
                 (has_broadcast && broadcast != addr).then_some(broadcast),
             ));
         }
-        // SAFETY: zwalniamy dokładnie listę zaalokowaną przez getifaddrs.
+        // SAFETY: frees exactly the list allocated by getifaddrs above.
         unsafe { libc::freeifaddrs(head) };
         networks
     }
@@ -684,7 +693,6 @@ mod tests {
         }
     }
 
-    /// Wersja androidowa (getifaddrs) zwraca te same sieci co biblioteka desktopowa.
     #[cfg(target_os = "linux")]
     #[test]
     fn getifaddrs_matches_network_interface() {
@@ -710,15 +718,18 @@ mod tests {
 
     #[test]
     fn finds_by_name_id_and_prefix() {
-        let list = vec![device("Laptop Kasi"), device("Telefon")];
-        assert_eq!(find_in(&list, "laptop kasi").unwrap().name, "Laptop Kasi");
-        assert_eq!(find_in(&list, &list[1].node_id).unwrap().name, "Telefon");
+        let list = vec![device("Kate's Laptop"), device("Phone")];
+        assert_eq!(
+            find_in(&list, "kate's laptop").unwrap().name,
+            "Kate's Laptop"
+        );
+        assert_eq!(find_in(&list, &list[1].node_id).unwrap().name, "Phone");
         assert_eq!(
             find_in(&list, &list[1].node_id[..10]).unwrap().name,
-            "Telefon"
+            "Phone"
         );
         assert!(find_in(&list, &list[1].node_id[..4]).is_none());
-        assert!(find_in(&list, "brak").is_none());
+        assert!(find_in(&list, "missing").is_none());
     }
 
     #[test]

@@ -1,7 +1,10 @@
+//! State and actions of the terminal user interface.
+
 use anyhow::Result;
 #[cfg(not(target_os = "android"))]
 use arboard::Clipboard;
 use iroh::EndpointId;
+use rust_i18n::t;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -10,6 +13,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::config::{Config, PeerInfo};
 use crate::discovery::{Discovery, DiscoveryOptions, NearbyDevice};
+use crate::i18n;
 use crate::node::NodeEngine;
 use crate::pairing::{PairOutcome, PairRequest, clean_device_name, pairing_code, request_pairing};
 use crate::protocol::messages::TransferOffer;
@@ -17,25 +21,34 @@ use crate::transfer::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
 
-/// Czas na decyzję w TUI, po którym oferta jest odrzucana.
+/// Time to answer an offer or pairing request before it is rejected.
 const DECISION_TIMEOUT: Duration = Duration::from_secs(120);
-/// Odświeżanie konfiguracji (zmiany z CLI/GUI na tym komputerze).
+/// How often the configuration is reloaded (changes made by the CLI or GUI).
 const CONFIG_RELOAD: Duration = Duration::from_secs(2);
 
+/// What a [`Pending`] decision is about.
 pub enum PendingKind {
+    /// An incoming file offer.
     File {
+        /// Alias of the sender or a short Node ID.
         peer_label: String,
+        /// Offered file name.
         file_name: String,
+        /// Offered file size in bytes.
         file_size: u64,
     },
+    /// An incoming pairing request.
     Pair {
+        /// Name of the requesting device.
         name: String,
+        /// Verification code to compare.
         code: String,
     },
 }
 
-/// Decyzja oczekująca na [y]/[n] – oferta pliku lub prośba o sparowanie.
+/// A decision waiting for `y`/`n`.
 pub struct Pending {
+    /// Subject of the decision.
     pub kind: PendingKind,
     responder: oneshot::Sender<bool>,
 }
@@ -49,18 +62,23 @@ impl Pending {
     }
 }
 
+/// Messages from background tasks to the UI loop.
 pub enum UiMessage {
+    /// A new decision to show.
     Pending(Pending),
+    /// Progress of a transfer.
     Transfer(TransferEvent),
+    /// The list of nearby devices changed.
     Nearby(Vec<NearbyDevice>),
-    /// Komunikat na pasku stanu.
+    /// Text for the status line.
     Status(String),
-    /// Zmieniła się lista zaufanych urządzeń (np. po parowaniu).
+    /// Trusted devices changed (e.g. after pairing); carries a status text.
     PeersChanged(String),
 }
 
-/// Handler węzła przekazujący oferty, parowanie i postęp do pętli TUI.
+/// [`TransferHandler`] forwarding offers, pairing requests and progress to the UI loop.
 pub struct TuiHandler {
+    /// Channel to the UI loop.
     pub tx: mpsc::UnboundedSender<UiMessage>,
 }
 
@@ -78,8 +96,8 @@ impl TuiHandler {
 }
 
 impl TransferHandler for TuiHandler {
+    /// Reloads the configuration per offer, so a changed download folder applies immediately.
     async fn decide(&self, peer: EndpointId, _: &str, offer: &TransferOffer) -> OfferDecision {
-        // Konfiguracja czytana przy każdej ofercie – zmiana katalogu zapisu działa od razu.
         let config = Config::load().unwrap_or_default();
         let dest_dir = config.download_dir();
         let peer_info = config.find_peer(&peer.to_string());
@@ -89,7 +107,7 @@ impl TransferHandler for TuiHandler {
 
         let peer_label = peer_info
             .map(|p| p.alias.clone())
-            .unwrap_or_else(|| format!("nieznane urządzenie {}", peer.fmt_short()));
+            .unwrap_or_else(|| t!("tui.unknown_device", id = peer.fmt_short()).into_owned());
         let kind = PendingKind::File {
             peer_label,
             file_name: offer.file_name.clone(),
@@ -99,7 +117,7 @@ impl TransferHandler for TuiHandler {
             OfferDecision::Accept { dest_dir }
         } else {
             OfferDecision::Reject {
-                reason: "Użytkownik odrzucił transfer".into(),
+                reason: t!("transfer.user_rejected").into_owned(),
             }
         }
     }
@@ -118,9 +136,9 @@ impl TransferHandler for TuiHandler {
         });
         let ok = saved.is_ok();
         let _ = self.tx.send(UiMessage::PeersChanged(if ok {
-            format!("Sparowano z '{}'", req.name)
+            t!("tui.paired", name = &req.name).into_owned()
         } else {
-            "Błąd zapisu sparowanego urządzenia".to_string()
+            t!("tui.pair_save_failed").into_owned()
         }));
         ok
     }
@@ -130,10 +148,14 @@ impl TransferHandler for TuiHandler {
     }
 }
 
+/// The focused panel.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
+    /// Trusted devices.
     Trusted,
+    /// Devices on the local network.
     Nearby,
+    /// Transfer list.
     Transfers,
 }
 
@@ -147,68 +169,121 @@ impl Focus {
     }
 }
 
+/// Purpose of the text input dialog.
 pub enum InputKind {
-    SendFile { node_id: String, label: String },
-    Rename { node_id: String },
+    /// Paths of files to send to a device.
+    SendFile {
+        /// Receiver's Node ID.
+        node_id: String,
+        /// Receiver's display name.
+        label: String,
+    },
+    /// New alias of a trusted device.
+    Rename {
+        /// Node ID of the device.
+        node_id: String,
+    },
+    /// TICKET or Node ID of a device to add.
     AddDevice,
+    /// New download folder.
     DownloadDir,
+    /// New name of this device.
     DeviceName,
 }
 
 impl InputKind {
-    /// Pola ze ścieżkami mają podpowiadanie klawiszem Tab.
+    /// Whether the field holds paths, enabling `Tab` completion.
     pub fn is_path(&self) -> bool {
         matches!(self, InputKind::SendFile { .. } | InputKind::DownloadDir)
     }
 }
 
+/// An open text input dialog.
 pub struct Input {
+    /// Purpose of the dialog.
     pub kind: InputKind,
+    /// Dialog title.
     pub title: String,
+    /// Explanation shown above the field.
     pub hint: String,
+    /// Current text.
     pub value: String,
+    /// Validation error of the last submit attempt.
     pub error: Option<String>,
 }
 
+/// An open informational dialog.
 pub enum Popup {
+    /// This device's TICKET with a QR code.
     Ticket,
+    /// Keyboard shortcuts.
     Help,
-    ConfirmRemove { node_id: String, alias: String },
+    /// Confirmation of removing a trusted device.
+    ConfirmRemove {
+        /// Node ID of the device.
+        node_id: String,
+        /// Alias shown in the question.
+        alias: String,
+    },
 }
 
+/// A transfer shown in the list, with its smoothed speed.
 pub struct TransferRow {
+    /// Latest state.
     pub ev: TransferEvent,
-    /// Prędkość w B/s (wygładzana).
+    /// Smoothed speed in bytes per second.
     pub speed: f64,
     last_sample: (u64, Instant),
 }
 
+/// The whole TUI state.
 pub struct App {
+    /// The P2P node.
     pub engine: NodeEngine,
+    /// Local network discovery, if it could start.
     pub discovery: Option<Discovery>,
+    /// This device's Node ID.
     pub node_id: String,
+    /// This device's pairing TICKET.
     pub ticket_str: String,
+    /// Status line text.
     pub status_msg: String,
+    /// Current configuration.
     pub config: Config,
-    /// Transfery w kolejności pojawienia się (najnowsze na końcu).
+    /// Transfers in order of appearance (newest last).
     pub transfers: Vec<TransferRow>,
+    /// Decisions waiting for the user (first shown on top).
     pub pending: VecDeque<Pending>,
+    /// Devices on the local network.
     pub nearby: Vec<NearbyDevice>,
+    /// Focused panel.
     pub focus: Focus,
+    /// Selection in the trusted devices panel.
     pub sel_trusted: usize,
+    /// Selection in the nearby devices panel.
     pub sel_nearby: usize,
+    /// Selection in the transfers panel (0 = newest).
     pub sel_transfer: usize,
+    /// Open text input dialog.
     pub input: Option<Input>,
+    /// Open informational dialog.
     pub popup: Option<Popup>,
+    /// Explanation why no nearby devices are visible.
     pub discovery_hint: Option<String>,
     tx: mpsc::UnboundedSender<UiMessage>,
     last_reload: Instant,
-    /// Na Linuksie zawartość schowka znika razem z obiektem – trzymamy go przez cały czas pracy.
+    /// On Linux the clipboard content disappears with this object, so it lives
+    /// as long as the TUI.
     #[cfg(not(target_os = "android"))]
     clipboard: Option<Clipboard>,
 }
 
 impl App {
+    /// Starts the node and discovery and builds the initial state.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the node cannot start.
     pub async fn new(tx: mpsc::UnboundedSender<UiMessage>) -> Result<Self> {
         let config = Config::load().unwrap_or_default();
         let engine = NodeEngine::with_persistent_identity().await?;
@@ -226,7 +301,7 @@ impl App {
             discovery,
             node_id,
             ticket_str,
-            status_msg: "Węzeł gotowy. [?] pomoc, [t] TICKET, [i] dodaj urządzenie.".to_string(),
+            status_msg: t!("tui.ready").into_owned(),
             config,
             transfers: Vec::new(),
             pending: VecDeque::new(),
@@ -245,7 +320,7 @@ impl App {
         })
     }
 
-    /// Zaufane urządzenia posortowane po nazwie (stała kolejność do nawigacji).
+    /// Trusted devices sorted by alias (a stable order for navigation).
     pub fn trusted(&self) -> Vec<(String, PeerInfo)> {
         let mut list: Vec<_> = self
             .config
@@ -257,11 +332,12 @@ impl App {
         list
     }
 
+    /// Whether the device is currently visible on the local network.
     pub fn is_online(&self, node_id: &str) -> bool {
         self.nearby.iter().any(|d| d.node_id == node_id)
     }
 
-    /// Wywoływane w każdej klatce: odświeżenie konfiguracji i diagnostyki wykrywania.
+    /// Called every frame: periodically reloads the configuration and the discovery hint.
     pub fn tick(&mut self) {
         if self.last_reload.elapsed() >= CONFIG_RELOAD {
             self.last_reload = Instant::now();
@@ -270,7 +346,7 @@ impl App {
             }
             self.discovery_hint = match &self.discovery {
                 Some(d) => d.health().hint(),
-                None => Some("Wykrywanie w sieci lokalnej jest niedostępne.".into()),
+                None => Some(t!("tui.discovery_unavailable").into_owned()),
             };
             self.clamp_selection();
         }
@@ -283,12 +359,17 @@ impl App {
         self.sel_transfer = self.sel_transfer.min(max(self.transfers.len()));
     }
 
+    /// Applies a message from a background task.
     pub fn handle_message(&mut self, msg: UiMessage) {
         match msg {
             UiMessage::Pending(p) => {
                 self.status_msg = match &p.kind {
-                    PendingKind::File { file_name, .. } => format!("Nowa oferta: {file_name}"),
-                    PendingKind::Pair { name, .. } => format!("Prośba o sparowanie: {name}"),
+                    PendingKind::File { file_name, .. } => {
+                        t!("tui.new_offer", name = file_name).into_owned()
+                    }
+                    PendingKind::Pair { name, .. } => {
+                        t!("tui.new_pair_request", name = name).into_owned()
+                    }
                 };
                 self.pending.push_back(p);
             }
@@ -332,18 +413,17 @@ impl App {
                     speed: 0.0,
                     ev,
                 });
-                // Nowy transfer na górze listy (lista jest wyświetlana od najnowszego).
                 self.sel_transfer = 0;
             }
         }
     }
 
-    // ---------------- nawigacja ----------------
-
+    /// Moves the focus to the next (or previous) panel.
     pub fn cycle_focus(&mut self, back: bool) {
         self.focus = self.focus.next(back);
     }
 
+    /// Moves the selection in the focused panel, wrapping around.
     pub fn select(&mut self, delta: isize) {
         let (sel, len) = match self.focus {
             Focus::Trusted => (&mut self.sel_trusted, self.config.peers.len()),
@@ -359,24 +439,22 @@ impl App {
         self.trusted().get(self.sel_trusted).cloned()
     }
 
-    /// Transfery wyświetlane są od najnowszego – indeks zaznaczenia liczony od końca.
+    /// The selected transfer; the list is shown newest first.
     pub fn selected_transfer(&self) -> Option<&TransferRow> {
         let len = self.transfers.len();
         (self.sel_transfer < len).then(|| &self.transfers[len - 1 - self.sel_transfer])
     }
 
-    // ---------------- akcje ----------------
-
-    /// Enter / `s` – zależnie od aktywnego panelu.
+    /// `Enter` / `s`: sends a file to the selected device or opens the selected transfer.
     pub fn activate(&mut self) {
         match self.focus {
             Focus::Trusted => match self.selected_trusted() {
                 Some((id, p)) => self.ask_send(id, p.alias),
-                None => self.status_msg = "Brak zaufanych urządzeń – [i] dodaj urządzenie.".into(),
+                None => self.status_msg = t!("tui.no_trusted").into_owned(),
             },
             Focus::Nearby => match self.nearby.get(self.sel_nearby).cloned() {
                 Some(d) => self.ask_send(d.node_id, d.name),
-                None => self.status_msg = "Brak urządzeń w pobliżu.".into(),
+                None => self.status_msg = t!("tui.no_nearby").into_owned(),
             },
             Focus::Transfers => self.open_selected_transfer(false),
         }
@@ -388,8 +466,8 @@ impl App {
                 node_id,
                 label: label.clone(),
             },
-            format!(" Wyślij do: {label} "),
-            "Ścieżka pliku (Tab – podpowiedź, możesz przeciągnąć plik do okna terminala)".into(),
+            format!(" {} ", t!("tui.send_to", name = &label)),
+            t!("tui.send_hint").into_owned(),
             String::new(),
         );
     }
@@ -404,15 +482,17 @@ impl App {
         });
     }
 
+    /// Opens the "add device" dialog.
     pub fn open_add_device(&mut self) {
         self.open_input(
             InputKind::AddDevice,
-            " Dodaj urządzenie ".into(),
-            "Wklej TICKET lub Node ID drugiego urządzenia – wyślemy też prośbę o sparowanie".into(),
+            format!(" {} ", t!("tui.add_title")),
+            t!("tui.add_hint").into_owned(),
             String::new(),
         );
     }
 
+    /// Opens the rename dialog for the selected trusted device.
     pub fn open_rename(&mut self) {
         if self.focus != Focus::Trusted {
             return;
@@ -420,33 +500,48 @@ impl App {
         if let Some((id, p)) = self.selected_trusted() {
             self.open_input(
                 InputKind::Rename { node_id: id },
-                " Zmień nazwę urządzenia ".into(),
-                "Nowa nazwa (alias)".into(),
+                format!(" {} ", t!("tui.rename_title")),
+                t!("tui.rename_hint").into_owned(),
                 p.alias,
             );
         }
     }
 
+    /// Opens the download folder dialog.
     pub fn open_download_dir(&mut self) {
         let current = self.config.download_dir().display().to_string();
         self.open_input(
             InputKind::DownloadDir,
-            " Katalog zapisu odebranych plików ".into(),
-            "Ścieżka katalogu (zostanie utworzony, jeśli nie istnieje)".into(),
+            format!(" {} ", t!("tui.dir_title")),
+            t!("tui.dir_hint").into_owned(),
             current,
         );
     }
 
+    /// Opens the device name dialog.
     pub fn open_device_name(&mut self) {
         let current = self.config.device_name();
         self.open_input(
             InputKind::DeviceName,
-            " Nazwa tego urządzenia ".into(),
-            "Widoczna dla innych w „W pobliżu” i przy parowaniu".into(),
+            format!(" {} ", t!("tui.name_title")),
+            t!("tui.name_hint").into_owned(),
             current,
         );
     }
 
+    /// Switches to the next interface language and saves it.
+    pub fn cycle_language(&mut self) {
+        let language = i18n::current().next();
+        i18n::set_language(language);
+        let result = Config::load().and_then(|mut c| {
+            c.language = Some(language.code().to_string());
+            c.save()?;
+            Ok(t!("tui.language", language = language.native_name()).into_owned())
+        });
+        self.after_config_change(result);
+    }
+
+    /// Toggles Auto-Accept of the selected trusted device.
     pub fn toggle_auto_accept(&mut self) {
         if self.focus != Focus::Trusted {
             return;
@@ -458,23 +553,21 @@ impl App {
             let peer = c
                 .peers
                 .get_mut(&id)
-                .ok_or_else(|| anyhow::anyhow!("Urządzenie zostało usunięte"))?;
+                .ok_or_else(|| anyhow::anyhow!(t!("tui.device_removed")))?;
             peer.auto_accept = !peer.auto_accept;
-            let msg = format!(
-                "Auto-Accept {} dla '{}'",
-                if peer.auto_accept {
-                    "włączony"
-                } else {
-                    "wyłączony"
-                },
-                peer.alias
-            );
+            let msg = if peer.auto_accept {
+                t!("tui.auto_on", alias = &peer.alias)
+            } else {
+                t!("tui.auto_off", alias = &peer.alias)
+            }
+            .into_owned();
             c.save()?;
             Ok(msg)
         });
         self.after_config_change(result);
     }
 
+    /// Asks for confirmation before removing the selected trusted device.
     pub fn ask_remove(&mut self) {
         if self.focus != Focus::Trusted {
             return;
@@ -487,11 +580,12 @@ impl App {
         }
     }
 
+    /// Removes a trusted device after confirmation.
     pub fn confirm_remove(&mut self, node_id: &str) {
         let result = Config::load().and_then(|mut c| {
             let alias = c.peers.remove(node_id).map(|p| p.alias).unwrap_or_default();
             c.save()?;
-            Ok(format!("Usunięto urządzenie '{alias}'"))
+            Ok(t!("tui.removed", alias = alias).into_owned())
         });
         self.after_config_change(result);
     }
@@ -503,19 +597,22 @@ impl App {
                 self.status_msg = msg;
                 self.clamp_selection();
             }
-            Err(e) => self.status_msg = format!("Błąd: {e:#}"),
+            Err(e) => self.status_msg = t!("tui.error", error = format!("{e:#}")).into_owned(),
         }
     }
 
+    /// Announces this device immediately to find others faster.
     pub fn refresh_nearby(&mut self) {
-        if let Some(d) = &self.discovery {
+        self.status_msg = if let Some(d) = &self.discovery {
             d.probe();
-            self.status_msg = "Szukanie urządzeń w sieci lokalnej...".into();
+            t!("tui.searching")
         } else {
-            self.status_msg = "Wykrywanie w sieci lokalnej jest niedostępne.".into();
+            t!("tui.discovery_unavailable")
         }
+        .into_owned();
     }
 
+    /// Removes finished, failed and rejected transfers from the list.
     pub fn clear_finished(&mut self) {
         self.transfers.retain(|t| {
             matches!(
@@ -526,23 +623,23 @@ impl App {
             )
         });
         self.clamp_selection();
-        self.status_msg = "Usunięto zakończone transfery z listy.".into();
+        self.status_msg = t!("tui.cleared").into_owned();
     }
 
-    /// `o`/Enter – otwórz plik, `f` – otwórz folder.
+    /// Opens the selected received file, or its folder when `reveal` is set.
     pub fn open_selected_transfer(&mut self, reveal: bool) {
         let Some(row) = self.selected_transfer() else {
-            self.status_msg = "Brak transferów.".into();
+            self.status_msg = t!("tui.no_transfers").into_owned();
             return;
         };
         let path = match (&row.ev.status, row.ev.direction) {
             (TransferStatus::Completed { path: Some(p) }, Direction::Download) => PathBuf::from(p),
             (_, Direction::Upload) => {
-                self.status_msg = "To plik wysłany – otwierać można pliki odebrane.".into();
+                self.status_msg = t!("tui.open_upload").into_owned();
                 return;
             }
             _ => {
-                self.status_msg = "Plik nie został jeszcze odebrany w całości.".into();
+                self.status_msg = t!("tui.open_incomplete").into_owned();
                 return;
             }
         };
@@ -552,21 +649,22 @@ impl App {
             crate::system::open_path(&path)
         };
         self.status_msg = match result {
-            Ok(()) => format!("Otwarto: {}", path.display()),
-            Err(e) => format!("Nie udało się otworzyć: {e}"),
-        };
+            Ok(()) => t!("tui.opened", path = path.display()),
+            Err(e) => t!("tui.open_failed", error = e),
+        }
+        .into_owned();
     }
 
-    /// Paruje z zaznaczonym urządzeniem „W pobliżu” (w tle – TUI pozostaje responsywne).
+    /// Pairs with the selected nearby device in the background.
     pub fn pair_selected(&mut self) {
         let Some(device) = self.nearby.get(self.sel_nearby).cloned() else {
-            self.status_msg = "Brak urządzeń w pobliżu do sparowania.".into();
+            self.status_msg = t!("tui.no_nearby").into_owned();
             return;
         };
         self.start_pairing(device.id, device.addr, device.name, None);
     }
 
-    /// Parowanie w tle; `keep_alias` – alias nadany ręcznie przy dodawaniu urządzenia.
+    /// Pairs in the background; `keep_alias` keeps an alias chosen when adding the device.
     fn start_pairing(
         &mut self,
         id: EndpointId,
@@ -575,8 +673,7 @@ impl App {
         keep_alias: Option<String>,
     ) {
         let code = pairing_code(&self.engine.node_id(), &id);
-        self.status_msg =
-            format!("Parowanie z '{label}' – kod {code}. Potwierdź na drugim urządzeniu...");
+        self.status_msg = t!("tui.pairing", name = &label, code = code).into_owned();
         let engine = self.engine.clone();
         let my_name = self.config.device_name();
         let tx = self.tx.clone();
@@ -589,17 +686,19 @@ impl App {
                         c.save()
                     });
                     match saved {
-                        Ok(()) => format!("Sparowano obustronnie z '{alias}'"),
-                        Err(e) => format!("Błąd zapisu: {e:#}"),
+                        Ok(()) => t!("tui.paired_mutual", name = &alias),
+                        Err(e) => t!("tui.error", error = format!("{e:#}")),
                     }
                 }
-                Ok(PairOutcome::Rejected) => format!("'{label}' odrzuciło parowanie"),
-                Err(e) => format!("Parowanie z '{label}' nieudane: {e:#}"),
-            };
+                Ok(PairOutcome::Rejected) => t!("tui.pair_rejected", name = &label),
+                Err(e) => t!("tui.pair_failed", name = &label, error = format!("{e:#}")),
+            }
+            .into_owned();
             let _ = tx.send(UiMessage::PeersChanged(status));
         });
     }
 
+    /// Copies this device's TICKET to the clipboard.
     pub fn copy_ticket_to_clipboard(&mut self) {
         #[cfg(not(target_os = "android"))]
         {
@@ -611,32 +710,34 @@ impl App {
                 .as_mut()
                 .is_some_and(|c| c.set_text(&self.ticket_str).is_ok());
             self.status_msg = if copied {
-                "Skopiowano TICKET do schowka (pozostaje dostępny, dopóki działa TUI).".to_string()
+                t!("tui.copied")
             } else {
-                "Schowek niedostępny – [t] pokaże TICKET do zaznaczenia.".to_string()
-            };
+                t!("tui.clipboard_unavailable")
+            }
+            .into_owned();
         }
 
         #[cfg(target_os = "android")]
         {
-            self.status_msg = "Schowek niedostępny w trybie tekstowym na Androidzie.".to_string();
+            self.status_msg = t!("tui.clipboard_unavailable").into_owned();
         }
     }
 
+    /// Answers the first pending decision.
     pub fn answer_pending(&mut self, accept: bool) {
         if let Some(p) = self.pending.pop_front() {
             let label = p.label().to_string();
             let _ = p.responder.send(accept);
             self.status_msg = if accept {
-                format!("Zaakceptowano: {label}")
+                t!("tui.accepted", name = label)
             } else {
-                format!("Odrzucono: {label}")
-            };
+                t!("tui.declined", name = label)
+            }
+            .into_owned();
         }
     }
 
-    // ---------------- pole tekstowe ----------------
-
+    /// `Tab` in a path field: completes the path.
     pub fn input_complete(&mut self) {
         if let Some(input) = self.input.as_mut()
             && input.kind.is_path()
@@ -647,6 +748,7 @@ impl App {
         }
     }
 
+    /// `Enter` in the input dialog; on a validation error the dialog stays open.
     pub fn submit_input(&mut self) {
         let Some(input) = self.input.take() else {
             return;
@@ -660,7 +762,6 @@ impl App {
             InputKind::DeviceName => self.submit_device_name(&value),
         };
         if let Err(error) = result {
-            // Pole zostaje otwarte z komunikatem błędu.
             self.input = Some(Input {
                 error: Some(error),
                 ..input
@@ -671,10 +772,10 @@ impl App {
     fn submit_send(&mut self, node_id: &str, label: &str, value: &str) -> Result<(), String> {
         let paths = parse_paths(value);
         if paths.is_empty() {
-            return Err("Podaj ścieżkę pliku".into());
+            return Err(t!("tui.path_required").into_owned());
         }
         if let Some(bad) = paths.iter().find(|p| !p.is_file()) {
-            return Err(format!("To nie jest plik: {}", bad.display()));
+            return Err(t!("tui.not_a_file", path = bad.display()).into_owned());
         }
         let fallback = self.config.resolve_target(node_id);
         let nearby = self.discovery.as_ref().and_then(|d| {
@@ -686,8 +787,7 @@ impl App {
         let tx = self.tx.clone();
         let node_id = node_id.to_string();
         let label = label.to_string();
-        let count = paths.len();
-        self.status_msg = format!("Wysyłanie {count} plik(ów) do '{label}'...");
+        self.status_msg = t!("tui.sending", count = paths.len(), name = &label).into_owned();
         tokio::spawn(async move {
             let addr = match (nearby, fallback) {
                 (Some(addr), _) => addr,
@@ -695,7 +795,7 @@ impl App {
                 (None, Err(_)) => match iroh::EndpointId::from_str(&node_id) {
                     Ok(id) => id.into(),
                     Err(e) => {
-                        let _ = tx.send(UiMessage::Status(format!("Błąd adresu: {e}")));
+                        let _ = tx.send(UiMessage::Status(t!("tui.error", error = e).into_owned()));
                         return;
                     }
                 },
@@ -705,9 +805,10 @@ impl App {
                 let _ = sink_tx.send(UiMessage::Transfer(ev));
             };
             let status = match service::send_files(&engine, addr, &paths, &sink).await {
-                Ok(()) => format!("Wysłano do '{label}'"),
-                Err(e) => format!("Wysyłka do '{label}': {e:#}"),
-            };
+                Ok(()) => t!("tui.sent", name = &label),
+                Err(e) => t!("tui.send_failed", name = &label, error = format!("{e:#}")),
+            }
+            .into_owned();
             let _ = tx.send(UiMessage::Status(status));
         });
         self.focus = Focus::Transfers;
@@ -717,31 +818,33 @@ impl App {
     fn submit_rename(&mut self, node_id: &str, value: &str) -> Result<(), String> {
         let alias = clean_device_name(value);
         if alias.is_empty() {
-            return Err("Nazwa nie może być pusta".into());
+            return Err(t!("settings.name_empty").into_owned());
         }
         let result = Config::load().and_then(|mut c| {
             let peer = c
                 .peers
                 .get_mut(node_id)
-                .ok_or_else(|| anyhow::anyhow!("Urządzenie zostało usunięte"))?;
+                .ok_or_else(|| anyhow::anyhow!(t!("tui.device_removed")))?;
             peer.alias = alias.clone();
             c.save()?;
-            Ok(format!("Zmieniono nazwę na '{alias}'"))
+            Ok(t!("tui.renamed", alias = &alias).into_owned())
         });
         self.after_config_change(result);
         Ok(())
     }
 
+    /// Adds the device and sends it a pairing request, so that after confirmation
+    /// the other side trusts this device too.
     fn submit_add_device(&mut self, value: &str) -> Result<(), String> {
         if value.is_empty() {
-            return Err("Wklej TICKET lub Node ID".into());
+            return Err(t!("tui.add_required").into_owned());
         }
         let mut config = Config::load().map_err(|e| e.to_string())?;
         let node_id = config
             .add_from_input(value, "", false)
             .map_err(|e| format!("{e:#}"))?;
         if node_id == self.node_id {
-            return Err("To jest TICKET tego urządzenia".into());
+            return Err(t!("tui.own_ticket").into_owned());
         }
         config.save().map_err(|e| e.to_string())?;
         let alias = config
@@ -756,7 +859,6 @@ impl App {
             .unwrap_or(addr);
         self.config = config;
         self.focus = Focus::Trusted;
-        // Prośba o sparowanie – po akceptacji druga strona też doda to urządzenie.
         self.start_pairing(addr.id, addr, alias.clone(), Some(alias));
         Ok(())
     }
@@ -764,13 +866,14 @@ impl App {
     fn submit_download_dir(&mut self, value: &str) -> Result<(), String> {
         let dir = expand_path(value);
         if dir.as_os_str().is_empty() {
-            return Err("Podaj ścieżkę katalogu".into());
+            return Err(t!("tui.dir_required").into_owned());
         }
-        std::fs::create_dir_all(&dir).map_err(|e| format!("Nie można utworzyć katalogu: {e}"))?;
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| t!("tui.dir_create_failed", error = e).into_owned())?;
         let result = Config::load().and_then(|mut c| {
             c.default_download_dir = Some(dir.clone());
             c.save()?;
-            Ok(format!("Pliki będą zapisywane w {}", dir.display()))
+            Ok(t!("tui.dir_changed", path = dir.display()).into_owned())
         });
         self.after_config_change(result);
         Ok(())
@@ -779,12 +882,12 @@ impl App {
     fn submit_device_name(&mut self, value: &str) -> Result<(), String> {
         let name = clean_device_name(value);
         if name.is_empty() {
-            return Err("Nazwa nie może być pusta".into());
+            return Err(t!("settings.name_empty").into_owned());
         }
         let result = Config::load().and_then(|mut c| {
             c.device_name = Some(name.clone());
             c.save()?;
-            Ok(format!("Nazwa urządzenia: {name}"))
+            Ok(t!("settings.name", name = &name).into_owned())
         });
         if let Some(d) = &self.discovery {
             d.set_name(&name);
@@ -794,7 +897,7 @@ impl App {
     }
 }
 
-/// `~` → katalog domowy, `file://` i cudzysłowy usunięte.
+/// Expands `~`, strips quotes and a `file://` prefix and decodes `%XX` escapes.
 fn expand_path(raw: &str) -> PathBuf {
     let raw = raw.trim().trim_matches(|c| c == '"' || c == '\'');
     let raw = raw.strip_prefix("file://").unwrap_or(raw);
@@ -812,7 +915,7 @@ fn expand_path(raw: &str) -> PathBuf {
     PathBuf::from(decoded)
 }
 
-/// Minimalne dekodowanie `%20` itp. (ścieżki `file://` z menedżerów plików).
+/// Minimal `%XX` decoding for `file://` paths pasted from file managers.
 fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -833,7 +936,8 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Jedna ścieżka lub kilka (np. przeciągnięte do terminala: z cudzysłowami lub `\ `).
+/// Parses one path or several (e.g. files dragged into a terminal, quoted or
+/// escaped with `\ `).
 pub fn parse_paths(raw: &str) -> Vec<PathBuf> {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -846,7 +950,7 @@ pub fn parse_paths(raw: &str) -> Vec<PathBuf> {
     shell_split(raw).iter().map(|p| expand_path(p)).collect()
 }
 
-/// Podział jak w powłoce: spacje rozdzielają, cudzysłowy grupują, `\` escapuje znak.
+/// Splits like a shell: whitespace separates, quotes group, `\` escapes a character.
 fn shell_split(raw: &str) -> Vec<String> {
     let mut parts = Vec::new();
     let mut current = String::new();
@@ -875,7 +979,8 @@ fn shell_split(raw: &str) -> Vec<String> {
     parts
 }
 
-/// Podpowiedź ścieżki (Tab): jedno dopasowanie – pełna nazwa, kilka – wspólny prefiks.
+/// Path completion: a single match is completed fully, several matches to
+/// their common prefix.
 fn complete_path(value: &str) -> Option<String> {
     let (dir_part, prefix) = match value.rfind('/') {
         Some(i) => (&value[..=i], &value[i + 1..]),
@@ -921,7 +1026,7 @@ fn complete_path(value: &str) -> Option<String> {
     }
 }
 
-/// Czy ścieżka jest pod katalogiem domowym – do skróconego wyświetlania (`~/...`).
+/// Shortens paths inside the home folder to `~/…` for display.
 pub fn display_path(path: &Path) -> String {
     match dirs::home_dir().and_then(|h| path.strip_prefix(&h).ok().map(Path::to_path_buf)) {
         Some(rest) => format!("~/{}", rest.display()),
@@ -944,27 +1049,27 @@ mod tests {
     #[test]
     fn expands_file_urls_and_quotes() {
         assert_eq!(
-            expand_path("'file:///tmp/moje%20zdj%C4%99cie.jpg'"),
-            PathBuf::from("/tmp/moje zdjęcie.jpg")
+            expand_path("'file:///tmp/my%20ph%C3%B6to.jpg'"),
+            PathBuf::from("/tmp/my phöto.jpg")
         );
     }
 
     #[test]
     fn completes_paths() -> std::io::Result<()> {
         let dir = tempfile::tempdir()?;
-        std::fs::write(dir.path().join("raport-2026.pdf"), b"x")?;
-        std::fs::write(dir.path().join("raport-2025.pdf"), b"x")?;
-        std::fs::create_dir(dir.path().join("zdjecia"))?;
+        std::fs::write(dir.path().join("report-2026.pdf"), b"x")?;
+        std::fs::write(dir.path().join("report-2025.pdf"), b"x")?;
+        std::fs::create_dir(dir.path().join("photos"))?;
         let base = format!("{}/", dir.path().display());
         assert_eq!(
-            complete_path(&format!("{base}rap")),
-            Some(format!("{base}raport-202"))
+            complete_path(&format!("{base}rep")),
+            Some(format!("{base}report-202"))
         );
         assert_eq!(
-            complete_path(&format!("{base}zd")),
-            Some(format!("{base}zdjecia/"))
+            complete_path(&format!("{base}ph")),
+            Some(format!("{base}photos/"))
         );
-        assert_eq!(complete_path(&format!("{base}brak")), None);
+        assert_eq!(complete_path(&format!("{base}missing")), None);
         Ok(())
     }
 }

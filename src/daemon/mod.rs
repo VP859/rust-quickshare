@@ -1,10 +1,18 @@
+//! `rqs daemon`: receiving files in the background.
+//!
+//! Trusted devices with Auto-Accept are accepted automatically. Other offers
+//! and pairing requests are confirmed in the console when one is attached, and
+//! rejected otherwise (e.g. when running as a system service).
+
 use anyhow::Result;
 use iroh::EndpointId;
+use rust_i18n::t;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{info, warn};
 
+use crate::cli::display::human_size;
 use crate::config::Config;
 use crate::discovery::{Discovery, DiscoveryOptions};
 use crate::node::NodeEngine;
@@ -14,12 +22,10 @@ use crate::transfer::service::{
     self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
 
-/// Demon: zaufane urządzenia z Auto-Accept są przyjmowane automatycznie; pozostałe –
-/// po potwierdzeniu w konsoli (jeśli jest terminal) lub odrzucane (usługa systemowa).
 struct DaemonHandler {
     downloads_dir: Option<PathBuf>,
     interactive: bool,
-    /// Serializuje pytania w konsoli przy równoległych ofertach.
+    /// Serializes console questions when offers arrive concurrently.
     prompt_lock: tokio::sync::Mutex<()>,
 }
 
@@ -39,10 +45,11 @@ impl DaemonHandler {
 }
 
 impl TransferHandler for DaemonHandler {
+    /// Reloads the configuration for every offer, so `rqs peer` changes apply
+    /// without a restart.
     async fn decide(&self, peer: EndpointId, _: &str, offer: &TransferOffer) -> OfferDecision {
-        // Konfiguracja czytana przy każdej ofercie – zmiany z `rqs peer` działają bez restartu.
         let config = Config::load().unwrap_or_else(|e| {
-            warn!("Nie udało się wczytać konfiguracji: {e:#}");
+            warn!("Could not load the configuration: {e:#}");
             Config::default()
         });
         let dest_dir = self
@@ -51,47 +58,50 @@ impl TransferHandler for DaemonHandler {
             .unwrap_or_else(|| config.download_dir());
         let peer_info = config.find_peer(&peer.to_string());
         let alias = peer_info
-            .map(|p| p.alias.as_str())
-            .unwrap_or("Nieznane Urządzenie");
+            .map(|p| p.alias.clone())
+            .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
 
         if peer_info.is_some_and(|p| p.auto_accept) {
-            info!("Auto-Accept: '{}' od '{}'", offer.file_name, alias);
+            info!("Auto-Accept: '{}' from '{alias}'", offer.file_name);
             return OfferDecision::Accept { dest_dir };
         }
         if !self.interactive {
             return OfferDecision::Reject {
-                reason: format!("Urządzenie {alias} nie ma włączonego Auto-Accept"),
+                reason: t!("daemon.no_auto_accept", alias = &alias).into_owned(),
             };
         }
 
-        let question = format!(
-            "\n[OFERTA] '{}' ({}) od '{}' ({}). Odebrać?",
-            offer.file_name,
-            crate::cli::display::human_size(offer.file_size),
-            alias,
-            peer
+        let question = t!(
+            "daemon.offer",
+            name = &offer.file_name,
+            size = human_size(offer.file_size),
+            alias = &alias,
+            id = peer
         );
-        if self.ask_user(question).await {
+        if self.ask_user(format!("\n{question}")).await {
             OfferDecision::Accept { dest_dir }
         } else {
             OfferDecision::Reject {
-                reason: "Użytkownik odrzucił transfer".into(),
+                reason: t!("transfer.user_rejected").into_owned(),
             }
         }
     }
 
     async fn confirm_pair(&self, req: PairRequest) -> bool {
         if !self.interactive {
-            info!("Odrzucono parowanie z '{}' – demon bez terminala", req.name);
+            info!(
+                "Rejected pairing with '{}': daemon has no terminal",
+                req.name
+            );
             return false;
         }
-        let question = format!(
-            "\n[PAROWANIE] '{}' ({}) chce się sparować.\nKod weryfikacyjny: {} – czy jest taki sam na drugim urządzeniu?",
-            req.name,
-            req.peer.fmt_short(),
-            req.code
+        let question = t!(
+            "daemon.pair",
+            name = &req.name,
+            id = req.peer.fmt_short(),
+            code = &req.code
         );
-        if !self.ask_user(question).await {
+        if !self.ask_user(format!("\n{question}")).await {
             return false;
         }
         let saved = Config::load().and_then(|mut c| {
@@ -100,11 +110,11 @@ impl TransferHandler for DaemonHandler {
         });
         match saved {
             Ok(()) => {
-                info!("Sparowano z '{}'", req.name);
+                info!("Paired with '{}'", req.name);
                 true
             }
             Err(e) => {
-                warn!("Nie udało się zapisać sparowanego urządzenia: {e:#}");
+                warn!("Could not save the paired device: {e:#}");
                 false
             }
         }
@@ -113,32 +123,44 @@ impl TransferHandler for DaemonHandler {
     fn on_event(&self, ev: TransferEvent) {
         match ev.status {
             TransferStatus::Completed { path } => info!(
-                "[SUKCES] '{}' od {} → {}",
+                "Received '{}' from {} → {}",
                 ev.file_name,
                 ev.peer,
                 path.unwrap_or_default()
             ),
-            TransferStatus::Failed { error } => warn!("[BŁĄD] '{}': {error}", ev.file_name),
+            TransferStatus::Failed { error } => {
+                warn!("Transfer of '{}' failed: {error}", ev.file_name)
+            }
             TransferStatus::Rejected { reason } => {
-                info!("[ODRZUCONO] '{}' od {}: {reason}", ev.file_name, ev.peer)
+                info!("Rejected '{}' from {}: {reason}", ev.file_name, ev.peer)
             }
             _ => {}
         }
     }
 }
 
+/// Runs the daemon until Ctrl+C: announces the device on the local network and
+/// accepts incoming transfers and pairing requests.
+///
+/// `downloads_dir` overrides the configured download folder.
+///
+/// # Errors
+///
+/// Fails when the node cannot start.
 pub async fn run_daemon(downloads_dir: Option<PathBuf>) -> Result<()> {
     let engine = NodeEngine::with_persistent_identity().await?;
     let ticket_str = engine.ticket().await?.serialize_to_string()?;
+    let config = Config::load().unwrap_or_default();
     let target = downloads_dir
         .clone()
-        .unwrap_or_else(|| Config::load().unwrap_or_default().download_dir());
+        .unwrap_or_else(|| config.download_dir());
 
     println!("==================================================================");
-    println!(" DEMON RQS URUCHOMIONY");
-    println!(" Twój Node ID: {}", engine.node_id());
-    println!(" Twój TICKET : {}", ticket_str);
-    println!(" Katalog pobierania: {:?}", target);
+    println!(" {}", t!("daemon.started"));
+    println!(" Node ID : {}", engine.node_id());
+    println!(" TICKET  : {ticket_str}");
+    println!(" {}", t!("daemon.folder", path = target.display()));
+    println!(" {}", t!("daemon.name", name = config.device_name()));
     println!("==================================================================\n");
 
     let handler = Arc::new(DaemonHandler {
@@ -147,20 +169,17 @@ pub async fn run_daemon(downloads_dir: Option<PathBuf>) -> Result<()> {
         prompt_lock: tokio::sync::Mutex::new(()),
     });
 
-    // Ogłaszanie w sieci lokalnej – inne urządzenia widzą demona i mogą się sparować.
-    let config = Config::load().unwrap_or_default();
     let _discovery = Discovery::start(
         engine.clone(),
         &config.device_name(),
         DiscoveryOptions::default(),
     )
-    .inspect_err(|e| warn!("Wykrywanie w sieci lokalnej wyłączone: {e:#}"))
+    .inspect_err(|e| warn!("Local network discovery disabled: {e:#}"))
     .ok();
-    println!(" Nazwa w sieci: {}\n", config.device_name());
 
     tokio::select! {
         _ = service::serve(engine.clone(), handler) => {}
-        _ = tokio::signal::ctrl_c() => info!("Otrzymano sygnał zakończenia"),
+        _ = tokio::signal::ctrl_c() => info!("Shutdown signal received"),
     }
     engine.close().await;
     Ok(())

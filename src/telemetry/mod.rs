@@ -1,1 +1,3 @@
+//! Diagnostics.
+
 pub mod doctor;

@@ -35,7 +35,7 @@ jobs:
       with:
         components: rustfmt, clippy
 
-    # Crate GUI (src-tauri) wymaga WebKitGTK i pozostałych bibliotek Tauri.
+    # The GUI crate (src-tauri) needs WebKitGTK and the other Tauri libraries.
     - name: Install Linux build dependencies
       run: |
         sudo apt-get update
