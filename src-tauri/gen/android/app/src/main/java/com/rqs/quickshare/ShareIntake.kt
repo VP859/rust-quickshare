@@ -38,11 +38,18 @@ object ShareIntake {
     return uris.distinct()
   }
 
-  /** Returns the text of an `ACTION_SEND` intent without attachments (e.g. a link from a browser). */
+  /**
+   * Returns the text of an `ACTION_SEND` intent that shares text (e.g. a link from a browser).
+   *
+   * Browsers such as Chrome attach a page thumbnail or favicon in `clipData` as a preview for
+   * the share sheet, so for a text share (a `text` MIME type) the text wins over any attached image.
+   */
   fun extractText(intent: Intent?): String? {
     if (intent?.action != Intent.ACTION_SEND) return null
-    if (IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) != null) return null
-    return intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }
+    val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() } ?: return null
+    val isTextShare = intent.type?.startsWith("text/") == true
+    val hasStream = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) != null
+    return text.takeIf { isTextShare || !hasStream }
   }
 
   /** Stores a shared text for the frontend, replacing a previous one that was not picked up. */

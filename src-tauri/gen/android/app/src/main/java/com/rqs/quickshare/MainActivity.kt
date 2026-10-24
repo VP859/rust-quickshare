@@ -52,13 +52,14 @@ class MainActivity : TauriActivity() {
 
   /** Takes files or a text from `ACTION_SEND` / `ACTION_SEND_MULTIPLE` and notifies the frontend. */
   private fun handleShareIntent(intent: Intent?) {
-    val uris = ShareIntake.extractUris(intent)
-    if (uris.isEmpty()) {
-      val text = ShareIntake.extractText(intent) ?: return
+    val text = ShareIntake.extractText(intent)
+    if (text != null) {
       ShareIntake.storeText(this, text)
       notifyShare()
       return
     }
+    val uris = ShareIntake.extractUris(intent)
+    if (uris.isEmpty()) return
     Thread {
       if (ShareIntake.copyToCache(this, uris) > 0) runOnUiThread { notifyShare() }
     }.start()
