@@ -370,6 +370,22 @@ fn render_pending(f: &mut Frame, app: &App) {
                 ),
             ],
         ),
+        PendingKind::Text {
+            peer_label,
+            preview,
+        } => (
+            format!(" {}{queue} ", t!("tui.text_title")),
+            vec![
+                Line::raw(t!("tui.text_from", from = peer_label).into_owned()),
+                Line::raw(""),
+                Line::styled(preview.clone(), Style::default().fg(Color::Cyan)),
+                Line::raw(""),
+                Line::styled(
+                    t!("tui.text_keys").into_owned(),
+                    Style::default().fg(Color::Yellow),
+                ),
+            ],
+        ),
         PendingKind::Pair { name, code } => (
             format!(" {}{queue} ", t!("tui.pair_title")),
             vec![
@@ -390,7 +406,11 @@ fn render_pending(f: &mut Frame, app: &App) {
             ],
         ),
     };
-    let area = centered(f.area(), 64, lines.len() as u16 + 2);
+    let wrapped = match &p.kind {
+        PendingKind::Text { preview, .. } => preview.chars().count() as u16 / 60,
+        _ => 0,
+    };
+    let area = centered(f.area(), 64, lines.len() as u16 + 2 + wrapped);
     f.render_widget(Clear, area);
     f.render_widget(
         Paragraph::new(lines)
@@ -532,6 +552,7 @@ fn render_help(f: &mut Frame) {
         ("Tab / 1 2 3", t!("tui.help_panels")),
         ("↑ ↓", t!("tui.help_select")),
         ("Enter / s", t!("tui.help_send")),
+        ("T", t!("tui.help_text")),
         ("p", t!("tui.help_pair")),
         ("i / +", t!("tui.help_add")),
         ("e / a / x", t!("tui.help_manage")),

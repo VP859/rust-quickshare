@@ -7,7 +7,8 @@ use rqs_p2p::node::{NodeEngine, NodeTicket, load_or_generate_secret_key};
 use rqs_p2p::pairing::{PairOutcome, PairRequest, pairing_code, request_pairing};
 use rqs_p2p::protocol::codec::{read_msg, write_msg};
 use rqs_p2p::protocol::messages::{
-    DEFAULT_CHUNK_SIZE, Hello, ShareToken, TransferDecision, TransferOffer,
+    DEFAULT_CHUNK_SIZE, Hello, MAX_TEXT_LEN, ShareToken, TextDecision, TransferDecision,
+    TransferOffer,
 };
 use rqs_p2p::transfer::Channel;
 use rqs_p2p::transfer::receiver::part_path_for;
@@ -29,6 +30,7 @@ struct TestHandler {
     share: Option<(ShareToken, PreparedFile)>,
     events: Mutex<Vec<TransferEvent>>,
     pair_requests: Mutex<Vec<PairRequest>>,
+    texts: Mutex<Vec<String>>,
 }
 
 impl TestHandler {
@@ -39,6 +41,7 @@ impl TestHandler {
             share: None,
             events: Mutex::new(Vec::new()),
             pair_requests: Mutex::new(Vec::new()),
+            texts: Mutex::new(Vec::new()),
         }
     }
 
@@ -83,6 +86,17 @@ impl TransferHandler for TestHandler {
     async fn confirm_pair(&self, request: PairRequest) -> bool {
         self.pair_requests.lock().unwrap().push(request);
         self.accept
+    }
+
+    async fn receive_text(&self, _: EndpointId, text: String) -> TextDecision {
+        self.texts.lock().unwrap().push(text);
+        if self.accept {
+            TextDecision::Accepted
+        } else {
+            TextDecision::Rejected {
+                reason: "test".into(),
+            }
+        }
     }
 }
 
@@ -396,6 +410,60 @@ async fn pairing_with_one_button_accept_and_reject() -> Result<()> {
         Ok(())
     })
     .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn text_is_delivered_or_declined() -> Result<()> {
+    with_timeout(async {
+        let dir = tempdir()?;
+        let link = "https://example.org/path?q=1\nsecond line";
+        for accept in [true, false] {
+            let handler = Arc::new(TestHandler::new(accept, dir.path()));
+            let (_rx, addr) = start_receiver(handler.clone()).await?;
+            let sender = engine().await?;
+            let decision = service::send_text(&sender, addr, link).await?;
+            assert_eq!(handler.texts.lock().unwrap().as_slice(), [link]);
+            assert_eq!(decision == TextDecision::Accepted, accept);
+        }
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn oversized_text_is_refused_on_both_sides() -> Result<()> {
+    with_timeout(async {
+        let dir = tempdir()?;
+        let handler = Arc::new(TestHandler::new(true, dir.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        let too_long = "x".repeat(MAX_TEXT_LEN + 1);
+
+        assert!(
+            service::send_text(&sender, addr.clone(), &too_long)
+                .await
+                .is_err()
+        );
+        assert!(
+            service::send_text(&sender, addr.clone(), "  ")
+                .await
+                .is_err()
+        );
+
+        let conn = sender.connect(addr).await?;
+        let mut channel = Channel::open(&conn, &Hello::Text { text: too_long }).await?;
+        let decision: TextDecision = read_msg(&mut channel.recv).await?;
+        assert!(matches!(decision, TextDecision::Rejected { .. }));
+        assert!(handler.texts.lock().unwrap().is_empty());
+        Ok(())
+    })
+    .await
+}
+
+#[test]
+fn text_preview_is_single_line_and_short() {
+    assert_eq!(service::text_preview("a\n\tb   c\u{7}d", 50), "a b c d");
+    assert_eq!(service::text_preview("abcdef", 4), "abc…");
 }
 
 fn free_udp_port() -> Result<u16> {

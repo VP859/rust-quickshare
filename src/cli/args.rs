@@ -29,6 +29,14 @@ pub enum Commands {
         #[arg(short, long)]
         to: Option<String>,
     },
+    /// Send text or a link; the receiver copies it to the clipboard after accepting.
+    Text {
+        /// Text to send (default: read from standard input).
+        text: Option<String>,
+        /// Alias, nearby device name, Node ID or TICKET of the receiver.
+        #[arg(short, long)]
+        to: String,
+    },
     /// Download a file shared by TICKET.
     Receive {
         /// Share TICKET printed by `rqs send` or shown by the GUI.

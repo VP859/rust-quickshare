@@ -187,6 +187,7 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Char('2') => app.focus = Focus::Nearby,
         KeyCode::Char('3') => app.focus = Focus::Transfers,
         KeyCode::Enter | KeyCode::Char('s') => app.activate(),
+        KeyCode::Char('T') => app.ask_send_text(),
         KeyCode::Char('o') => app.open_selected_transfer(false),
         KeyCode::Char('f') => app.open_selected_transfer(true),
         KeyCode::Char('C') => app.clear_finished(),

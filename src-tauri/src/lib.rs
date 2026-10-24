@@ -118,6 +118,9 @@ pub fn run() {
             discovery_health,
             set_download_dir,
             take_shared_files,
+            take_shared_text,
+            send_text,
+            open_link,
             app_info,
             open_repository,
         ])

@@ -9,11 +9,12 @@ import androidx.core.content.IntentCompat
 import java.io.File
 
 /**
- * Receives files shared to the app through the system "Share" menu.
+ * Receives files, texts and links shared to the app through the system "Share" menu.
  *
  * `content://` URIs have no path on disk, so their contents are copied into
  * `cacheDir/share-in/` and the resulting paths are appended to `pending.txt`,
- * which the Rust backend reads with the `take_shared_files` command.
+ * which the Rust backend reads with the `take_shared_files` command. A shared
+ * text is stored in `pending-text.txt` and read with `take_shared_text`.
  */
 object ShareIntake {
   private const val TAG = "RqsShare"
@@ -35,6 +36,19 @@ object ShareIntake {
       for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let(uris::add)
     }
     return uris.distinct()
+  }
+
+  /** Returns the text of an `ACTION_SEND` intent without attachments (e.g. a link from a browser). */
+  fun extractText(intent: Intent?): String? {
+    if (intent?.action != Intent.ACTION_SEND) return null
+    if (IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java) != null) return null
+    return intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }
+  }
+
+  /** Stores a shared text for the frontend, replacing a previous one that was not picked up. */
+  fun storeText(context: Context, text: String) {
+    val dir = File(context.cacheDir, "share-in").apply { mkdirs() }
+    synchronized(lock) { File(dir, "pending-text.txt").writeText(text) }
   }
 
   /**

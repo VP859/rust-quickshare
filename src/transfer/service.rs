@@ -1,11 +1,13 @@
 //! Node service shared by every user interface (daemon, TUI, GUI).
 //!
 //! [`serve`] accepts connections and dispatches incoming control streams:
-//! file offers, downloads of files shared by TICKET and pairing requests.
-//! [`send_files`] and [`pull_shared`] are the outgoing counterparts.
+//! file offers, downloads of files shared by TICKET, pairing requests and
+//! texts for the clipboard. [`send_files`], [`pull_shared`] and [`send_text`]
+//! are the outgoing counterparts.
 //!
 //! An interface only implements [`TransferHandler`] (decisions, shared files,
-//! pairing confirmation) and renders the [`TransferEvent`]s it receives.
+//! pairing confirmation, received texts) and renders the [`TransferEvent`]s it
+//! receives.
 
 use anyhow::{Context, Result};
 use iroh::EndpointId;
@@ -15,6 +17,7 @@ use serde::Serialize;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::{debug, info, warn};
 
 use super::Channel;
@@ -22,11 +25,15 @@ use super::receiver::{read_offer, receive_on_channel, reject};
 use super::sender::{PreparedFile, SendOutcome, prepare_file, push_file, send_on_channel};
 use crate::node::{NodeEngine, NodeTicket};
 use crate::pairing::{PAIR_DECISION_TIMEOUT, PairRequest, clean_device_name, pairing_code};
-use crate::protocol::codec::write_msg;
-use crate::protocol::messages::{Hello, PairResponse, ShareToken, TransferOffer};
+use crate::protocol::codec::{read_msg, write_msg};
+use crate::protocol::messages::{
+    Hello, MAX_TEXT_LEN, PairResponse, ShareToken, TextDecision, TransferOffer,
+};
 
 /// Application close code sent when a download asks for an unknown share token.
 const CLOSE_UNKNOWN_SHARE: u32 = 2;
+/// Upper bound for a handler to decide about a received text.
+const TEXT_DECISION_TIMEOUT: Duration = Duration::from_secs(150);
 
 /// Direction of a transfer as seen from this device.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -135,6 +142,23 @@ pub trait TransferHandler: Send + Sync + 'static {
     fn confirm_pair(&self, _request: PairRequest) -> impl Future<Output = bool> + Send {
         async { false }
     }
+
+    /// Handles a text sent by `peer` (at most [`MAX_TEXT_LEN`] bytes).
+    ///
+    /// Implementations accept it automatically for Auto-Accept devices or ask
+    /// the user, and on acceptance copy it to the clipboard. The default
+    /// declines every text.
+    fn receive_text(
+        &self,
+        _peer: EndpointId,
+        _text: String,
+    ) -> impl Future<Output = TextDecision> + Send {
+        async {
+            TextDecision::Rejected {
+                reason: t!("service.text_unsupported").into_owned(),
+            }
+        }
+    }
 }
 
 /// Emits the successive states of a single transfer.
@@ -237,6 +261,7 @@ async fn handle_connection<H: TransferHandler>(
             Hello::Pair { name, addr } => {
                 handle_pair(engine, &conn, channel, &name, addr, handler.as_ref()).await
             }
+            Hello::Text { text } => handle_text(&conn, channel, text, handler.as_ref()).await,
         };
         if let Err(e) = result {
             warn!("Transfer from {} failed: {e:#}", conn.remote_id());
@@ -333,6 +358,30 @@ async fn handle_pair<H: TransferHandler>(
     Ok(())
 }
 
+async fn handle_text<H: TransferHandler>(
+    conn: &Connection,
+    mut channel: Channel,
+    text: String,
+    handler: &H,
+) -> Result<()> {
+    let peer = conn.remote_id();
+    let decision = if text.is_empty() || text.len() > MAX_TEXT_LEN {
+        TextDecision::Rejected {
+            reason: t!("service.text_too_long", max = MAX_TEXT_LEN).into_owned(),
+        }
+    } else {
+        info!("Text ({} bytes) from {peer}", text.len());
+        tokio::time::timeout(TEXT_DECISION_TIMEOUT, handler.receive_text(peer, text))
+            .await
+            .unwrap_or_else(|_| TextDecision::Rejected {
+                reason: t!("transfer.user_rejected").into_owned(),
+            })
+    };
+    write_msg(&mut channel.send, &decision).await?;
+    channel.finish().await;
+    Ok(())
+}
+
 fn report_send(tracker: &Tracker<'_>, result: Result<SendOutcome>) -> Result<()> {
     match result {
         Ok(SendOutcome::Rejected(reason)) => {
@@ -420,6 +469,57 @@ pub async fn pull_shared(
     tracker.finish(&result, |p| Some(p.display().to_string()));
     conn.close(0u32.into(), b"done");
     result
+}
+
+/// Sends a text (e.g. a link) that the other device copies to its clipboard
+/// once accepted; waits for the decision.
+///
+/// # Errors
+///
+/// Fails when the text is empty or longer than [`MAX_TEXT_LEN`], the device
+/// cannot be reached or does not answer (e.g. an older version without text
+/// support).
+pub async fn send_text(
+    engine: &NodeEngine,
+    target: iroh::EndpointAddr,
+    text: &str,
+) -> Result<TextDecision> {
+    if text.trim().is_empty() {
+        anyhow::bail!(t!("service.text_empty"));
+    }
+    if text.len() > MAX_TEXT_LEN {
+        anyhow::bail!(t!("service.text_too_long", max = MAX_TEXT_LEN));
+    }
+    let conn = engine.connect(target).await?;
+    let mut channel = Channel::open(
+        &conn,
+        &Hello::Text {
+            text: text.to_string(),
+        },
+    )
+    .await?;
+    let decision: Result<TextDecision> = read_msg(&mut channel.recv)
+        .await
+        .context(t!("service.text_no_answer"));
+    conn.close(0u32.into(), b"done");
+    decision
+}
+
+/// One-line preview of a text: line breaks and control characters become
+/// spaces, repeated whitespace is collapsed and the result is cut to
+/// `max_chars` characters with an ellipsis.
+pub fn text_preview(text: &str, max_chars: usize) -> String {
+    let flat = text
+        .split(|c: char| c.is_whitespace() || c.is_control())
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if flat.chars().count() <= max_chars {
+        return flat;
+    }
+    let mut cut: String = flat.chars().take(max_chars.saturating_sub(1)).collect();
+    cut.push('…');
+    cut
 }
 
 /// Generates a random share token.

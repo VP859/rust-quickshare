@@ -610,11 +610,11 @@ tui.st_failed:
   en: "error: %{error}"
   pl: "błąd: %{error}"
 tui.footer_trusted:
-  en: "Enter send file · e rename · a Auto-Accept · x remove · i add · Tab panel · g folder · N device name · L language"
-  pl: "Enter wyślij plik · e nazwa · a Auto-Accept · x usuń · i dodaj · Tab panel · g katalog · N nazwa urządzenia · L język"
+  en: "Enter send file · T send text · e rename · a Auto-Accept · x remove · i add · Tab panel · g folder · N device name · L language"
+  pl: "Enter wyślij plik · T wyślij tekst · e nazwa · a Auto-Accept · x usuń · i dodaj · Tab panel · g katalog · N nazwa urządzenia · L język"
 tui.footer_nearby:
-  en: "p pair · Enter send file · r search · i add by TICKET · Tab panel"
-  pl: "p sparuj · Enter wyślij plik · r szukaj · i dodaj przez TICKET · Tab panel"
+  en: "p pair · Enter send file · T send text · r search · i add by TICKET · Tab panel"
+  pl: "p sparuj · Enter wyślij plik · T wyślij tekst · r szukaj · i dodaj przez TICKET · Tab panel"
 tui.footer_transfers:
   en: "Enter/o open file · f open folder · C clear finished · Tab panel"
   pl: "Enter/o otwórz plik · f otwórz folder · C wyczyść zakończone · Tab panel"
@@ -761,3 +761,89 @@ gui.no_files:
 gui.pairing_ticket:
   en: "This is a device TICKET – add it as a trusted device"
   pl: "To TICKET urządzenia – dodaj je jako zaufane urządzenie"
+
+# ---------------------------------------------------------------- text messages
+service.text_unsupported:
+  en: "This device does not accept texts"
+  pl: "To urządzenie nie przyjmuje tekstów"
+service.text_too_long:
+  en: "The text is empty or longer than %{max} bytes"
+  pl: "Tekst jest pusty lub dłuższy niż %{max} bajtów"
+service.text_empty:
+  en: "The text is empty"
+  pl: "Tekst jest pusty"
+service.text_no_answer:
+  en: "The device did not answer – it may run an older version without text support"
+  pl: "Urządzenie nie odpowiedziało – może mieć starszą wersję bez obsługi tekstu"
+cli.text_waiting:
+  en: "Waiting for the receiver to accept the text…"
+  pl: "Oczekiwanie, aż odbiorca przyjmie tekst…"
+cli.text_delivered:
+  en: "Delivered – the text is in the receiver's clipboard."
+  pl: "Dostarczono – tekst jest w schowku odbiorcy."
+cli.text_rejected:
+  en: "The receiver declined the text: %{reason}"
+  pl: "Odbiorca odrzucił tekst: %{reason}"
+daemon.text:
+  en: "[TEXT] from '%{alias}': %{text}\nAccept and copy to the clipboard?"
+  pl: "[TEKST] od '%{alias}': %{text}\nPrzyjąć i skopiować do schowka?"
+daemon.text_copied:
+  en: "Text from '%{alias}' (copied to the clipboard):"
+  pl: "Tekst od '%{alias}' (skopiowany do schowka):"
+daemon.text_received:
+  en: "Text from '%{alias}' (clipboard unavailable):"
+  pl: "Tekst od '%{alias}' (schowek niedostępny):"
+tui.new_text:
+  en: "New text from %{name}"
+  pl: "Nowy tekst od %{name}"
+tui.text_title:
+  en: "Incoming text"
+  pl: "Przychodzący tekst"
+tui.text_from:
+  en: "From: %{from}"
+  pl: "Od: %{from}"
+tui.text_keys:
+  en: "[y] accept and copy to the clipboard    [n] decline"
+  pl: "[y] przyjmij i skopiuj do schowka    [n] odrzuć"
+tui.text_copied:
+  en: "Text from %{name} copied to the clipboard: %{text}"
+  pl: "Tekst od %{name} skopiowany do schowka: %{text}"
+tui.text_not_copied:
+  en: "Text from %{name} (clipboard unavailable): %{text}"
+  pl: "Tekst od %{name} (schowek niedostępny): %{text}"
+tui.text_where:
+  en: "Select a trusted or nearby device to send text to"
+  pl: "Wybierz zaufane urządzenie lub urządzenie w pobliżu, aby wysłać tekst"
+tui.text_to:
+  en: "Send text to: %{name}"
+  pl: "Wyślij tekst do: %{name}"
+tui.text_hint:
+  en: "Text or a link (paste with Ctrl+Shift+V); the receiver copies it to the clipboard"
+  pl: "Tekst lub link (wklej Ctrl+Shift+V); odbiorca skopiuje go do schowka"
+tui.text_sending:
+  en: "Sending text to '%{name}' – waiting for acceptance…"
+  pl: "Wysyłanie tekstu do '%{name}' – oczekiwanie na akceptację…"
+tui.text_delivered:
+  en: "Text delivered to '%{name}'"
+  pl: "Tekst dostarczony do '%{name}'"
+tui.text_rejected:
+  en: "'%{name}' declined the text: %{reason}"
+  pl: "'%{name}' odrzuciło tekst: %{reason}"
+tui.help_text:
+  en: "send text or a link to the selected device"
+  pl: "wyślij tekst lub link do wybranego urządzenia"
+gui.notify_text_title:
+  en: "Incoming text"
+  pl: "Przychodzący tekst"
+gui.notify_text:
+  en: "%{sender} wants to send you a text"
+  pl: "%{sender} chce przesłać Ci tekst"
+gui.notify_text_copied:
+  en: "Text from %{sender} copied to the clipboard"
+  pl: "Tekst od %{sender} skopiowany do schowka"
+gui.text_rejected:
+  en: "The text was not delivered: %{reason}"
+  pl: "Tekst nie został dostarczony: %{reason}"
+gui.not_a_link:
+  en: "Only http(s) links can be opened"
+  pl: "Można otwierać tylko linki http(s)"

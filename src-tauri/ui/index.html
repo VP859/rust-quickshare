@@ -177,6 +177,7 @@
   .recipients .label { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); padding: 8px 2px 0; }
   .recipients button.row { width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); text-align: left; justify-content: flex-start; font-weight: 400; min-height: 0; }
   .recipients button.row:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .textbox { white-space: pre-wrap; word-break: break-word; max-height: 220px; font-size: 13px; }
   .about { display: flex; align-items: center; gap: 12px; }
   .about .logo { width: 36px; height: 36px; border-radius: 10px; }
 
@@ -224,6 +225,8 @@
   <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
   <symbol id="i-folder" viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><path d="M11 9h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
   <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
 </svg>
 
@@ -248,6 +251,7 @@
     <p class="mobile-only" data-i18n="drop_hint_mobile"></p>
     <div class="buttons">
       <button class="primary" id="btn-select-file"><svg class="i sm"><use href="#i-file"/></svg><span data-i18n="select_file"></span></button>
+      <button id="btn-send-text"><svg class="i sm"><use href="#i-text"/></svg><span data-i18n="send_text"></span></button>
       <button class="mobile-only" id="btn-scan"><svg class="i sm"><use href="#i-scan"/></svg><span data-i18n="scan_qr"></span></button>
       <button id="btn-receive-ticket"><svg class="i sm"><use href="#i-ticket"/></svg><span data-i18n="receive_ticket"></span></button>
     </div>
@@ -359,6 +363,36 @@
       </div>
       <p class="muted small" id="offer-queue"></p>
       <div class="modal-actions"><button class="danger" id="btn-offer-reject" data-i18n="reject"></button><button class="primary" id="btn-offer-accept" data-i18n="accept"></button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-text-send" role="dialog" aria-modal="true" aria-labelledby="text-send-title">
+  <div class="modal">
+    <div class="modal-head"><h3 id="text-send-title" data-i18n="text_send_title"></h3><button class="ghost icon" data-close="modal-text-send" data-i18n-aria="close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="text-input" data-i18n="text_label"></label>
+        <textarea id="text-input" rows="5" data-i18n-ph="text_ph" style="font-family: inherit; font-size: 14px"></textarea>
+      </div>
+      <p class="muted small" data-i18n="text_send_hint"></p>
+      <div class="modal-actions">
+        <button id="btn-text-paste" style="margin-right:auto"><svg class="i sm"><use href="#i-copy"/></svg><span data-i18n="paste"></span></button>
+        <button id="btn-text-cancel" data-i18n="cancel"></button>
+        <button class="primary" id="btn-text-next" data-i18n="choose_recipient_btn"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-text-in" role="alertdialog" aria-modal="true" aria-labelledby="text-in-title">
+  <div class="modal">
+    <div class="modal-head"><h3 id="text-in-title" data-i18n="incoming_text"></h3></div>
+    <div class="modal-body">
+      <p class="muted small" id="text-in-from"></p>
+      <div class="codebox textbox" id="text-in-body" style="-webkit-user-select:text; user-select:text"></div>
+      <p class="muted small" id="text-in-queue"></p>
+      <div class="modal-actions"><button class="danger" id="btn-text-reject" data-i18n="reject"></button><button class="primary" id="btn-text-accept" data-i18n="accept_copy"></button></div>
     </div>
   </div>
 </div>
@@ -491,6 +525,14 @@
       name_saved: 'Device name saved', saved: 'Saved', dir_changed: 'Download folder changed',
       lan_granted: 'Local network access granted – searching…',
       no_tauri: 'Tauri API missing – start the app through Tauri', pair_expired: 'The pairing request expired',
+      send_text: 'Send text', text_send_title: 'Send text or a link', text_label: 'Text', text_ph: 'Type or paste text or a link…',
+      text_send_hint: 'After the recipient accepts, the text lands in their clipboard.', paste: 'Paste', choose_recipient_btn: 'Choose recipient',
+      send_text_menu: 'Send text…', incoming_text: 'Incoming text', text_from: 'From {name}', accept_copy: 'Accept and copy',
+      text_sending: 'Waiting for {name} to accept…', text_delivered: 'Delivered – in the clipboard of {name}',
+      text_copied: 'Copied to the clipboard', text_not_copied: 'Could not copy to the clipboard – use Copy',
+      text_received_toast: 'Text from {name} copied to the clipboard', open_link: 'Open link',
+      text_empty: 'Type or paste some text first', text_too_long: 'The text is too long (max 32 KB)', clipboard_empty: 'The clipboard is empty',
+      text_expired: 'The text request expired', text_to: 'Text: {preview}',
     },
     pl: {
       node_starting: 'Uruchamianie…', node_active: 'Online · {id}', node_unavailable: 'Offline',
@@ -549,6 +591,14 @@
       name_saved: 'Zapisano nazwę urządzenia', saved: 'Zapisano', dir_changed: 'Zmieniono folder pobranych plików',
       lan_granted: 'Przyznano dostęp do sieci lokalnej – szukanie…',
       no_tauri: 'Brak API Tauri – uruchom aplikację przez Tauri', pair_expired: 'Prośba o sparowanie wygasła',
+      send_text: 'Wyślij tekst', text_send_title: 'Wyślij tekst lub link', text_label: 'Tekst', text_ph: 'Wpisz lub wklej tekst albo link…',
+      text_send_hint: 'Po akceptacji tekst trafi do schowka odbiorcy.', paste: 'Wklej', choose_recipient_btn: 'Wybierz odbiorcę',
+      send_text_menu: 'Wyślij tekst…', incoming_text: 'Przychodzący tekst', text_from: 'Od {name}', accept_copy: 'Przyjmij i skopiuj',
+      text_sending: 'Oczekiwanie, aż {name} przyjmie…', text_delivered: 'Dostarczono – w schowku urządzenia {name}',
+      text_copied: 'Skopiowano do schowka', text_not_copied: 'Nie udało się skopiować do schowka – użyj „Kopiuj”',
+      text_received_toast: 'Tekst od {name} skopiowany do schowka', open_link: 'Otwórz link',
+      text_empty: 'Najpierw wpisz lub wklej tekst', text_too_long: 'Tekst jest za długi (maks. 32 KB)', clipboard_empty: 'Schowek jest pusty',
+      text_expired: 'Prośba o przesłanie tekstu wygasła', text_to: 'Tekst: {preview}',
     },
   };
   let lang = 'en';
@@ -594,6 +644,8 @@
     svg.append(use);
     return svg;
   }
+  const preview = (text, max = 120) => { const flat = String(text).replace(/\s+/g, ' ').trim(); return flat.length > max ? flat.slice(0, max - 1) + '…' : flat; };
+  const isLink = (text) => /^https?:\/\/\S+$/i.test(String(text).trim());
   const dotClass = (state) => 'dot ' + (state === true ? 'ok' : state === false ? 'bad' : 'wait');
   const open = (id) => $(id).classList.add('active');
   const close = (id) => $(id).classList.remove('active');
@@ -718,6 +770,7 @@
     const item = (iconName, label, fn, cls = '') => el('button', { class: cls, onclick: async (e) => { e.stopPropagation(); closeMenu(); try { await fn(); } catch (err) { fail(err); } } }, icon(iconName, 'sm'), label);
     openMenu = el('div', { class: 'menu', role: 'menu', onclick: (e) => e.stopPropagation() },
       item('send', t('send_file_menu'), () => sendToPeer(p)),
+      item('text', t('send_text_menu'), () => composeText(p.node_id, p.alias)),
       item('sliders', t('edit_peer'), () => openPeerModal(p)),
       item('shield', p.auto_accept ? t('auto_accept_off') : t('auto_accept_on'), async () => {
         await invoke('update_peer', { nodeId: p.node_id, alias: null, autoAccept: !p.auto_accept });
@@ -800,9 +853,11 @@
       const peer = peers.find(p => p.node_id === d.node_id);
       const send = el('button', { onclick: (e) => { e.stopPropagation(); sendToDevice(d.node_id, peer?.alias ?? d.name); } },
         icon('send', 'sm'), el('span', { class: 'label-text' }, t('send_file')));
+      const text = el('button', { class: 'ghost icon', title: t('send_text'), 'aria-label': t('send_text'),
+        onclick: (e) => { e.stopPropagation(); composeText(d.node_id, peer?.alias ?? d.name); } }, icon('text', 'sm'));
       const trailing = peer
-        ? el('div', { class: 'trailing' }, send)
-        : el('div', { class: 'trailing' }, send,
+        ? el('div', { class: 'trailing' }, text, send)
+        : el('div', { class: 'trailing' }, text, send,
             el('button', { class: 'primary', onclick: (e) => { e.stopPropagation(); pairWith(d); } }, t('pair')));
       box.append(el('div', { class: 'row device', 'data-node': d.node_id },
         el('div', { class: 'avatar' }, icon(platformIcon(d.platform)), el('span', { class: 'dot ok' })),
@@ -900,28 +955,37 @@
   }
 
   let pendingFiles = [];
+  let pendingText = null;
   function recipientRow(avatar, title, sub, onclick) {
     return el('button', { class: 'row', onclick },
       el('div', { class: 'avatar' }, avatar),
       el('div', { class: 'body' }, el('div', { class: 'title' }, title), el('div', { class: 'sub' }, sub)));
   }
-  function chooseRecipient(paths) {
-    if (!paths.length) return;
+  function deliver(nodeId, label) {
+    close('modal-recipient');
+    if (pendingText !== null) sendText(pendingText, nodeId, label);
+    else sendFiles(pendingFiles, nodeId, label);
+  }
+  function chooseRecipient(paths, text = null) {
+    if (text === null && !paths.length) return;
     pendingFiles = paths;
-    $('recipient-files').textContent = paths.length === 1 ? baseName(paths[0]) : t('n_files_list', { n: paths.length, list: paths.map(baseName).join(', ') });
+    pendingText = text;
+    $('recipient-files').textContent = text !== null ? t('text_to', { preview: preview(text) })
+      : paths.length === 1 ? baseName(paths[0]) : t('n_files_list', { n: paths.length, list: paths.map(baseName).join(', ') });
     const box = $('recipients');
     box.replaceChildren();
     const unpaired = nearby.filter(d => !isTrusted(d.node_id));
     if (!peers.length && !unpaired.length) box.append(emptyState('inbox', t('no_devices')));
     for (const p of peers) {
       box.append(recipientRow([initials(p.alias), el('span', { class: dotClass(online.get(p.node_id)) })], p.alias, el('span', { class: 'mono' }, shortId(p.node_id)),
-        () => { close('modal-recipient'); sendFiles(pendingFiles, p.node_id, p.alias); }));
+        () => deliver(p.node_id, p.alias)));
     }
     if (unpaired.length) box.append(el('div', { class: 'label' }, t('nearby_unpaired')));
     for (const d of unpaired) {
       box.append(recipientRow([icon(platformIcon(d.platform)), el('span', { class: 'dot ok' })], d.name, platformLabel(d.platform),
-        () => { close('modal-recipient'); sendFiles(pendingFiles, d.node_id, d.name); }));
+        () => deliver(d.node_id, d.name)));
     }
+    $('btn-share-ticket').style.display = text !== null ? 'none' : '';
     $('btn-share-ticket').disabled = paths.length !== 1;
     $('btn-share-ticket').title = paths.length !== 1 ? t('ticket_one_file') : '';
     open('modal-recipient');
@@ -934,6 +998,100 @@
     } catch (e) { fail(e); }
   };
   $('btn-select-file').onclick = async () => { try { chooseRecipient(await pickFiles()); } catch (e) { fail(e); } };
+
+  // ---------- Text and links ----------
+  const MAX_TEXT_BYTES = 32 * 1024;
+  let textTarget = null;
+  function composeText(nodeId = null, label = null, prefill = '') {
+    textTarget = nodeId ? { nodeId, label } : null;
+    $('text-input').value = prefill;
+    $('btn-text-next').textContent = textTarget ? t('send_text') : t('choose_recipient_btn');
+    open('modal-text-send');
+    $('text-input').focus();
+  }
+  $('btn-send-text').onclick = () => composeText();
+  $('btn-text-cancel').onclick = () => close('modal-text-send');
+  $('btn-text-paste').onclick = async () => {
+    try {
+      const text = T?.clipboardManager?.readText ? await T.clipboardManager.readText() : await invoke('plugin:clipboard-manager|read_text');
+      if (text) $('text-input').value = text; else toast(t('clipboard_empty'), true);
+    } catch { toast(t('clipboard_empty'), true); }
+  };
+  $('btn-text-next').onclick = () => {
+    const text = $('text-input').value;
+    if (!text.trim()) return toast(t('text_empty'), true);
+    if (new TextEncoder().encode(text).length > MAX_TEXT_BYTES) return toast(t('text_too_long'), true);
+    close('modal-text-send');
+    if (textTarget) sendText(text, textTarget.nodeId, textTarget.label);
+    else chooseRecipient([], text);
+  };
+
+  let textSeq = 0;
+  function addTextRow(entry) {
+    const id = 'text-' + (++textSeq);
+    const row = { el: el('div', { class: 'row transfer' }), text: entry };
+    transfers.set(id, row);
+    const list = $('transfers');
+    list.querySelector('.empty')?.remove();
+    list.prepend(row.el);
+    renderTextRow(row);
+    $('btn-clear').style.visibility = '';
+    return row;
+  }
+  function renderTextRow(row) {
+    const x = row.text;
+    row.el.className = 'row transfer' + (x.state === 'done' ? ' done' : x.state === 'failed' ? ' failed' : '');
+    const detail = x.state === 'sending' ? t('text_sending', { name: x.label })
+      : x.state === 'failed' ? x.error
+      : x.dir === 'upload' ? t('text_delivered', { name: x.label })
+      : x.copied ? t('text_copied') : t('text_not_copied');
+    const trailing = el('div', { class: 'trailing' },
+      el('button', { class: 'ghost icon', title: t('copy'), 'aria-label': t('copy'), onclick: () => copyText(x.text) }, icon('copy', 'sm')));
+    if (!isMobile && isLink(x.text)) {
+      trailing.prepend(el('button', { onclick: () => invoke('open_link', { url: x.text.trim() }).catch(fail) }, t('open_link')));
+    }
+    row.el.replaceChildren(
+      el('div', { class: 'dir' }, icon('text', 'sm')),
+      el('div', { class: 'body' },
+        el('div', { class: 'meta' }, el('span', { class: 'title' }, preview(x.text, 80)),
+          el('span', { class: 'muted small' }, (x.dir === 'upload' ? '↑ ' : '↓ ') + x.label)),
+        el('div', { class: 'detail' }, detail)),
+      trailing);
+  }
+  async function sendText(text, nodeId, label) {
+    const row = addTextRow({ dir: 'upload', text, label, state: 'sending' });
+    try {
+      await invoke('send_text', { text, target: nodeId });
+      row.text.state = 'done';
+    } catch (e) {
+      row.text.state = 'failed';
+      row.text.error = String(e?.message ?? e);
+      fail(e);
+    }
+    renderTextRow(row);
+  }
+
+  const textRequests = [];
+  function showNextTextRequest() {
+    const r = textRequests[0];
+    if (!r) return close('modal-text-in');
+    $('text-in-from').textContent = t('text_from', { name: r.alias ?? t('unknown_device', { id: shortId(r.peer) }) });
+    $('text-in-body').textContent = r.text;
+    $('text-in-queue').textContent = textRequests.length > 1 ? t('queued', { n: textRequests.length - 1 }) : '';
+    open('modal-text-in');
+  }
+  async function answerTextRequest(accept) {
+    const r = textRequests.shift();
+    if (r) { try { await invoke('respond_to_offer', { transferId: r.id, accept }); } catch (e) { fail(e); } }
+    showNextTextRequest();
+  }
+  $('btn-text-accept').onclick = () => answerTextRequest(true);
+  $('btn-text-reject').onclick = () => answerTextRequest(false);
+  function onTextReceived(x) {
+    const label = x.alias ?? shortId(x.peer);
+    addTextRow({ dir: 'download', text: x.text, label, state: 'done', copied: x.copied });
+    toast(x.copied ? t('text_received_toast', { name: label }) : t('text_not_copied'), !x.copied);
+  }
 
   // ---------- Receiving from a TICKET / QR code ----------
   async function handleScannedTicket(text) {
@@ -1031,7 +1189,8 @@
   }
   $('btn-clear').onclick = () => {
     for (const [id, row] of transfers) {
-      if (['completed', 'failed', 'rejected'].includes(row.ev.status.kind)) { row.el.remove(); transfers.delete(id); }
+      const finished = row.text ? row.text.state !== 'sending' : ['completed', 'failed', 'rejected'].includes(row.ev.status.kind);
+      if (finished) { row.el.remove(); transfers.delete(id); }
     }
     renderNoTransfers();
   };
@@ -1060,10 +1219,11 @@
     renderNodeStatus();
     renderPeers();
     renderNearby();
-    for (const row of transfers.values()) renderTransfer(row.ev);
+    for (const row of transfers.values()) row.text ? renderTextRow(row) : renderTransfer(row.ev);
     renderNoTransfers();
     if (offers.length) showNextOffer();
     if (pairRequests.length) showNextPairRequest();
+    if (textRequests.length) showNextTextRequest();
   }
   async function loadLanguage() {
     try {
@@ -1123,7 +1283,9 @@
   async function checkSharedFiles() {
     try {
       const files = await invoke('take_shared_files');
-      if (files.length) chooseRecipient(files);
+      if (files.length) return chooseRecipient(files);
+      const text = await invoke('take_shared_text');
+      if (text) composeText(null, null, text);
     } catch (e) { fail(e); }
   }
   window.addEventListener('rqs-share', checkSharedFiles);
@@ -1148,6 +1310,15 @@
     await listen('transfer-error', ({ payload }) => fail(payload.message));
     await listen('incoming-offer', ({ payload }) => { offers.push(payload); if (offers.length === 1) showNextOffer(); else $('offer-queue').textContent = t('queued', { n: offers.length - 1 }); });
     await listen('node-error', ({ payload }) => fail(payload));
+    await listen('incoming-text', ({ payload }) => { textRequests.push(payload); if (textRequests.length === 1) showNextTextRequest(); else $('text-in-queue').textContent = t('queued', { n: textRequests.length - 1 }); });
+    await listen('text-received', ({ payload }) => onTextReceived(payload));
+    await listen('request-cancelled', ({ payload }) => {
+      const i = textRequests.findIndex(r => r.id === payload);
+      if (i < 0) return;
+      textRequests.splice(i, 1);
+      if (i === 0) showNextTextRequest();
+      toast(t('text_expired'), true);
+    });
     await listen('nearby', ({ payload }) => setNearby(payload));
     await listen('peers-changed', async () => { await refreshPeers(); renderNearby(); });
     await listen('pair-result', async ({ payload }) => {

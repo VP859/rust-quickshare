@@ -7,7 +7,7 @@ use rqs_p2p::cli::args::{Cli, Commands};
 use rqs_p2p::cli::nearby_cmd::{run_discover, run_pair};
 use rqs_p2p::cli::peer_cmd::handle_peer_cmd;
 use rqs_p2p::cli::settings_cmd::{run_language, run_name};
-use rqs_p2p::cli::transfer_cmd::{run_receive, run_send, run_show_ticket};
+use rqs_p2p::cli::transfer_cmd::{run_receive, run_send, run_send_text, run_show_ticket};
 use rqs_p2p::config::Config;
 use rqs_p2p::daemon::run_daemon;
 use rqs_p2p::telemetry::doctor::run_doctor;
@@ -34,6 +34,7 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Send { files, to } => run_send(&files, to.as_deref()).await?,
+        Commands::Text { text, to } => run_send_text(text, &to).await?,
         Commands::Receive { ticket, output_dir } => {
             run_receive(&ticket, output_dir.as_deref()).await?
         }

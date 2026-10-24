@@ -12,6 +12,7 @@ use rqs_p2p::discovery::NearbyDevice;
 use rqs_p2p::i18n::{self, Language};
 use rqs_p2p::node::NodeTicket;
 use rqs_p2p::pairing::{PairOutcome, clean_device_name, pairing_code, request_pairing};
+use rqs_p2p::protocol::messages::TextDecision;
 use rqs_p2p::transfer::sender::prepare_file;
 use rqs_p2p::transfer::service;
 use rust_i18n::t;
@@ -358,6 +359,26 @@ pub async fn send_files(
     Ok(())
 }
 
+/// Sends text or a link to a device given by alias, nearby name, Node ID or
+/// TICKET and waits until the receiver accepts it (it then lands in the
+/// receiver's clipboard).
+///
+/// Returns a localized error when the receiver declined or did not answer.
+#[tauri::command]
+pub async fn send_text(text: String, target: String, state: State<'_, AppState>) -> CmdResult<()> {
+    let addr = resolve_with_nearby(&state, &target).await?;
+    let engine = state.engine().await?.clone();
+    match service::send_text(&engine, addr, &text)
+        .await
+        .map_err(|e| format!("{e:#}"))?
+    {
+        TextDecision::Accepted => Ok(()),
+        TextDecision::Rejected { reason } => {
+            Err(t!("gui.text_rejected", reason = reason).into_owned())
+        }
+    }
+}
+
 /// Shares a file by a one-time TICKET (the receiver scans the QR code or runs `rqs receive`).
 #[tauri::command]
 pub async fn share_file(
@@ -412,7 +433,8 @@ pub async fn receive_from_ticket(
     let engine = state.engine().await?.clone();
     let dest_dir = state.download_dir().await;
     tauri::async_runtime::spawn(async move {
-        let sink = |ev: service::TransferEvent| {
+        let sink = |mut ev: service::TransferEvent| {
+            crate::platform::finalize_download(&app, &mut ev);
             app.state::<AppState>().record_download(&ev);
             let _ = app.emit("transfer", ev);
         };
@@ -607,6 +629,25 @@ pub fn open_repository() -> CmdResult<()> {
 #[tauri::command]
 pub fn take_shared_files(app: AppHandle) -> Vec<String> {
     crate::platform::take_shared_files(&app)
+}
+
+/// Opens an `http(s)` link from a received text in the default browser
+/// (desktop only).
+#[tauri::command]
+pub fn open_link(url: String) -> CmdResult<()> {
+    let url = url.trim();
+    let is_link = (url.starts_with("https://") || url.starts_with("http://"))
+        && !url.chars().any(|c| c.is_whitespace() || c.is_control());
+    if !is_link {
+        return Err(t!("gui.not_a_link").into_owned());
+    }
+    rqs_p2p::system::open_url(url).map_err(err)
+}
+
+/// A text or link shared from the Android "Share" menu (none on desktop).
+#[tauri::command]
+pub fn take_shared_text(app: AppHandle) -> Option<String> {
+    crate::platform::take_shared_text(&app)
 }
 
 /// Loads the configuration into the state and activates the saved language.

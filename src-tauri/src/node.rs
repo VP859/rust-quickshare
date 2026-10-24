@@ -3,14 +3,15 @@
 //! progress to the frontend.
 //!
 //! Events emitted to the frontend: `node-ready`, `node-error`, `nearby`,
-//! `incoming-offer`, `pair-request`, `pair-cancelled`, `peers-changed` and `transfer`.
+//! `incoming-offer`, `incoming-text`, `text-received`, `request-cancelled`,
+//! `pair-request`, `pair-cancelled`, `peers-changed` and `transfer`.
 
 use iroh::EndpointId;
 use rqs_p2p::config::Config;
 use rqs_p2p::discovery::{Discovery, DiscoveryOptions};
 use rqs_p2p::node::NodeEngine;
 use rqs_p2p::pairing::PairRequest;
-use rqs_p2p::protocol::messages::{ShareToken, TransferOffer};
+use rqs_p2p::protocol::messages::{ShareToken, TextDecision, TransferOffer};
 use rqs_p2p::transfer::sender::PreparedFile;
 use rqs_p2p::transfer::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
@@ -22,6 +23,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::{Mutex, OnceCell, oneshot};
 use tracing::warn;
@@ -43,6 +45,8 @@ pub struct AppState {
     pub shares: std::sync::Mutex<HashMap<ShareToken, PreparedFile>>,
     /// Download folder chosen at startup (on Android it depends on permissions).
     pub platform_download_dir: OnceLock<PathBuf>,
+    /// Gallery folder for received photos and videos (Android only).
+    pub platform_media_dir: OnceLock<PathBuf>,
     /// Local network discovery; unset when the UDP socket could not be opened.
     pub discovery: OnceLock<Discovery>,
     /// Received files; only these may be opened from the interface.
@@ -58,6 +62,7 @@ impl AppState {
             pending: Mutex::new(HashMap::new()),
             shares: std::sync::Mutex::new(HashMap::new()),
             platform_download_dir: OnceLock::new(),
+            platform_media_dir: OnceLock::new(),
             discovery: OnceLock::new(),
             received: std::sync::Mutex::new(HashSet::new()),
         }
@@ -126,6 +131,32 @@ pub struct IncomingOffer {
     pub file_name: String,
     /// Offered file size in bytes.
     pub size: u64,
+}
+
+/// Payload of the `incoming-text` event.
+#[derive(Clone, Serialize)]
+pub struct IncomingText {
+    /// ID to answer with `respond_to_offer`.
+    pub id: String,
+    /// Node ID of the sender.
+    pub peer: String,
+    /// Alias of the sender if it is trusted.
+    pub alias: Option<String>,
+    /// The received text.
+    pub text: String,
+}
+
+/// Payload of the `text-received` event, emitted after a text was accepted.
+#[derive(Clone, Serialize)]
+pub struct ReceivedText {
+    /// Node ID of the sender.
+    pub peer: String,
+    /// Alias of the sender if it is trusted.
+    pub alias: Option<String>,
+    /// The received text.
+    pub text: String,
+    /// Whether the text was copied to the clipboard.
+    pub copied: bool,
 }
 
 /// [`TransferHandler`] of the GUI.
@@ -231,7 +262,7 @@ impl TransferHandler for GuiHandler {
 
     async fn confirm_pair(&self, req: PairRequest) -> bool {
         let state = self.state();
-        let id = pair_request_id(&req);
+        let id = request_id("pair", &req.peer);
         let (tx, rx) = oneshot::channel();
         state.pending.lock().await.insert(id.clone(), tx);
         let _ = self.app.emit(
@@ -275,7 +306,75 @@ impl TransferHandler for GuiHandler {
         }
     }
 
-    fn on_event(&self, event: TransferEvent) {
+    async fn receive_text(&self, peer: EndpointId, text: String) -> TextDecision {
+        let state = self.state();
+        let peer_info = state
+            .config
+            .lock()
+            .await
+            .find_peer(&peer.to_string())
+            .cloned();
+        let alias = peer_info.as_ref().map(|p| p.alias.clone());
+        let sender = alias
+            .clone()
+            .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
+
+        if !peer_info.is_some_and(|p| p.auto_accept) {
+            let id = request_id("text", &peer);
+            let (tx, rx) = oneshot::channel();
+            state.pending.lock().await.insert(id.clone(), tx);
+            let _ = self.app.emit(
+                "incoming-text",
+                IncomingText {
+                    id: id.clone(),
+                    peer: peer.to_string(),
+                    alias: alias.clone(),
+                    text: text.clone(),
+                },
+            );
+            self.notify(
+                &t!("gui.notify_text_title"),
+                &t!("gui.notify_text", sender = &sender),
+            );
+            let accepted = matches!(
+                tokio::time::timeout(DECISION_TIMEOUT, rx).await,
+                Ok(Ok(true))
+            );
+            if state.pending.lock().await.remove(&id).is_some() {
+                let _ = self.app.emit("request-cancelled", id);
+            }
+            if !accepted {
+                return TextDecision::Rejected {
+                    reason: t!("transfer.user_rejected").into_owned(),
+                };
+            }
+        }
+
+        let copied = match self.app.clipboard().write_text(text.clone()) {
+            Ok(()) => true,
+            Err(e) => {
+                warn!("Could not copy the received text: {e}");
+                false
+            }
+        };
+        let _ = self.app.emit(
+            "text-received",
+            ReceivedText {
+                peer: peer.to_string(),
+                alias,
+                text,
+                copied,
+            },
+        );
+        self.notify(
+            &t!("gui.notify_text_title"),
+            &t!("gui.notify_text_copied", sender = &sender),
+        );
+        TextDecision::Accepted
+    }
+
+    fn on_event(&self, mut event: TransferEvent) {
+        crate::platform::finalize_download(&self.app, &mut event);
         self.state().record_download(&event);
         if event.direction == Direction::Download
             && let TransferStatus::Completed { .. } = event.status
@@ -286,13 +385,13 @@ impl TransferHandler for GuiHandler {
     }
 }
 
-/// Unique ID of a pairing request (device and moment).
-fn pair_request_id(req: &PairRequest) -> String {
+/// Unique ID of a pairing request or an incoming text (kind, device and moment).
+fn request_id(kind: &str, peer: &EndpointId) -> String {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or_default();
-    format!("pair-{}-{nanos}", req.peer.fmt_short())
+    format!("{kind}-{}-{nanos}", peer.fmt_short())
 }
 
 /// Starts local network discovery and forwards list changes as `nearby` events.

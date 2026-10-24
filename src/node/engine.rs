@@ -9,7 +9,8 @@ use tracing::{debug, info};
 
 use super::NodeTicket;
 
-/// ALPN of the RQS protocol; must change whenever the wire format changes.
+/// ALPN of the RQS protocol; must change whenever the encoding of an existing
+/// message changes (new trailing enum variants keep it).
 pub const ALPN_RQS: &[u8] = b"rqs/0.2";
 
 /// How long to wait for a relay connection before building a TICKET.

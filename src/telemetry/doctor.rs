@@ -5,6 +5,7 @@ use anyhow::Result;
 use network_interface::NetworkInterfaceConfig;
 use rust_i18n::t;
 use std::net::UdpSocket;
+#[cfg(not(target_os = "android"))]
 use tracing::info;
 
 /// Summary of the checks performed by [`run_doctor`].

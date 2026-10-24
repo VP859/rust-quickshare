@@ -1,6 +1,6 @@
 [package]
 name = "rqs-gui"
-version = "0.1.0"
+version = "0.1.5"
 edition = "2024"
 description = "Ferry – P2P file sharing app for desktop and Android"
 repository = "https://github.com/VP859/rust-quickshare"
@@ -50,3 +50,6 @@ tauri-plugin-fs = "2.4.0"
 [target.'cfg(target_os = "android")'.dependencies]
 # Rust logs in `adb logcat` (stdout of an Android app is discarded).
 tracing-android = "0.2.0"
+# Calling MediaScannerConnection so received photos appear in the gallery.
+jni = "0.21.1"
+ndk-context = "0.1.1"

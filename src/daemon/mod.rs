@@ -1,8 +1,9 @@
 //! `rqs daemon`: receiving files in the background.
 //!
-//! Trusted devices with Auto-Accept are accepted automatically. Other offers
-//! and pairing requests are confirmed in the console when one is attached, and
-//! rejected otherwise (e.g. when running as a system service).
+//! Trusted devices with Auto-Accept are accepted automatically. Other offers,
+//! texts and pairing requests are confirmed in the console when one is
+//! attached, and rejected otherwise (e.g. when running as a system service).
+//! Accepted texts are printed and copied to the clipboard when one is available.
 
 use anyhow::Result;
 use iroh::EndpointId;
@@ -17,7 +18,7 @@ use crate::config::Config;
 use crate::discovery::{Discovery, DiscoveryOptions};
 use crate::node::NodeEngine;
 use crate::pairing::PairRequest;
-use crate::protocol::messages::TransferOffer;
+use crate::protocol::messages::{TextDecision, TransferOffer};
 use crate::transfer::service::{
     self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
@@ -27,6 +28,10 @@ struct DaemonHandler {
     interactive: bool,
     /// Serializes console questions when offers arrive concurrently.
     prompt_lock: tokio::sync::Mutex<()>,
+    /// On Linux the clipboard content disappears with this object, so it lives
+    /// as long as the daemon.
+    #[cfg(not(target_os = "android"))]
+    clipboard: std::sync::Mutex<Option<arboard::Clipboard>>,
 }
 
 impl DaemonHandler {
@@ -41,6 +46,25 @@ impl DaemonHandler {
         })
         .await
         .unwrap_or(false)
+    }
+
+    fn copy_to_clipboard(&self, text: &str) -> bool {
+        #[cfg(not(target_os = "android"))]
+        {
+            let Ok(mut clipboard) = self.clipboard.lock() else {
+                return false;
+            };
+            if clipboard.is_none() {
+                *clipboard = arboard::Clipboard::new().ok();
+            }
+            clipboard.as_mut().is_some_and(|c| c.set_text(text).is_ok())
+        }
+
+        #[cfg(target_os = "android")]
+        {
+            let _ = text;
+            false
+        }
     }
 }
 
@@ -120,6 +144,45 @@ impl TransferHandler for DaemonHandler {
         }
     }
 
+    async fn receive_text(&self, peer: EndpointId, text: String) -> TextDecision {
+        let config = Config::load().unwrap_or_default();
+        let peer_info = config.find_peer(&peer.to_string());
+        let alias = peer_info
+            .map(|p| p.alias.clone())
+            .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
+        if !peer_info.is_some_and(|p| p.auto_accept) {
+            if !self.interactive {
+                return TextDecision::Rejected {
+                    reason: t!("daemon.no_auto_accept", alias = &alias).into_owned(),
+                };
+            }
+            let question = t!(
+                "daemon.text",
+                alias = &alias,
+                text = service::text_preview(&text, 200)
+            );
+            if !self.ask_user(format!("\n{question}")).await {
+                return TextDecision::Rejected {
+                    reason: t!("transfer.user_rejected").into_owned(),
+                };
+            }
+        }
+        let copied = self.copy_to_clipboard(&text);
+        info!(
+            "Text from '{alias}' ({} bytes), copied to the clipboard: {copied}",
+            text.len()
+        );
+        if self.interactive {
+            let header = if copied {
+                t!("daemon.text_copied", alias = &alias)
+            } else {
+                t!("daemon.text_received", alias = &alias)
+            };
+            println!("\n{header}\n{text}\n");
+        }
+        TextDecision::Accepted
+    }
+
     fn on_event(&self, ev: TransferEvent) {
         match ev.status {
             TransferStatus::Completed { path } => info!(
@@ -167,6 +230,8 @@ pub async fn run_daemon(downloads_dir: Option<PathBuf>) -> Result<()> {
         downloads_dir,
         interactive: std::io::stdin().is_terminal(),
         prompt_lock: tokio::sync::Mutex::new(()),
+        #[cfg(not(target_os = "android"))]
+        clipboard: std::sync::Mutex::new(None),
     });
 
     let _discovery = Discovery::start(

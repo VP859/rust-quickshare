@@ -5560,10 +5560,12 @@ dependencies = [
 
 [[package]]
 name = "rqs-gui"
-version = "0.1.0"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "iroh",
+ "jni 0.21.1",
+ "ndk-context",
  "qrcode",
  "rqs_p2p",
  "rust-i18n",

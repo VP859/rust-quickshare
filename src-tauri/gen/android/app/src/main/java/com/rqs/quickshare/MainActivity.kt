@@ -14,10 +14,11 @@ import androidx.core.content.ContextCompat
  * Entry activity hosting the Tauri WebView.
  *
  * Requests runtime permissions, keeps the P2P node alive through [RqsTransferService]
- * and forwards files from the system "Share" menu to the frontend.
+ * and forwards files and texts from the system "Share" menu to the frontend.
  *
  * Events dispatched to the WebView (`window`):
- * - `rqs-share` – shared files are ready to be fetched with `take_shared_files`;
+ * - `rqs-share` – shared files or a shared text are ready to be fetched with
+ *   `take_shared_files` / `take_shared_text`;
  * - `rqs-lan-permission` – local network access was granted (Android 17+).
  */
 class MainActivity : TauriActivity() {
@@ -49,23 +50,28 @@ class MainActivity : TauriActivity() {
     handleShareIntent(intent)
   }
 
-  /** Copies files from `ACTION_SEND` / `ACTION_SEND_MULTIPLE` and notifies the frontend. */
+  /** Takes files or a text from `ACTION_SEND` / `ACTION_SEND_MULTIPLE` and notifies the frontend. */
   private fun handleShareIntent(intent: Intent?) {
     val uris = ShareIntake.extractUris(intent)
-    if (uris.isEmpty()) return
+    if (uris.isEmpty()) {
+      val text = ShareIntake.extractText(intent) ?: return
+      ShareIntake.storeText(this, text)
+      notifyShare()
+      return
+    }
     Thread {
-      if (ShareIntake.copyToCache(this, uris) > 0) {
-        runOnUiThread {
-          webView?.evaluateJavascript("window.dispatchEvent(new Event('rqs-share'))", null)
-        }
-      }
+      if (ShareIntake.copyToCache(this, uris) > 0) runOnUiThread { notifyShare() }
     }.start()
+  }
+
+  private fun notifyShare() {
+    webView?.evaluateJavascript("window.dispatchEvent(new Event('rqs-share'))", null)
   }
 
   private fun requestRuntimePermissions() {
     val wanted = buildList {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
-      if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+      if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
       if (Build.VERSION.SDK_INT >= API_ANDROID_17) add(ACCESS_LOCAL_NETWORK)
     }.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
     if (wanted.isNotEmpty()) ActivityCompat.requestPermissions(this, wanted.toTypedArray(), PERMISSIONS_REQUEST)

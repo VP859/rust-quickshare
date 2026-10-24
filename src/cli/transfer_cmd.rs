@@ -1,4 +1,4 @@
-//! `rqs send`, `rqs receive` and `rqs ticket`.
+//! `rqs send`, `rqs text`, `rqs receive` and `rqs ticket`.
 
 use anyhow::{Context, Result};
 use iroh::EndpointId;
@@ -12,7 +12,7 @@ use super::display::{TerminalProgress, print_ticket};
 use crate::config::Config;
 use crate::discovery::{Discovery, DiscoveryOptions};
 use crate::node::{NodeEngine, NodeTicket};
-use crate::protocol::messages::{ShareToken, TransferOffer};
+use crate::protocol::messages::{ShareToken, TextDecision, TransferOffer};
 use crate::transfer::sender::{PreparedFile, prepare_file};
 use crate::transfer::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
@@ -39,9 +39,9 @@ pub async fn run_send(files: &[PathBuf], to: Option<&str>) -> Result<()> {
     result
 }
 
-/// Prefers a fresh address from local discovery (works without internet); `target`
-/// may also be the name of an unpaired nearby device.
-async fn send_to_peer(engine: &NodeEngine, files: &[PathBuf], target: &str) -> Result<()> {
+/// Address of the receiver; prefers a fresh address from local discovery (works
+/// without internet). `target` may also be the name of an unpaired nearby device.
+async fn resolve_receiver(engine: &NodeEngine, target: &str) -> Result<iroh::EndpointAddr> {
     let config = Config::load()?;
     let resolved = config.resolve_target(target);
     let query = match &resolved {
@@ -62,8 +62,48 @@ async fn send_to_peer(engine: &NodeEngine, files: &[PathBuf], target: &str) -> R
         (None, Err(e)) => return Err(e),
     };
     println!("{}", t!("cli.connecting", id = addr.id));
+    Ok(addr)
+}
+
+async fn send_to_peer(engine: &NodeEngine, files: &[PathBuf], target: &str) -> Result<()> {
+    let addr = resolve_receiver(engine, target).await?;
     let progress = TerminalProgress::default();
     service::send_files(engine, addr, files, &|ev| progress.handle(ev)).await
+}
+
+/// `rqs text [TEXT] --to <device>`; without `TEXT` the text is read from
+/// standard input.
+///
+/// # Errors
+///
+/// Fails when the text is empty or too long, the receiver cannot be reached or
+/// it declined the text.
+pub async fn run_send_text(text: Option<String>, to: &str) -> Result<()> {
+    let text = match text {
+        Some(text) => text,
+        None => {
+            let mut buf = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf)?;
+            buf.trim_end_matches(['\r', '\n']).to_string()
+        }
+    };
+    let engine = NodeEngine::with_persistent_identity().await?;
+    let result = async {
+        let addr = resolve_receiver(&engine, to).await?;
+        println!("{}", t!("cli.text_waiting"));
+        service::send_text(&engine, addr, &text).await
+    }
+    .await;
+    engine.close().await;
+    match result? {
+        TextDecision::Accepted => {
+            println!("{}", t!("cli.text_delivered"));
+            Ok(())
+        }
+        TextDecision::Rejected { reason } => {
+            anyhow::bail!(t!("cli.text_rejected", reason = reason))
+        }
+    }
 }
 
 /// Serves one file under a share token and rejects incoming offers.

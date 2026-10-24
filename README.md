@@ -22,6 +22,9 @@ The command line tool is called `rqs`, and the crates keep their `rqs_p2p` / `rq
 * **Trusted devices** – alias + Auto-Accept per device; untrusted offers require confirmation.
 * **Nearby devices + one-button pairing** – Ferry apps on the same network show up
   automatically; **Pair** adds a device without retyping a TICKET or scanning a QR code.
+* **Text and links** – send copied text or a link; after the receiver accepts it (or right away
+  for Auto-Accept devices) it lands in their clipboard. On Android, links can be shared to Ferry
+  from any app.
 * **Interfaces** – desktop/Android GUI (Tauri v2), TUI (ratatui), CLI (clap), background daemon.
 * **Languages** – English (default) and Polish in every interface (see [Language](#language)).
 
@@ -40,6 +43,8 @@ rqs peer list | rqs peer edit Laptop --auto-accept false | rqs peer remove Lapto
 rqs daemon                                   # receive in the background (Auto-Accept for trusted)
 rqs send film.mkv notes.pdf --to Laptop      # send by alias, nearby name, NodeID or TICKET
 
+rqs text "https://example.org" --to Laptop # text/link → the receiver's clipboard (stdin when omitted)
+
 rqs send film.mkv                            # share via a one-time TICKET (prints QR)
 rqs receive <TICKET> ~/Downloads             # download a shared file
 
@@ -57,6 +62,7 @@ Panels: **[1] Trusted devices**, **[2] Nearby**, **[3] Transfers** (`Tab` / `1 2
 | Key | Action |
 |-----|--------|
 | `Enter` / `s` | send a file to the selected device (`Tab` completes the path; you can drag a file into the terminal) |
+| `T` | send text or a link to the selected device |
 | `p` | pair with a nearby device |
 | `i` / `+` | add a device by TICKET or Node ID (+ pairing request) |
 | `e` / `a` / `x` | rename / toggle Auto-Accept / remove device |
@@ -125,8 +131,9 @@ in English. Translations live in `locales/app.yml` (backend) and in `src-tauri/u
 ## Protocol (ALPN `rqs/0.2`)
 
 ```
-dialer ─ bi stream ─▶ Hello::Push | Hello::Pull{token} | Hello::Pair{name, addr}
-                     (Pair → PairResponse{accepted, name, addr}; otherwise one stream per file)
+dialer ─ bi stream ─▶ Hello::Push | Hello::Pull{token} | Hello::Pair{name, addr} | Hello::Text{text}
+                     (Pair → PairResponse{accepted, name, addr}; Text → TextDecision;
+                      otherwise one stream per file)
 sender ────────────▶ TransferOffer {name, size, chunk_size=1MiB, blake3}
 receiver ──────────▶ TransferDecision::Accept{start_chunk_index} | Reject{reason}
 sender ─ uni stream per chunk (≤8 in flight) ─▶ ChunkHeader{index, len, blake3} + payload
@@ -173,7 +180,8 @@ cargo tauri android build --apk --aab
 
 On Android: share any file from Gallery/Files → **Ferry** → pick a recipient. The node stays
 alive in the background thanks to a foreground service with a persistent notification. Received
-files land in `Download/Ferry`.
+files land in `Download/Ferry`; photos and videos are moved to `Pictures/Ferry`, so they show up
+in the gallery as a "Ferry" album. Sharing a link or text to Ferry opens the "Send text" dialog.
 
 ## Releases
 

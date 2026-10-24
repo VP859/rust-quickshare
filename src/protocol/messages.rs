@@ -5,14 +5,15 @@
 //! *control stream* opened by the dialing peer:
 //!
 //! ```text
-//! dialer   ── Hello::Push | Hello::Pull { token } | Hello::Pair { name, addr } ──▶
+//! dialer   ── Hello::Push | Hello::Pull { token } | Hello::Pair { … } | Hello::Text { … } ─▶
 //! sender   ── TransferOffer ──────────────────────────────────────────────────▶
 //! receiver ◀─ TransferDecision::Accept { start_chunk_index } | Reject { reason } ─
 //! sender   ── one unidirectional stream per chunk: ChunkHeader + payload ─────▶
 //! receiver ◀─ TransferResult::Verified | Failed { reason } ───────────────────
 //! ```
 //!
-//! [`Hello::Pair`] is answered with a single [`PairResponse`] instead.
+//! [`Hello::Pair`] is answered with a single [`PairResponse`] and [`Hello::Text`]
+//! with a single [`TextDecision`] instead.
 
 use iroh::EndpointAddr;
 use rust_i18n::t;
@@ -28,6 +29,8 @@ pub const MAX_FRAME_LEN: u32 = 64 * 1024;
 pub const MAX_FILE_NAME_LEN: usize = 255;
 /// Largest device name in bytes, used for discovery and pairing.
 pub const MAX_DEVICE_NAME_LEN: usize = 64;
+/// Largest text sent with [`Hello::Text`], in bytes; it fits in one frame.
+pub const MAX_TEXT_LEN: usize = 32 * 1024;
 /// Number of chunk streams in flight at the same time.
 pub const CHUNK_WINDOW: usize = 8;
 
@@ -50,6 +53,27 @@ pub enum Hello {
         name: String,
         /// Current address of the requesting peer, stored by the other side.
         addr: EndpointAddr,
+    },
+    /// The dialing peer sends a short text (e.g. a link) for the clipboard.
+    ///
+    /// Added after the first release as the last variant, so the encoding of
+    /// the other messages is unchanged; an older peer fails to decode it and
+    /// closes the stream.
+    Text {
+        /// The text, at most [`MAX_TEXT_LEN`] bytes.
+        text: String,
+    },
+}
+
+/// Answer to [`Hello::Text`], sent after the user made a decision.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TextDecision {
+    /// The text was accepted and copied to the clipboard.
+    Accepted,
+    /// The text was declined.
+    Rejected {
+        /// Human readable reason shown to the sender.
+        reason: String,
     },
 }
 

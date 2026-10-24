@@ -16,7 +16,7 @@ use crate::discovery::{Discovery, DiscoveryOptions, NearbyDevice};
 use crate::i18n;
 use crate::node::NodeEngine;
 use crate::pairing::{PairOutcome, PairRequest, clean_device_name, pairing_code, request_pairing};
-use crate::protocol::messages::TransferOffer;
+use crate::protocol::messages::{MAX_TEXT_LEN, TextDecision, TransferOffer};
 use crate::transfer::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
@@ -36,6 +36,13 @@ pub enum PendingKind {
         file_name: String,
         /// Offered file size in bytes.
         file_size: u64,
+    },
+    /// An incoming text for the clipboard.
+    Text {
+        /// Alias of the sender or a short Node ID.
+        peer_label: String,
+        /// One-line preview of the text.
+        preview: String,
     },
     /// An incoming pairing request.
     Pair {
@@ -57,6 +64,7 @@ impl Pending {
     fn label(&self) -> &str {
         match &self.kind {
             PendingKind::File { file_name, .. } => file_name,
+            PendingKind::Text { preview, .. } => preview,
             PendingKind::Pair { name, .. } => name,
         }
     }
@@ -74,6 +82,13 @@ pub enum UiMessage {
     Status(String),
     /// Trusted devices changed (e.g. after pairing); carries a status text.
     PeersChanged(String),
+    /// An accepted text to copy to the clipboard.
+    TextReceived {
+        /// Alias of the sender or a short Node ID.
+        peer_label: String,
+        /// The received text.
+        text: String,
+    },
 }
 
 /// [`TransferHandler`] forwarding offers, pairing requests and progress to the UI loop.
@@ -143,6 +158,27 @@ impl TransferHandler for TuiHandler {
         ok
     }
 
+    async fn receive_text(&self, peer: EndpointId, text: String) -> TextDecision {
+        let config = Config::load().unwrap_or_default();
+        let peer_info = config.find_peer(&peer.to_string());
+        let peer_label = peer_info
+            .map(|p| p.alias.clone())
+            .unwrap_or_else(|| t!("tui.unknown_device", id = peer.fmt_short()).into_owned());
+        if !peer_info.is_some_and(|p| p.auto_accept) {
+            let kind = PendingKind::Text {
+                peer_label: peer_label.clone(),
+                preview: service::text_preview(&text, 300),
+            };
+            if !self.ask(kind).await {
+                return TextDecision::Rejected {
+                    reason: t!("transfer.user_rejected").into_owned(),
+                };
+            }
+        }
+        let _ = self.tx.send(UiMessage::TextReceived { peer_label, text });
+        TextDecision::Accepted
+    }
+
     fn on_event(&self, event: TransferEvent) {
         let _ = self.tx.send(UiMessage::Transfer(event));
     }
@@ -173,6 +209,13 @@ impl Focus {
 pub enum InputKind {
     /// Paths of files to send to a device.
     SendFile {
+        /// Receiver's Node ID.
+        node_id: String,
+        /// Receiver's display name.
+        label: String,
+    },
+    /// Text or a link to send to a device.
+    SendText {
         /// Receiver's Node ID.
         node_id: String,
         /// Receiver's display name.
@@ -367,6 +410,9 @@ impl App {
                     PendingKind::File { file_name, .. } => {
                         t!("tui.new_offer", name = file_name).into_owned()
                     }
+                    PendingKind::Text { peer_label, .. } => {
+                        t!("tui.new_text", name = peer_label).into_owned()
+                    }
                     PendingKind::Pair { name, .. } => {
                         t!("tui.new_pair_request", name = name).into_owned()
                     }
@@ -383,6 +429,15 @@ impl App {
                 self.config = Config::load().unwrap_or_default();
                 self.status_msg = status;
                 self.clamp_selection();
+            }
+            UiMessage::TextReceived { peer_label, text } => {
+                let preview = service::text_preview(&text, 80);
+                self.status_msg = if self.set_clipboard(&text) {
+                    t!("tui.text_copied", name = peer_label, text = preview)
+                } else {
+                    t!("tui.text_not_copied", name = peer_label, text = preview)
+                }
+                .into_owned();
             }
         }
     }
@@ -458,6 +513,31 @@ impl App {
             },
             Focus::Transfers => self.open_selected_transfer(false),
         }
+    }
+
+    /// `T`: sends text or a link to the selected device.
+    pub fn ask_send_text(&mut self) {
+        let target = match self.focus {
+            Focus::Trusted => self.selected_trusted().map(|(id, p)| (id, p.alias)),
+            Focus::Nearby => self
+                .nearby
+                .get(self.sel_nearby)
+                .map(|d| (d.node_id.clone(), d.name.clone())),
+            Focus::Transfers => None,
+        };
+        let Some((node_id, label)) = target else {
+            self.status_msg = t!("tui.text_where").into_owned();
+            return;
+        };
+        self.open_input(
+            InputKind::SendText {
+                node_id,
+                label: label.clone(),
+            },
+            format!(" {} ", t!("tui.text_to", name = &label)),
+            t!("tui.text_hint").into_owned(),
+            String::new(),
+        );
     }
 
     fn ask_send(&mut self, node_id: String, label: String) {
@@ -700,26 +780,31 @@ impl App {
 
     /// Copies this device's TICKET to the clipboard.
     pub fn copy_ticket_to_clipboard(&mut self) {
+        let ticket = self.ticket_str.clone();
+        self.status_msg = if self.set_clipboard(&ticket) {
+            t!("tui.copied")
+        } else {
+            t!("tui.clipboard_unavailable")
+        }
+        .into_owned();
+    }
+
+    /// Puts `text` into the system clipboard; `false` when it is unavailable.
+    fn set_clipboard(&mut self, text: &str) -> bool {
         #[cfg(not(target_os = "android"))]
         {
             if self.clipboard.is_none() {
                 self.clipboard = Clipboard::new().ok();
             }
-            let copied = self
-                .clipboard
+            self.clipboard
                 .as_mut()
-                .is_some_and(|c| c.set_text(&self.ticket_str).is_ok());
-            self.status_msg = if copied {
-                t!("tui.copied")
-            } else {
-                t!("tui.clipboard_unavailable")
-            }
-            .into_owned();
+                .is_some_and(|c| c.set_text(text).is_ok())
         }
 
         #[cfg(target_os = "android")]
         {
-            self.status_msg = t!("tui.clipboard_unavailable").into_owned();
+            let _ = text;
+            false
         }
     }
 
@@ -756,6 +841,7 @@ impl App {
         let value = input.value.trim().to_string();
         let result: Result<(), String> = match &input.kind {
             InputKind::SendFile { node_id, label } => self.submit_send(node_id, label, &value),
+            InputKind::SendText { node_id, label } => self.submit_text(node_id, label, &value),
             InputKind::Rename { node_id } => self.submit_rename(node_id, &value),
             InputKind::AddDevice => self.submit_add_device(&value),
             InputKind::DownloadDir => self.submit_download_dir(&value),
@@ -769,6 +855,49 @@ impl App {
         }
     }
 
+    /// Address of a device: the fresh LAN address from discovery, the stored
+    /// one, or a bare Node ID.
+    fn target_addr(&self, node_id: &str) -> Result<iroh::EndpointAddr, String> {
+        let nearby = self.discovery.as_ref().and_then(|d| {
+            EndpointId::from_str(node_id)
+                .ok()
+                .and_then(|id| d.addr_of(&id))
+        });
+        match (nearby, self.config.resolve_target(node_id)) {
+            (Some(addr), _) | (None, Ok(addr)) => Ok(addr),
+            (None, Err(_)) => EndpointId::from_str(node_id)
+                .map(Into::into)
+                .map_err(|e| t!("tui.error", error = e).into_owned()),
+        }
+    }
+
+    fn submit_text(&mut self, node_id: &str, label: &str, value: &str) -> Result<(), String> {
+        if value.is_empty() {
+            return Err(t!("service.text_empty").into_owned());
+        }
+        if value.len() > MAX_TEXT_LEN {
+            return Err(t!("service.text_too_long", max = MAX_TEXT_LEN).into_owned());
+        }
+        let addr = self.target_addr(node_id)?;
+        let engine = self.engine.clone();
+        let tx = self.tx.clone();
+        let text = value.to_string();
+        let label = label.to_string();
+        self.status_msg = t!("tui.text_sending", name = &label).into_owned();
+        tokio::spawn(async move {
+            let status = match service::send_text(&engine, addr, &text).await {
+                Ok(TextDecision::Accepted) => t!("tui.text_delivered", name = &label),
+                Ok(TextDecision::Rejected { reason }) => {
+                    t!("tui.text_rejected", name = &label, reason = reason)
+                }
+                Err(e) => t!("tui.send_failed", name = &label, error = format!("{e:#}")),
+            }
+            .into_owned();
+            let _ = tx.send(UiMessage::Status(status));
+        });
+        Ok(())
+    }
+
     fn submit_send(&mut self, node_id: &str, label: &str, value: &str) -> Result<(), String> {
         let paths = parse_paths(value);
         if paths.is_empty() {
@@ -777,29 +906,12 @@ impl App {
         if let Some(bad) = paths.iter().find(|p| !p.is_file()) {
             return Err(t!("tui.not_a_file", path = bad.display()).into_owned());
         }
-        let fallback = self.config.resolve_target(node_id);
-        let nearby = self.discovery.as_ref().and_then(|d| {
-            EndpointId::from_str(node_id)
-                .ok()
-                .and_then(|id| d.addr_of(&id))
-        });
+        let addr = self.target_addr(node_id)?;
         let engine = self.engine.clone();
         let tx = self.tx.clone();
-        let node_id = node_id.to_string();
         let label = label.to_string();
         self.status_msg = t!("tui.sending", count = paths.len(), name = &label).into_owned();
         tokio::spawn(async move {
-            let addr = match (nearby, fallback) {
-                (Some(addr), _) => addr,
-                (None, Ok(addr)) => addr,
-                (None, Err(_)) => match iroh::EndpointId::from_str(&node_id) {
-                    Ok(id) => id.into(),
-                    Err(e) => {
-                        let _ = tx.send(UiMessage::Status(t!("tui.error", error = e).into_owned()));
-                        return;
-                    }
-                },
-            };
             let sink_tx = tx.clone();
             let sink = move |ev| {
                 let _ = sink_tx.send(UiMessage::Transfer(ev));
