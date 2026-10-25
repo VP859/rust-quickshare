@@ -113,7 +113,7 @@ async fn check_discovery() {
                     port = DISCOVERY_PORT,
                     networks = health.networks,
                     lan = lan,
-                    received = health.beacons_received,
+                    received = health.lan_beacons_received,
                     devices = devices.len()
                 )
             );

@@ -112,6 +112,11 @@ pub struct DiscoveryHealth {
     pub lan_send_error: Option<String>,
     /// Number of announcements received from other devices.
     pub beacons_received: u64,
+    /// Announcements from other computers on the network, not counting other
+    /// instances on this computer.
+    pub lan_beacons_received: u64,
+    /// A firewall known to block incoming discovery packets (e.g. `firewalld`).
+    pub firewall_blocking: Option<String>,
 }
 
 impl DiscoveryHealth {
@@ -137,7 +142,16 @@ impl DiscoveryHealth {
         if !self.lan_send_ok {
             return Some(t!("discovery.lan_blocked", error = error()).into_owned());
         }
-        if self.beacons_received == 0 {
+        if self.lan_beacons_received == 0 {
+            if self.firewall_blocking.as_deref() == Some("firewalld") {
+                return Some(
+                    t!(
+                        "discovery.firewalld",
+                        ports = format!("{DISCOVERY_PORT}-{}", crate::node::QUIC_PORT)
+                    )
+                    .into_owned(),
+                );
+            }
             return Some(t!("discovery.nothing_received", port = DISCOVERY_PORT).into_owned());
         }
         None
@@ -210,6 +224,9 @@ impl Discovery {
             opts.port,
             if listening { "ok" } else { "limited mode" }
         );
+        if opts.targets.is_none() {
+            spawn_firewall_check(shared.clone(), opts.port);
+        }
         let task = tokio::spawn(run(engine, socket, opts, shared.clone()));
         Ok(Self { shared, task })
     }
@@ -233,9 +250,11 @@ impl Discovery {
         self.shared.tx.subscribe()
     }
 
-    /// Announces this device immediately (e.g. the "Search" button).
+    /// Announces this device immediately (e.g. the "Search" button) and checks
+    /// the firewall again.
     pub fn probe(&self) {
         self.shared.probe.notify_one();
+        spawn_firewall_check(self.shared.clone(), DISCOVERY_PORT);
     }
 
     /// Changes the announced device name and announces it immediately.
@@ -290,6 +309,46 @@ pub fn find_in(devices: &[NearbyDevice], query: &str) -> Option<NearbyDevice> {
                 || d.name.eq_ignore_ascii_case(q)
         })
         .cloned()
+}
+
+fn spawn_firewall_check(shared: Arc<Shared>, port: u16) {
+    std::thread::spawn(move || {
+        let blocking = blocking_firewall(port);
+        if let Some(name) = &blocking {
+            warn!("Discovery: {name} blocks incoming UDP {port}");
+        }
+        if let Ok(mut health) = shared.health.lock() {
+            health.firewall_blocking = blocking;
+        }
+    });
+}
+
+/// Name of an active firewall that does not allow incoming UDP on `port`.
+///
+/// Only firewalld (default on Fedora and openSUSE) can be queried without root:
+/// `firewall-cmd --query-port` also takes port ranges into account.
+#[cfg(target_os = "linux")]
+fn blocking_firewall(port: u16) -> Option<String> {
+    use std::process::{Command, Stdio};
+    let running = Command::new("firewall-cmd")
+        .arg("--state")
+        .stderr(Stdio::null())
+        .output()
+        .is_ok_and(|o| o.status.success() && o.stdout.starts_with(b"running"));
+    if !running {
+        return None;
+    }
+    let open = Command::new("firewall-cmd")
+        .arg(format!("--query-port={port}/udp"))
+        .stderr(Stdio::null())
+        .output()
+        .is_ok_and(|o| o.status.success());
+    (!open).then(|| "firewalld".to_string())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn blocking_firewall(_port: u16) -> Option<String> {
+    None
 }
 
 fn bind(port: u16) -> std::io::Result<std::net::UdpSocket> {
@@ -493,8 +552,17 @@ async fn handle_packet(
     if beacon.magic != MAGIC || beacon.addr.id == engine.node_id() {
         return;
     }
+    let from_this_computer = match from.ip() {
+        std::net::IpAddr::V4(ip) => {
+            ip.is_loopback() || local_networks(engine).iter().any(|(own, _)| *own == ip)
+        }
+        std::net::IpAddr::V6(ip) => ip.is_loopback(),
+    };
     if let Ok(mut health) = shared.health.lock() {
         health.beacons_received += 1;
+        if !from_this_computer {
+            health.lan_beacons_received += 1;
+        }
     }
 
     let id = beacon.addr.id;

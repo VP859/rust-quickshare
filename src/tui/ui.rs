@@ -201,12 +201,31 @@ fn render_nearby(f: &mut Frame, app: &App, area: Rect) {
             ListItem::new(Line::from(spans))
         })
         .collect();
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    let mut list_area = inner;
+    if let Some(hint) = &app.discovery_hint {
+        let rows = (hint.chars().count() as u16).div_ceil(inner.width.max(1));
+        let parts = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Min(1),
+                Constraint::Length(rows.min(inner.height / 2)),
+            ])
+            .split(inner);
+        list_area = parts[0];
+        f.render_widget(
+            Paragraph::new(hint.clone())
+                .style(Style::default().fg(Color::Yellow))
+                .wrap(Wrap { trim: true }),
+            parts[1],
+        );
+    }
     let list = List::new(items)
-        .block(block)
         .highlight_style(highlight(focused))
         .highlight_symbol("▶ ");
     let mut state = ListState::default().with_selected(Some(app.sel_nearby));
-    f.render_stateful_widget(list, area, &mut state);
+    f.render_stateful_widget(list, list_area, &mut state);
 }
 
 fn progress_bar(pct: u64) -> String {

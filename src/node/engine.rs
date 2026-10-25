@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use iroh::endpoint::{Connection, presets};
 use iroh::{Endpoint, EndpointAddr, EndpointId, SecretKey};
 use rust_i18n::t;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::time::Duration;
 use tracing::{debug, info};
 
@@ -12,6 +13,12 @@ use super::NodeTicket;
 /// ALPN of the RQS protocol; must change whenever the encoding of an existing
 /// message changes (new trailing enum variants keep it).
 pub const ALPN_RQS: &[u8] = b"rqs/0.2";
+
+/// Preferred UDP port of QUIC connections, next to the discovery port, so one
+/// firewall rule (`47823-47824/udp`) covers discovery and direct LAN transfers.
+/// When it is taken (e.g. a second instance on the same computer) a random
+/// port is used.
+pub const QUIC_PORT: u16 = 47824;
 
 /// How long to wait for a relay connection before building a TICKET.
 const ONLINE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -26,19 +33,38 @@ pub struct NodeEngine {
 
 impl NodeEngine {
     /// Binds a new endpoint with the given identity and the default n0 relays
-    /// and address lookup.
+    /// and address lookup, on IPv4 port [`QUIC_PORT`] when it is free.
     ///
     /// # Errors
     ///
     /// Fails when the endpoint cannot bind its UDP sockets.
     pub async fn new(secret_key: SecretKey) -> Result<Self> {
-        let endpoint = Endpoint::builder(presets::N0)
-            .secret_key(secret_key)
-            .alpns(vec![ALPN_RQS.to_vec()])
-            .bind()
-            .await
-            .context(t!("engine.bind"))?;
-        info!("P2P node started, Node ID {}", endpoint.id());
+        let builder = |key: SecretKey| {
+            Endpoint::builder(presets::N0)
+                .secret_key(key)
+                .alpns(vec![ALPN_RQS.to_vec()])
+        };
+        let preferred = match builder(secret_key.clone())
+            .bind_addr(SocketAddr::from((Ipv4Addr::UNSPECIFIED, QUIC_PORT)))
+        {
+            Ok(b) => b.bind().await.ok(),
+            Err(_) => None,
+        };
+        let endpoint = match preferred {
+            Some(endpoint) => endpoint,
+            None => {
+                debug!("UDP {QUIC_PORT} is taken, binding QUIC to a random port");
+                builder(secret_key)
+                    .bind()
+                    .await
+                    .context(t!("engine.bind"))?
+            }
+        };
+        info!(
+            "P2P node started, Node ID {}, sockets {:?}",
+            endpoint.id(),
+            endpoint.bound_sockets()
+        );
         Ok(Self { endpoint })
     }
 

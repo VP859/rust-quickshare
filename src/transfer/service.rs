@@ -416,7 +416,11 @@ pub async fn send_files(
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let tracker = Tracker::new(peer, &name, 0, Direction::Upload, sink);
+        let size = tokio::fs::metadata(path)
+            .await
+            .map(|m| m.len())
+            .unwrap_or(0);
+        let tracker = Tracker::new(peer, &name, size, Direction::Upload, sink);
         tracker.emit(0, TransferStatus::Preparing);
         let result = async {
             let file = prepare_file(path).await?;

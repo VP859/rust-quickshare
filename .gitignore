@@ -5,7 +5,7 @@
 
 # ---- Rust: build artifacts --------------------------------------------------
 target/
-**/target/
+**/target/\
 # Cargo.lock is intentionally NOT ignored: this is an application, so the
 # lockfile guarantees reproducible builds and belongs in the repository.
 

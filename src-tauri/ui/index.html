@@ -95,6 +95,7 @@
   section > header h2 { font-size: 14px; font-weight: 600; }
   .count { font-size: 12px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; min-width: 22px; text-align: center; }
   .hint { color: var(--muted); font-size: 12.5px; margin: -4px 0 10px; }
+  .hint.warn { color: var(--warn); margin: 10px 0 0; -webkit-user-select: text; user-select: text; }
 
   .list { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
   .list.menu-open { overflow: visible; }
@@ -265,6 +266,7 @@
     </header>
     <p class="hint" data-i18n="nearby_hint"></p>
     <div class="list" id="nearby"></div>
+    <p class="hint warn" id="nearby-hint" hidden></p>
   </section>
 
   <section>
@@ -843,10 +845,9 @@
     const box = $('nearby');
     $('nearby-count').textContent = nearby.length;
     box.replaceChildren();
+    updateDiscoveryHint();
     if (!nearby.length) {
-      const hint = el('div', { class: 'warn small' });
-      box.append(emptyState('wifi', t('searching_nearby'), hint));
-      invoke('discovery_health').then(h => { if (h) hint.textContent = h; }).catch(() => {});
+      box.append(emptyState('wifi', t('searching_nearby')));
       return;
     }
     for (const d of nearby) {
@@ -866,6 +867,13 @@
           el('div', { class: 'sub' }, platformLabel(d.platform), peer ? [' · ', el('span', { class: 'tag' }, t('paired_as', { name: peer.alias }))] : '')),
         trailing));
     }
+  }
+
+  async function updateDiscoveryHint() {
+    let hint = null;
+    try { hint = await invoke('discovery_health'); } catch {}
+    $('nearby-hint').textContent = hint ?? '';
+    $('nearby-hint').hidden = !hint;
   }
 
   async function sendToDevice(nodeId, label) {
@@ -1162,7 +1170,7 @@
     const kind = ev.status.kind;
     const pct = ev.total ? Math.min(100, Math.round(ev.done / ev.total * 100)) : (kind === 'completed' ? 100 : 0);
     const peer = peers.find(p => p.node_id === ev.peer)?.alias ?? shortId(ev.peer);
-    const detail = kind === 'running' ? `${pct}% · ${fmtSize(ev.done)} / ${fmtSize(ev.total)}`
+    const detail = kind === 'running' ? (ev.total ? `${pct}% · ${fmtSize(ev.done)} / ${fmtSize(ev.total)}` : fmtSize(ev.done))
       : kind === 'failed' ? t('tr_failed', { error: ev.status.error }) : kind === 'rejected' ? t('tr_rejected', { reason: ev.status.reason })
       : kind === 'completed' && ev.status.path ? t('tr_saved', { path: ev.status.path }) : t('st_' + kind);
     row.el.className = 'row transfer' + (kind === 'completed' ? ' done' : kind === 'failed' || kind === 'rejected' ? ' failed' : '');
@@ -1341,7 +1349,7 @@
     await loadNodeInfo();
     checkOnline();
     setInterval(checkOnline, 60000);
-    setInterval(() => { if (!nearby.length) renderNearby(); }, 5000);
+    setInterval(updateDiscoveryHint, 5000);
     if (isMobile) checkSharedFiles();
   });
 })();

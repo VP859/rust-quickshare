@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use iroh::EndpointId;
-use rqs_p2p::discovery::{Discovery, DiscoveryOptions};
+use rqs_p2p::discovery::{Discovery, DiscoveryHealth, DiscoveryOptions};
 use rqs_p2p::node::{NodeEngine, NodeTicket, load_or_generate_secret_key};
 use rqs_p2p::pairing::{PairOutcome, PairRequest, pairing_code, request_pairing};
 use rqs_p2p::protocol::codec::{read_msg, write_msg};
@@ -138,10 +138,12 @@ async fn push_multi_chunk_file_to_accepting_peer() -> Result<()> {
         service::send_files(&sender, addr, &[path], &|e| sent.lock().unwrap().push(e)).await?;
 
         assert_eq!(tokio::fs::read(dst.path().join("report.bin")).await?, data);
+        let sent = sent.lock().unwrap();
         assert!(matches!(
-            sent.lock().unwrap().last().map(|e| &e.status),
+            sent.last().map(|e| &e.status),
             Some(TransferStatus::Completed { .. })
         ));
+        assert!(sent.iter().all(|e| e.total == data.len() as u64));
         Ok(())
     })
     .await
@@ -347,10 +349,7 @@ async fn discovery_finds_peer_on_local_network() -> Result<()> {
             .await
             .context("A did not discover B")?;
         assert_eq!(seen_by_a.id, b.node_id());
-        assert!(
-            seen_by_a.addr.ip_addrs().next().is_some(),
-            "brak adresu LAN"
-        );
+        assert!(seen_by_a.addr.ip_addrs().next().is_some(), "no LAN address");
         let seen_by_b = db
             .wait_for(&a.node_id().to_string(), Duration::from_secs(10))
             .await
@@ -367,7 +366,16 @@ async fn discovery_finds_peer_on_local_network() -> Result<()> {
         }
         assert!(health.listening && health.lan_send_ok, "{health:?}");
         assert!(health.beacons_received > 0, "{health:?}");
-        assert_eq!(health.hint(), None);
+        assert_eq!(
+            health.lan_beacons_received, 0,
+            "loopback is not the network"
+        );
+        assert!(health.hint().is_some(), "only this computer was heard");
+        let heard_lan = DiscoveryHealth {
+            lan_beacons_received: 1,
+            ..health.clone()
+        };
+        assert_eq!(heard_lan.hint(), None);
 
         da.set_name("Office Laptop");
         assert!(

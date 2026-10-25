@@ -204,8 +204,11 @@ discovery.lan_blocked:
   en: "Sending to the local network is blocked (%{error}) – usually by a VPN or a firewall. NordVPN: nordvpn set lan-discovery on. You can also use a TICKET."
   pl: "Wysyłanie do sieci lokalnej jest blokowane (%{error}) – zwykle przez VPN lub zaporę. NordVPN: nordvpn set lan-discovery on. Możesz też użyć TICKETU."
 discovery.nothing_received:
-  en: "No announcements received yet. Check that the other device is on the same network and that firewalls on both devices allow UDP %{port}."
-  pl: "Nie odebrano jeszcze żadnych ogłoszeń. Sprawdź, czy drugie urządzenie jest w tej samej sieci, a zapory na obu urządzeniach przepuszczają UDP %{port}."
+  en: "No announcements from other devices on the network yet. Check that they are on the same network and that firewalls on both devices allow UDP %{port}."
+  pl: "Brak ogłoszeń od innych urządzeń w sieci. Sprawdź, czy są w tej samej sieci, a zapory na obu urządzeniach przepuszczają UDP %{port}."
+discovery.firewalld:
+  en: "firewalld blocks devices on the network. Allow Ferry: sudo firewall-cmd --permanent --add-port=%{ports}/udp && sudo firewall-cmd --reload"
+  pl: "firewalld blokuje urządzenia w sieci. Odblokuj Ferry: sudo firewall-cmd --permanent --add-port=%{ports}/udp && sudo firewall-cmd --reload"
 
 # ---------------------------------------------------------------- doctor
 doctor.title:
