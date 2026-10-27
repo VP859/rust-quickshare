@@ -13,6 +13,7 @@
 use rqs_p2p::transfer::service::TransferEvent;
 use tauri::AppHandle;
 
+/// Android: public folders, gallery integration and the "Share" menu.
 #[cfg(target_os = "android")]
 mod imp {
     use rqs_p2p::transfer::service::{Direction, TransferEvent, TransferStatus};
@@ -34,10 +35,13 @@ mod imp {
         "mov", "3gp", "webm", "mkv",
     ];
 
+    /// Folder for files and texts received from the "Share" menu.
     fn share_dir(app: &AppHandle) -> Option<PathBuf> {
         app.path().app_cache_dir().ok().map(|d| d.join("share-in"))
     }
 
+    /// `<storage>/<name>/Ferry` (e.g. `Download/Ferry`), created when missing;
+    /// `None` when the public storage is not writable.
     fn public_dir(app: &AppHandle, name: &str) -> Option<PathBuf> {
         app.path()
             .home_dir()
@@ -78,6 +82,7 @@ mod imp {
         }
     }
 
+    /// Whether the file is a photo or video, judged by its extension.
     fn is_media(path: &Path) -> bool {
         path.extension()
             .and_then(|e| e.to_str())
@@ -220,24 +225,31 @@ mod imp {
     }
 }
 
+/// Desktop: nothing to set up, paths are used as they are and there is no
+/// "Share" menu.
 #[cfg(not(target_os = "android"))]
 mod imp {
     use rqs_p2p::transfer::service::TransferEvent;
     use std::path::PathBuf;
     use tauri::AppHandle;
 
+    /// The default directories of the core are used.
     pub fn init(_app: &AppHandle) {}
 
+    /// Received files stay where they were saved.
     pub fn finalize_download(_app: &AppHandle, _event: &mut TransferEvent) {}
 
+    /// Desktop file pickers return regular paths.
     pub async fn local_path(_app: &AppHandle, input: &str) -> Result<PathBuf, String> {
         Ok(PathBuf::from(input))
     }
 
+    /// There is no "Share" menu on desktop.
     pub fn take_shared_files(_app: &AppHandle) -> Vec<String> {
         Vec::new()
     }
 
+    /// There is no "Share" menu on desktop.
     pub fn take_shared_text(_app: &AppHandle) -> Option<String> {
         None
     }

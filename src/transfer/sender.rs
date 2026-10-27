@@ -86,7 +86,8 @@ pub async fn push_file(
 ///
 /// Sends the offer, waits for the decision, streams the remaining chunks on
 /// separate unidirectional streams (up to [`CHUNK_WINDOW`] in flight) and waits
-/// for the receiver's verdict.
+/// for the receiver's verdict. Chunk buffers are handed over to QUIC without
+/// copying.
 ///
 /// # Errors
 ///
@@ -134,14 +135,17 @@ pub async fn send_on_channel(
 
         let len = offer
             .chunk_len(chunk_index)
-            .context(t!("transfer.chunk_len"))?;
+            .with_context(|| t!("transfer.chunk_len"))?;
         let mut payload = vec![0u8; len as usize];
         source
             .read_exact(&mut payload)
             .await
-            .context(t!("sender.file_changed"))?;
+            .with_context(|| t!("sender.file_changed"))?;
 
-        let mut stream = conn.open_uni().await.context(t!("sender.open_stream"))?;
+        let mut stream = conn
+            .open_uni()
+            .await
+            .with_context(|| t!("sender.open_stream"))?;
         in_flight.spawn(async move {
             let header = ChunkHeader {
                 chunk_index,
@@ -149,7 +153,7 @@ pub async fn send_on_channel(
                 chunk_hash: *blake3::hash(&payload).as_bytes(),
             };
             write_msg(&mut stream, &header).await?;
-            stream.write_all(&payload).await?;
+            stream.write_chunk(bytes::Bytes::from(payload)).await?;
             stream.finish()?;
             Ok(len)
         });
@@ -167,9 +171,10 @@ pub async fn send_on_channel(
     }
 }
 
+/// Waits for the next finished chunk task and returns the bytes it sent.
 async fn join_next(set: &mut JoinSet<Result<u32>>) -> Result<u32> {
     set.join_next()
         .await
-        .context(t!("transfer.task_aborted"))?
-        .context(t!("transfer.task_aborted"))?
+        .with_context(|| t!("transfer.task_aborted"))?
+        .with_context(|| t!("transfer.task_aborted"))?
 }

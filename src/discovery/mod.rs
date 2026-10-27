@@ -26,6 +26,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::{Notify, watch};
 use tracing::{debug, info, warn};
 
+use crate::config::Config;
 use crate::node::NodeEngine;
 use crate::pairing::clean_device_name;
 
@@ -35,19 +36,29 @@ pub const DISCOVERY_PORT: u16 = 47823;
 /// Administratively scoped multicast group used for announcements (not mDNS).
 pub const MULTICAST_GROUP: Ipv4Addr = Ipv4Addr::new(239, 255, 71, 83);
 
+/// First bytes of every announcement; other packets on the port are ignored.
 const MAGIC: [u8; 4] = *b"RQSd";
+/// Interval between announcements.
 const ANNOUNCE_INTERVAL: Duration = Duration::from_secs(5);
 /// A device disappears from the list after about three missed announcements.
 const DEVICE_TTL: Duration = Duration::from_secs(17);
+/// Upper bound of remembered devices, so a flood of fake announcements cannot exhaust memory.
 const MAX_DEVICES: usize = 256;
+/// Largest accepted announcement in bytes.
 const MAX_BEACON_LEN: usize = 2048;
+/// Largest number of QUIC ports taken from one announcement.
 const MAX_QUIC_PORTS: usize = 4;
 
+/// Announcement sent to the local network and answered directly.
 #[derive(Serialize, Deserialize)]
 struct Beacon {
+    /// Always [`MAGIC`].
     magic: [u8; 4],
+    /// Device name of the sender.
     name: String,
+    /// Operating system of the sender (`std::env::consts::OS`).
     platform: String,
+    /// iroh address of the sender (Node ID, relay, direct addresses).
     addr: EndpointAddr,
     /// IPv4 QUIC ports; combined with the packet's source address they give a
     /// LAN address even before iroh has discovered its own addresses.
@@ -92,8 +103,11 @@ impl Default for DiscoveryOptions {
     }
 }
 
+/// A visible device and when it was last heard.
 struct Entry {
+    /// Last announcement of the device.
     device: NearbyDevice,
+    /// When it was received.
     seen: Instant,
 }
 
@@ -158,15 +172,25 @@ impl DiscoveryHealth {
     }
 }
 
+/// State shared by the [`Discovery`] handle and its background task.
 struct Shared {
+    /// Announced device name.
     name: RwLock<String>,
+    /// Visible devices keyed by Node ID.
     devices: Mutex<HashMap<EndpointId, Entry>>,
+    /// Wakes the task for an immediate announcement.
     probe: Notify,
+    /// Publishes the sorted device list to subscribers.
     tx: watch::Sender<Vec<NearbyDevice>>,
+    /// Current state, see [`DiscoveryHealth`].
     health: Mutex<DiscoveryHealth>,
+    /// IPv4 addresses of this computer from the last announcement round, used
+    /// to tell announcements of other local instances from the network.
+    own_addrs: Mutex<Vec<Ipv4Addr>>,
 }
 
 impl Shared {
+    /// Sends the current device list, sorted by name, to subscribers.
     fn publish(&self, devices: &HashMap<EndpointId, Entry>) {
         let mut list: Vec<_> = devices.values().map(|e| e.device.clone()).collect();
         list.sort_by_key(|d| d.name.to_lowercase());
@@ -176,7 +200,9 @@ impl Shared {
 
 /// The discovery service; stops when dropped.
 pub struct Discovery {
+    /// State shared with the background task.
     shared: Arc<Shared>,
+    /// The background task; aborted on drop.
     task: tokio::task::JoinHandle<()>,
 }
 
@@ -206,7 +232,7 @@ impl Discovery {
                 );
                 bind(0)
             })
-            .context(t!("discovery.socket"))?;
+            .with_context(|| t!("discovery.socket"))?;
         let socket = UdpSocket::from_std(std_socket)?;
         let (tx, _) = watch::channel(Vec::new());
         let shared = Arc::new(Shared {
@@ -218,6 +244,7 @@ impl Discovery {
                 listening,
                 ..Default::default()
             }),
+            own_addrs: Mutex::new(Vec::new()),
         });
         info!(
             "Discovery listening on UDP {} ({})",
@@ -297,6 +324,32 @@ impl Discovery {
     }
 }
 
+/// Address of `target`: an alias, nearby device name, Node ID or TICKET.
+///
+/// A fresh LAN address announced on the local network is preferred (it works
+/// without internet); otherwise the address stored in `config` or carried by
+/// the TICKET is used, and a bare Node ID is resolved later through DNS/pkarr.
+///
+/// # Errors
+///
+/// Fails when `target` is neither a trusted or nearby device nor a valid
+/// TICKET or Node ID.
+pub fn resolve_target(
+    config: &Config,
+    discovery: Option<&Discovery>,
+    target: &str,
+) -> Result<EndpointAddr> {
+    let resolved = config.resolve_target(target);
+    let nearby = discovery.and_then(|d| match &resolved {
+        Ok(addr) => d.addr_of(&addr.id),
+        Err(_) => d.find(target).map(|n| n.addr),
+    });
+    match (nearby, resolved) {
+        (Some(addr), _) | (None, Ok(addr)) => Ok(addr),
+        (None, Err(e)) => Err(e),
+    }
+}
+
 /// Finds a device by full Node ID, a Node ID prefix of at least 8 characters,
 /// or its name (case-insensitive).
 pub fn find_in(devices: &[NearbyDevice], query: &str) -> Option<NearbyDevice> {
@@ -311,6 +364,8 @@ pub fn find_in(devices: &[NearbyDevice], query: &str) -> Option<NearbyDevice> {
         .cloned()
 }
 
+/// Checks the firewall on a separate thread (it runs external programs) and
+/// stores the result in [`DiscoveryHealth::firewall_blocking`].
 fn spawn_firewall_check(shared: Arc<Shared>, port: u16) {
     std::thread::spawn(move || {
         let blocking = blocking_firewall(port);
@@ -346,11 +401,14 @@ fn blocking_firewall(port: u16) -> Option<String> {
     (!open).then(|| "firewalld".to_string())
 }
 
+/// Other platforms: no firewall that can be queried without administrator rights.
 #[cfg(not(target_os = "linux"))]
 fn blocking_firewall(_port: u16) -> Option<String> {
     None
 }
 
+/// Opens the discovery socket: shared port (several apps on one computer),
+/// broadcast allowed, non-blocking. Port `0` picks a random port.
 fn bind(port: u16) -> std::io::Result<std::net::UdpSocket> {
     use socket2::{Domain, Protocol, Socket, Type};
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
@@ -363,6 +421,8 @@ fn bind(port: u16) -> std::io::Result<std::net::UdpSocket> {
     Ok(socket.into())
 }
 
+/// Background task: announces periodically and on demand, answers new
+/// devices and forgets devices that stopped announcing.
 async fn run(engine: NodeEngine, socket: UdpSocket, opts: DiscoveryOptions, shared: Arc<Shared>) {
     let mut buf = vec![0u8; MAX_BEACON_LEN];
     let mut tick = tokio::time::interval(ANNOUNCE_INTERVAL);
@@ -392,6 +452,7 @@ async fn run(engine: NodeEngine, socket: UdpSocket, opts: DiscoveryOptions, shar
     }
 }
 
+/// Serializes the current announcement; `None` if it would not fit in one datagram.
 fn encode_beacon(engine: &NodeEngine, shared: &Shared, reply: bool) -> Option<Vec<u8>> {
     let endpoint = engine.endpoint();
     let beacon = Beacon {
@@ -436,6 +497,9 @@ async fn announce(
         }
         None => {
             let networks = local_networks(engine);
+            if let Ok(mut own) = shared.own_addrs.lock() {
+                *own = networks.iter().map(|(ip, _)| *ip).collect();
+            }
             send(
                 socket,
                 &bytes,
@@ -492,13 +556,17 @@ async fn announce(
     }
 }
 
+/// Outcome of sending one announcement round to local networks.
 #[derive(Default)]
 struct LanSendStats {
+    /// At least one send succeeded.
     ok: bool,
+    /// Last send error.
     error: Option<String>,
 }
 
 impl LanSendStats {
+    /// Records the result of one send.
     fn record(&mut self, result: std::io::Result<()>) {
         match result {
             Ok(()) => self.ok = true,
@@ -507,6 +575,7 @@ impl LanSendStats {
     }
 }
 
+/// Sends one datagram, logging failures at debug level.
 async fn send(socket: &UdpSocket, bytes: &[u8], target: SocketAddr) -> std::io::Result<()> {
     socket
         .send_to(bytes, target)
@@ -539,6 +608,8 @@ fn join_multicast(engine: &NodeEngine, socket: &UdpSocket, joined: &mut BTreeSet
     }
 }
 
+/// Processes a received announcement: updates the device list and health
+/// and answers a new device directly (answers are not answered again).
 async fn handle_packet(
     engine: &NodeEngine,
     socket: &UdpSocket,
@@ -554,7 +625,7 @@ async fn handle_packet(
     }
     let from_this_computer = match from.ip() {
         std::net::IpAddr::V4(ip) => {
-            ip.is_loopback() || local_networks(engine).iter().any(|(own, _)| *own == ip)
+            ip.is_loopback() || shared.own_addrs.lock().is_ok_and(|own| own.contains(&ip))
         }
         std::net::IpAddr::V6(ip) => ip.is_loopback(),
     };
@@ -630,6 +701,7 @@ async fn handle_packet(
     }
 }
 
+/// Removes devices that have not announced themselves for [`DEVICE_TTL`].
 fn expire(shared: &Shared) {
     let Ok(mut devices) = shared.devices.lock() else {
         return;
@@ -649,6 +721,8 @@ fn local_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
     networks
 }
 
+/// Desktop variant using the `network-interface` crate; the broadcast
+/// address is computed from the netmask when the system does not report it.
 #[cfg(not(target_os = "android"))]
 fn platform_networks(_engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
     use network_interface::{Addr, NetworkInterface, NetworkInterfaceConfig};

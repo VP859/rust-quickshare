@@ -163,7 +163,9 @@ pub trait TransferHandler: Send + Sync + 'static {
 
 /// Emits the successive states of a single transfer.
 pub struct Tracker<'a> {
+    /// Event template with the fixed fields of this transfer.
     base: TransferEvent,
+    /// Receiver of the events.
     sink: EventSink<'a>,
 }
 
@@ -208,6 +210,8 @@ impl<'a> Tracker<'a> {
         self.emit(done, TransferStatus::Running);
     }
 
+    /// Emits [`TransferStatus::Completed`] or [`TransferStatus::Failed`] for `result`;
+    /// `path` extracts the saved file path from a success.
     fn finish<T>(&self, result: &Result<T>, path: impl FnOnce(&T) -> Option<String>) {
         match result {
             Ok(v) => self.emit(self.base.total, TransferStatus::Completed { path: path(v) }),
@@ -249,6 +253,7 @@ pub async fn serve<H: TransferHandler>(engine: NodeEngine, handler: Arc<H>) {
     }
 }
 
+/// Serves every control stream of one incoming connection in turn.
 async fn handle_connection<H: TransferHandler>(
     engine: &NodeEngine,
     conn: Connection,
@@ -271,6 +276,7 @@ async fn handle_connection<H: TransferHandler>(
     Ok(())
 }
 
+/// Incoming file offer ([`Hello::Push`]): asks the handler and receives the file.
 async fn handle_push<H: TransferHandler>(
     conn: &Connection,
     mut channel: Channel,
@@ -304,6 +310,7 @@ async fn handle_push<H: TransferHandler>(
     Ok(())
 }
 
+/// Download of a file shared by TICKET ([`Hello::Pull`]); unknown tokens close the connection.
 async fn handle_pull<H: TransferHandler>(
     conn: &Connection,
     mut channel: Channel,
@@ -329,6 +336,7 @@ async fn handle_pull<H: TransferHandler>(
     Ok(())
 }
 
+/// Pairing request ([`Hello::Pair`]): asks the handler and answers with [`PairResponse`].
 async fn handle_pair<H: TransferHandler>(
     engine: &NodeEngine,
     conn: &Connection,
@@ -358,6 +366,8 @@ async fn handle_pair<H: TransferHandler>(
     Ok(())
 }
 
+/// Incoming text ([`Hello::Text`]): validates its size, asks the handler and
+/// answers with [`TextDecision`].
 async fn handle_text<H: TransferHandler>(
     conn: &Connection,
     mut channel: Channel,
@@ -382,6 +392,7 @@ async fn handle_text<H: TransferHandler>(
     Ok(())
 }
 
+/// Emits the final event of an upload; a rejection is not an error.
 fn report_send(tracker: &Tracker<'_>, result: Result<SendOutcome>) -> Result<()> {
     match result {
         Ok(SendOutcome::Rejected(reason)) => {
@@ -454,13 +465,13 @@ pub async fn pull_shared(
     dest_dir: &Path,
     sink: EventSink<'_>,
 ) -> Result<PathBuf> {
-    let token = ticket.share.context(t!("service.pairing_ticket"))?;
+    let token = ticket.share.with_context(|| t!("service.pairing_ticket"))?;
     let peer = ticket.addr.id;
     let conn = engine.connect(ticket.addr.clone()).await?;
     let mut channel = Channel::open(&conn, &Hello::Pull { token }).await?;
     let offer = read_offer(&mut channel)
         .await
-        .context(t!("service.share_gone"))?;
+        .with_context(|| t!("service.share_gone"))?;
     let tracker = Tracker::new(
         peer,
         &offer.file_name,
@@ -504,7 +515,7 @@ pub async fn send_text(
     .await?;
     let decision: Result<TextDecision> = read_msg(&mut channel.recv)
         .await
-        .context(t!("service.text_no_answer"));
+        .with_context(|| t!("service.text_no_answer"));
     conn.close(0u32.into(), b"done");
     decision
 }

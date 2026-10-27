@@ -30,6 +30,7 @@ pub async fn handle_peer_cmd(cmd: PeerCommands) -> Result<()> {
     }
 }
 
+/// `rqs peer list`: prints trusted devices sorted by alias.
 fn list() -> Result<()> {
     let config = Config::load()?;
     if config.peers.is_empty() {
@@ -59,6 +60,7 @@ fn list() -> Result<()> {
     Ok(())
 }
 
+/// `rqs peer edit`: changes the alias and/or Auto-Accept of a device.
 fn edit(target: &str, alias: Option<String>, auto_accept: Option<bool>) -> Result<()> {
     let mut config = Config::load()?;
     let key = config
@@ -79,6 +81,7 @@ fn edit(target: &str, alias: Option<String>, auto_accept: Option<bool>) -> Resul
     config.save()
 }
 
+/// `rqs peer remove`: removes a device by alias or Node ID.
 fn remove(target: &str) -> Result<()> {
     let mut config = Config::load()?;
     if config.remove_peer(target) {

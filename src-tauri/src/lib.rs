@@ -4,7 +4,11 @@
 //! web frontend in `ui/index.html`. On desktop the app keeps running in the
 //! system tray when its window is closed.
 
-#![warn(missing_docs)]
+#![warn(
+    missing_docs,
+    clippy::missing_docs_in_private_items,
+    clippy::missing_errors_doc
+)]
 
 rust_i18n::i18n!("../locales", fallback = "en");
 
@@ -139,8 +143,10 @@ pub(crate) mod tray {
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
     use tauri::{App, AppHandle, Manager, Runtime};
 
+    /// ID of the tray icon, used to find it again in [`refresh`].
     const TRAY_ID: &str = "rqs-tray";
 
+    /// Shows, restores and focuses the main window.
     fn show_main(app: &AppHandle) {
         if let Some(window) = app.get_webview_window("main") {
             let _ = window.show();
@@ -149,6 +155,7 @@ pub(crate) mod tray {
         }
     }
 
+    /// Tray menu (show, hide, quit) in the current language.
     fn menu<R: Runtime, M: Manager<R>>(manager: &M) -> tauri::Result<Menu<R>> {
         let show = MenuItem::with_id(manager, "show", t!("gui.tray_show"), true, None::<&str>)?;
         let hide = MenuItem::with_id(manager, "hide", t!("gui.tray_hide"), true, None::<&str>)?;

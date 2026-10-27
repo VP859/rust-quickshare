@@ -10,7 +10,13 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::messages::MAX_FRAME_LEN;
 
+/// Size of the big-endian length prefix of every frame.
+const LEN_PREFIX: usize = 4;
+
 /// Serializes `msg` and writes it as a single frame, then flushes `writer`.
+///
+/// The length prefix and the payload are written with one call, so a frame
+/// costs a single write on QUIC streams.
 ///
 /// # Errors
 ///
@@ -21,18 +27,19 @@ where
     W: AsyncWriteExt + Unpin,
     T: Serialize,
 {
-    let bytes = postcard::to_allocvec(msg).context(t!("codec.serialize"))?;
-    let len = u32::try_from(bytes.len())
+    let mut frame =
+        postcard::to_extend(msg, vec![0u8; LEN_PREFIX]).with_context(|| t!("codec.serialize"))?;
+    let len = u32::try_from(frame.len() - LEN_PREFIX)
         .ok()
         .filter(|l| *l <= MAX_FRAME_LEN)
-        .context(t!("codec.frame_too_large"))?;
+        .with_context(|| t!("codec.frame_too_large"))?;
+    frame[..LEN_PREFIX].copy_from_slice(&len.to_be_bytes());
 
     writer
-        .write_all(&len.to_be_bytes())
+        .write_all(&frame)
         .await
-        .context(t!("codec.write"))?;
-    writer.write_all(&bytes).await.context(t!("codec.write"))?;
-    writer.flush().await.context(t!("codec.write"))?;
+        .with_context(|| t!("codec.write"))?;
+    writer.flush().await.with_context(|| t!("codec.write"))?;
     Ok(())
 }
 
@@ -49,11 +56,11 @@ where
     R: AsyncReadExt + Unpin,
     T: DeserializeOwned,
 {
-    let mut len_buf = [0u8; 4];
+    let mut len_buf = [0u8; LEN_PREFIX];
     reader
         .read_exact(&mut len_buf)
         .await
-        .context(t!("codec.read"))?;
+        .with_context(|| t!("codec.read"))?;
 
     let len = u32::from_be_bytes(len_buf);
     if len > MAX_FRAME_LEN {
@@ -64,8 +71,8 @@ where
     reader
         .read_exact(&mut buf)
         .await
-        .context(t!("codec.read"))?;
-    postcard::from_bytes(&buf).context(t!("codec.deserialize"))
+        .with_context(|| t!("codec.read"))?;
+    postcard::from_bytes(&buf).with_context(|| t!("codec.deserialize"))
 }
 
 #[cfg(test)]

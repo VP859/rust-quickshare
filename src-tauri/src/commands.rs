@@ -24,8 +24,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::node::AppState;
 
+/// Result of a command; the error is a message shown to the user.
 type CmdResult<T> = Result<T, String>;
 
+/// Converts any error into the message returned to the frontend.
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
@@ -104,19 +106,27 @@ pub struct LanguageInfo {
     pub available: Vec<LanguageOption>,
 }
 
+/// Payload of the `transfer-error` event.
 #[derive(Clone, Serialize)]
 struct TransferError {
+    /// Error description including its causes.
     message: String,
 }
 
+/// Payload of the `pair-result` event.
 #[derive(Clone, Serialize)]
 struct PairResult {
+    /// Node ID of the added device.
     node_id: String,
+    /// Its alias on this device.
     alias: String,
+    /// Whether both devices now trust each other.
     ok: bool,
+    /// Localized result shown to the user.
     message: String,
 }
 
+/// Renders `text` as a QR code SVG document (dark modules on white).
 fn qr_svg(text: &str) -> CmdResult<String> {
     let code = QrCode::new(text.as_bytes()).map_err(err)?;
     Ok(code
@@ -127,6 +137,7 @@ fn qr_svg(text: &str) -> CmdResult<String> {
         .build())
 }
 
+/// Reports a failed background transfer with a `transfer-error` event.
 fn emit_error(app: &AppHandle, e: anyhow::Error) {
     let _ = app.emit(
         "transfer-error",
@@ -137,6 +148,10 @@ fn emit_error(app: &AppHandle, e: anyhow::Error) {
 }
 
 /// Node ID, TICKET (with QR code) and download folder of this device.
+///
+/// # Errors
+///
+/// When the P2P node cannot start or the QR code cannot be generated.
 #[tauri::command]
 pub async fn get_node_info(state: State<'_, AppState>) -> CmdResult<NodeInfo> {
     let engine = state.engine().await?;
@@ -155,6 +170,10 @@ pub async fn get_node_info(state: State<'_, AppState>) -> CmdResult<NodeInfo> {
 }
 
 /// Trusted devices sorted by alias.
+///
+/// # Errors
+///
+/// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
 #[tauri::command]
 pub async fn list_peers(state: State<'_, AppState>) -> CmdResult<Vec<TrustedPeer>> {
     let config = state.config.lock().await;
@@ -176,6 +195,11 @@ pub async fn list_peers(state: State<'_, AppState>) -> CmdResult<Vec<TrustedPeer
 /// A pairing request is then sent in the background so that, once accepted,
 /// the other device trusts this one too; the result arrives as a
 /// `pair-result` event.
+///
+/// # Errors
+///
+/// When the input is neither a TICKET nor a Node ID, it is this device's own
+/// TICKET, or the configuration cannot be saved.
 #[tauri::command]
 pub async fn add_peer(
     input: String,
@@ -204,6 +228,9 @@ pub async fn add_peer(
     Ok(node_id)
 }
 
+/// Sends a pairing request to a device just added by TICKET or Node ID in the
+/// background and reports the result with a `pair-result` event. When the
+/// other device accepts, its current address is stored as well.
 fn start_pairing_after_add(app: AppHandle, node_id: String, alias: String, auto_accept: bool) {
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();
@@ -255,6 +282,11 @@ fn start_pairing_after_add(app: AppHandle, node_id: String, alias: String, auto_
 /// Opens a received file, or its folder when `reveal` is set.
 ///
 /// Only files received during this session may be opened.
+///
+/// # Errors
+///
+/// When the file was not received in this session, no longer exists or no
+/// opener program is available.
 #[tauri::command]
 pub fn open_received(path: String, reveal: bool, state: State<'_, AppState>) -> CmdResult<()> {
     let path = PathBuf::from(path);
@@ -284,6 +316,10 @@ pub fn discovery_health(state: State<'_, AppState>) -> Option<String> {
 }
 
 /// Changes the alias and/or Auto-Accept setting of a trusted device.
+///
+/// # Errors
+///
+/// When the device is not trusted or the configuration cannot be saved.
 #[tauri::command]
 pub async fn update_peer(
     node_id: String,
@@ -309,6 +345,10 @@ pub async fn update_peer(
 }
 
 /// Removes a trusted device.
+///
+/// # Errors
+///
+/// When the configuration cannot be saved.
 #[tauri::command]
 pub async fn remove_peer(node_id: String, state: State<'_, AppState>) -> CmdResult<()> {
     let mut config = state.config.lock().await;
@@ -317,6 +357,10 @@ pub async fn remove_peer(node_id: String, state: State<'_, AppState>) -> CmdResu
 }
 
 /// Whether a trusted device responds within a few seconds.
+///
+/// # Errors
+///
+/// When `node_id` is not a valid Node ID or the node cannot start.
 #[tauri::command]
 pub async fn peer_online(node_id: String, state: State<'_, AppState>) -> CmdResult<bool> {
     let target = state
@@ -332,6 +376,12 @@ pub async fn peer_online(node_id: String, state: State<'_, AppState>) -> CmdResu
 ///
 /// Returns immediately; progress arrives as `transfer` events and a failure as
 /// a `transfer-error` event. On Android `content://` URIs are accepted.
+///
+/// # Errors
+///
+/// When no files were given, the device cannot be resolved, the node cannot
+/// start or an Android `content://` file cannot be copied. Transfer failures are
+/// reported later through `transfer-error`.
 #[tauri::command]
 pub async fn send_files(
     paths: Vec<String>,
@@ -364,6 +414,11 @@ pub async fn send_files(
 /// receiver's clipboard).
 ///
 /// Returns a localized error when the receiver declined or did not answer.
+///
+/// # Errors
+///
+/// When the text is empty or too long, the device cannot be reached or does
+/// not answer, or the receiver declined it.
 #[tauri::command]
 pub async fn send_text(text: String, target: String, state: State<'_, AppState>) -> CmdResult<()> {
     let addr = resolve_with_nearby(&state, &target).await?;
@@ -380,6 +435,10 @@ pub async fn send_text(text: String, target: String, state: State<'_, AppState>)
 }
 
 /// Shares a file by a one-time TICKET (the receiver scans the QR code or runs `rqs receive`).
+///
+/// # Errors
+///
+/// When the file cannot be read and hashed or the TICKET cannot be built.
 #[tauri::command]
 pub async fn share_file(
     path: String,
@@ -403,6 +462,10 @@ pub async fn share_file(
 }
 
 /// Tells whether a TICKET shares a file or identifies a device to pair with.
+///
+/// # Errors
+///
+/// When the text is neither a TICKET nor a Node ID.
 #[tauri::command]
 pub fn inspect_ticket(ticket: String) -> CmdResult<TicketInfo> {
     if let Ok(t) = NodeTicket::deserialize_from_str(&ticket) {
@@ -420,6 +483,11 @@ pub fn inspect_ticket(ticket: String) -> CmdResult<TicketInfo> {
 }
 
 /// Downloads a file from a share TICKET in the background (`transfer` events).
+///
+/// # Errors
+///
+/// When the TICKET is invalid or is a pairing TICKET. Download failures are
+/// reported later through `transfer-error`.
 #[tauri::command]
 pub async fn receive_from_ticket(
     ticket: String,
@@ -446,6 +514,10 @@ pub async fn receive_from_ticket(
 }
 
 /// Answers an `incoming-offer` or `pair-request` event by its ID.
+///
+/// # Errors
+///
+/// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
 #[tauri::command]
 pub async fn respond_to_offer(
     transfer_id: String,
@@ -459,6 +531,10 @@ pub async fn respond_to_offer(
 }
 
 /// Sets the folder for received files, creating it if needed.
+///
+/// # Errors
+///
+/// When the folder cannot be created or the configuration cannot be saved.
 #[tauri::command]
 pub async fn set_download_dir(path: String, state: State<'_, AppState>) -> CmdResult<()> {
     let dir = PathBuf::from(path);
@@ -468,20 +544,12 @@ pub async fn set_download_dir(path: String, state: State<'_, AppState>) -> CmdRe
     config.save().map_err(err)
 }
 
-/// Address of a device: a fresh LAN address from discovery when available
-/// (works without internet), otherwise the stored one. Accepts a Node ID,
-/// alias, nearby device name or TICKET.
+/// Address of a device given by Node ID, alias, nearby device name or TICKET;
+/// see [`rqs_p2p::discovery::resolve_target`].
 async fn resolve_with_nearby(state: &AppState, target: &str) -> CmdResult<iroh::EndpointAddr> {
-    let resolved = state.config.lock().await.resolve_target(target);
-    let nearby = state.discovery.get().and_then(|d| match &resolved {
-        Ok(addr) => d.addr_of(&addr.id),
-        Err(_) => d.find(target).map(|n| n.addr),
-    });
-    match (nearby, resolved) {
-        (Some(addr), _) => Ok(addr),
-        (None, Ok(addr)) => Ok(addr),
-        (None, Err(e)) => Err(format!("{e:#}")),
-    }
+    let config = state.config.lock().await;
+    rqs_p2p::discovery::resolve_target(&config, state.discovery.get(), target)
+        .map_err(|e| format!("{e:#}"))
 }
 
 /// Devices currently visible on the local network (updates arrive as `nearby` events).
@@ -495,6 +563,10 @@ pub fn list_nearby(state: State<'_, AppState>) -> Vec<NearbyDevice> {
 }
 
 /// Announces this device immediately ("Search" button).
+///
+/// # Errors
+///
+/// When local network discovery is unavailable.
 #[tauri::command]
 pub fn refresh_nearby(state: State<'_, AppState>) -> CmdResult<()> {
     let discovery = state
@@ -506,6 +578,10 @@ pub fn refresh_nearby(state: State<'_, AppState>) -> CmdResult<()> {
 }
 
 /// Verification code shown before a pairing request is sent.
+///
+/// # Errors
+///
+/// When `node_id` is not a valid Node ID or the node cannot start.
 #[tauri::command]
 pub async fn pair_code(node_id: String, state: State<'_, AppState>) -> CmdResult<String> {
     let peer = iroh::EndpointId::from_str(&node_id).map_err(err)?;
@@ -513,6 +589,11 @@ pub async fn pair_code(node_id: String, state: State<'_, AppState>) -> CmdResult
 }
 
 /// One-button pairing; waits for the other device and returns the saved alias.
+///
+/// # Errors
+///
+/// When the device cannot be reached, declines, does not answer in time, or the
+/// configuration cannot be saved.
 #[tauri::command]
 pub async fn pair_device(node_id: String, state: State<'_, AppState>) -> CmdResult<String> {
     let addr = resolve_with_nearby(&state, &node_id).await?;
@@ -538,6 +619,10 @@ pub async fn pair_device(node_id: String, state: State<'_, AppState>) -> CmdResu
 }
 
 /// Name of this device.
+///
+/// # Errors
+///
+/// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
 #[tauri::command]
 pub async fn get_device_name(state: State<'_, AppState>) -> CmdResult<DeviceName> {
     let config = state.config.lock().await;
@@ -548,6 +633,10 @@ pub async fn get_device_name(state: State<'_, AppState>) -> CmdResult<DeviceName
 }
 
 /// Changes the name of this device and announces it immediately.
+///
+/// # Errors
+///
+/// When the cleaned name is empty or the configuration cannot be saved.
 #[tauri::command]
 pub async fn set_device_name(name: String, state: State<'_, AppState>) -> CmdResult<String> {
     let clean = clean_device_name(&name);
@@ -580,6 +669,10 @@ pub fn get_language() -> LanguageInfo {
 
 /// Switches and saves the interface language; backend messages, notifications
 /// and the tray menu follow it too.
+///
+/// # Errors
+///
+/// When the language code is not supported or the configuration cannot be saved.
 #[tauri::command]
 pub async fn set_language(
     code: String,
@@ -620,6 +713,10 @@ pub fn app_info() -> AppInfo {
 }
 
 /// Opens the project repository in the default browser (desktop only).
+///
+/// # Errors
+///
+/// When no browser can be started (e.g. on Android).
 #[tauri::command]
 pub fn open_repository() -> CmdResult<()> {
     rqs_p2p::system::open_url(env!("CARGO_PKG_REPOSITORY")).map_err(err)
@@ -633,6 +730,10 @@ pub fn take_shared_files(app: AppHandle) -> Vec<String> {
 
 /// Opens an `http(s)` link from a received text in the default browser
 /// (desktop only).
+///
+/// # Errors
+///
+/// When `url` is not an `http(s)` link without spaces or no browser can be started.
 #[tauri::command]
 pub fn open_link(url: String) -> CmdResult<()> {
     let url = url.trim();

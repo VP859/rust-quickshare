@@ -93,7 +93,7 @@ impl NodeTicket {
         match EndpointId::from_str(s.trim()) {
             Ok(id) => Ok(id.into()),
             Err(_) if Self::looks_like_ticket(s) => Err(ticket_err),
-            Err(e) => Err(e).context(t!("ticket.invalid_target")),
+            Err(e) => Err(e).with_context(|| t!("ticket.invalid_target")),
         }
     }
 }

@@ -13,6 +13,7 @@ use super::app::{App, Focus, PendingKind, Popup, display_path};
 use crate::cli::display::{human_size, qr_terminal};
 use crate::transfer::service::{Direction as TransferDirection, TransferStatus};
 
+/// Width of transfer progress bars in characters.
 const BAR_WIDTH: usize = 16;
 
 /// Draws the whole interface: header, three panels, footer and dialogs
@@ -52,6 +53,7 @@ pub fn render(f: &mut Frame, app: &App) {
     }
 }
 
+/// Bordered panel with a title, highlighted when focused.
 fn panel(title: String, focused: bool) -> Block<'static> {
     let color = if focused {
         Color::Cyan
@@ -64,6 +66,7 @@ fn panel(title: String, focused: bool) -> Block<'static> {
         .border_style(Style::default().fg(color))
 }
 
+/// Style of the selected row; dimmer when the panel is not focused.
 fn highlight(focused: bool) -> Style {
     if focused {
         Style::default()
@@ -75,6 +78,7 @@ fn highlight(focused: bool) -> Style {
     }
 }
 
+/// Header: app name, key hints, Node ID, device name and download folder.
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
     let lines = vec![
         Line::from(vec![
@@ -103,6 +107,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
     );
 }
 
+/// Panel `[1]`: trusted devices with their online state and Auto-Accept.
 fn render_trusted(f: &mut Frame, app: &App, area: Rect) {
     let focused = app.focus == Focus::Trusted;
     let trusted = app.trusted();
@@ -156,6 +161,8 @@ fn render_trusted(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(list, area, &mut state);
 }
 
+/// Panel `[2]`: devices on the local network, with a discovery hint when
+/// something prevents finding others.
 fn render_nearby(f: &mut Frame, app: &App, area: Rect) {
     let focused = app.focus == Focus::Nearby;
     let block = panel(
@@ -228,11 +235,13 @@ fn render_nearby(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(list, list_area, &mut state);
 }
 
+/// Text progress bar of [`BAR_WIDTH`] characters.
 fn progress_bar(pct: u64) -> String {
     let filled = (pct.min(100) as usize * BAR_WIDTH) / 100;
     format!("{}{}", "█".repeat(filled), "░".repeat(BAR_WIDTH - filled))
 }
 
+/// Panel `[3]`: transfers, newest first, with progress and speed.
 fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
     let focused = app.focus == Focus::Transfers;
     let block = panel(format!(" [3] {} ", t!("tui.transfers_title")), focused);
@@ -329,6 +338,7 @@ fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
     f.render_stateful_widget(list, area, &mut state);
 }
 
+/// Footer: keys of the focused panel and the status line.
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let hints = match app.focus {
         Focus::Trusted => t!("tui.footer_trusted"),
@@ -353,6 +363,7 @@ fn centered(area: Rect, width: u16, height: u16) -> Rect {
     }
 }
 
+/// Dialog of the first pending decision (offer, text or pairing).
 fn render_pending(f: &mut Frame, app: &App) {
     let Some(p) = app.pending.front() else {
         return;
@@ -444,6 +455,7 @@ fn render_pending(f: &mut Frame, app: &App) {
     );
 }
 
+/// Text input dialog with its hint and validation error.
 fn render_input(f: &mut Frame, app: &App) {
     let Some(input) = &app.input else {
         return;
@@ -485,6 +497,7 @@ fn render_input(f: &mut Frame, app: &App) {
     );
 }
 
+/// Informational dialog: TICKET, help or removal confirmation.
 fn render_popup(f: &mut Frame, app: &App, popup: &Popup) {
     match popup {
         Popup::Ticket => render_ticket(f, app),
@@ -566,6 +579,7 @@ fn render_ticket(f: &mut Frame, app: &App) {
     );
 }
 
+/// Help with all keyboard shortcuts.
 fn render_help(f: &mut Frame) {
     let rows = [
         ("Tab / 1 2 3", t!("tui.help_panels")),

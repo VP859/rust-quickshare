@@ -3,8 +3,9 @@
 //! progress to the frontend.
 //!
 //! Events emitted to the frontend: `node-ready`, `node-error`, `nearby`,
-//! `incoming-offer`, `incoming-text`, `text-received`, `request-cancelled`,
-//! `pair-request`, `pair-cancelled`, `peers-changed` and `transfer`.
+//! `incoming-offer`, `incoming-text`, `pair-request` (questions answered with
+//! `respond_to_offer`), `request-cancelled` (a question expired), `text-received`,
+//! `peers-changed` and `transfer`.
 
 use iroh::EndpointId;
 use rqs_p2p::config::Config;
@@ -36,6 +37,7 @@ const PAIR_UI_TIMEOUT: Duration = Duration::from_secs(55);
 
 /// State shared by all Tauri commands.
 pub struct AppState {
+    /// The P2P node, started on first use; see [`AppState::engine`].
     engine: OnceCell<NodeEngine>,
     /// Current configuration; saved after every change.
     pub config: Mutex<Config>,
@@ -166,6 +168,7 @@ pub struct GuiHandler {
 }
 
 impl GuiHandler {
+    /// Shared application state.
     fn state(&self) -> tauri::State<'_, AppState> {
         self.app.state::<AppState>()
     }
@@ -189,6 +192,41 @@ impl GuiHandler {
             warn!("Could not show a notification: {e}");
         }
     }
+
+    /// Alias of a trusted sender and whether it has Auto-Accept enabled.
+    async fn sender_info(&self, peer: &EndpointId) -> (Option<String>, bool) {
+        let state = self.state();
+        let config = state.config.lock().await;
+        config
+            .find_peer(&peer.to_string())
+            .map_or((None, false), |p| (Some(p.alias.clone()), p.auto_accept))
+    }
+
+    /// Asks the user through the frontend and waits for the answer.
+    ///
+    /// Emits `event` with `payload` (whose `id` the frontend passes to
+    /// `respond_to_offer`), shows a notification and waits at most `timeout`.
+    /// A request left unanswered is withdrawn with a `request-cancelled` event,
+    /// so the frontend closes its dialog. Returns `true` only on acceptance.
+    async fn ask<P: Serialize + Clone>(
+        &self,
+        id: &str,
+        event: &str,
+        payload: P,
+        timeout: Duration,
+        notification: (&str, &str),
+    ) -> bool {
+        let state = self.state();
+        let (tx, rx) = oneshot::channel();
+        state.pending.lock().await.insert(id.to_string(), tx);
+        let _ = self.app.emit(event, payload);
+        self.notify(notification.0, notification.1);
+        let accepted = matches!(tokio::time::timeout(timeout, rx).await, Ok(Ok(true)));
+        if state.pending.lock().await.remove(id).is_some() {
+            let _ = self.app.emit("request-cancelled", id);
+        }
+        accepted
+    }
 }
 
 impl TransferHandler for GuiHandler {
@@ -198,46 +236,30 @@ impl TransferHandler for GuiHandler {
         transfer_id: &str,
         offer: &TransferOffer,
     ) -> OfferDecision {
-        let state = self.state();
-        let dest_dir = state.download_dir().await;
-        let peer_info = state
-            .config
-            .lock()
-            .await
-            .find_peer(&peer.to_string())
-            .cloned();
-        if peer_info.as_ref().is_some_and(|p| p.auto_accept) {
-            return OfferDecision::Accept { dest_dir };
-        }
-
-        let (tx, rx) = oneshot::channel();
-        state
-            .pending
-            .lock()
-            .await
-            .insert(transfer_id.to_string(), tx);
-        let alias = peer_info.map(|p| p.alias);
-        let _ = self.app.emit(
-            "incoming-offer",
-            IncomingOffer {
-                id: transfer_id.to_string(),
-                peer: peer.to_string(),
-                alias: alias.clone(),
-                file_name: offer.file_name.clone(),
-                size: offer.file_size,
-            },
-        );
-        let sender = alias.unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
-        self.notify(
-            &t!("gui.notify_offer_title"),
-            &t!("gui.notify_offer", sender = sender, name = &offer.file_name),
-        );
-
-        let accepted = matches!(
-            tokio::time::timeout(DECISION_TIMEOUT, rx).await,
-            Ok(Ok(true))
-        );
-        state.pending.lock().await.remove(transfer_id);
+        let dest_dir = self.state().download_dir().await;
+        let (alias, auto_accept) = self.sender_info(&peer).await;
+        let sender = alias
+            .clone()
+            .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
+        let accepted = auto_accept
+            || self
+                .ask(
+                    transfer_id,
+                    "incoming-offer",
+                    IncomingOffer {
+                        id: transfer_id.to_string(),
+                        peer: peer.to_string(),
+                        alias,
+                        file_name: offer.file_name.clone(),
+                        size: offer.file_size,
+                    },
+                    DECISION_TIMEOUT,
+                    (
+                        &t!("gui.notify_offer_title"),
+                        &t!("gui.notify_offer", sender = sender, name = &offer.file_name),
+                    ),
+                )
+                .await;
         if accepted {
             OfferDecision::Accept { dest_dir }
         } else {
@@ -261,34 +283,24 @@ impl TransferHandler for GuiHandler {
     }
 
     async fn confirm_pair(&self, req: PairRequest) -> bool {
-        let state = self.state();
         let id = request_id("pair", &req.peer);
-        let (tx, rx) = oneshot::channel();
-        state.pending.lock().await.insert(id.clone(), tx);
-        let _ = self.app.emit(
-            "pair-request",
-            IncomingPair {
-                id: id.clone(),
-                peer: req.peer.to_string(),
-                name: req.name.clone(),
-                code: req.code.clone(),
-            },
+        let request = IncomingPair {
+            id: id.clone(),
+            peer: req.peer.to_string(),
+            name: req.name.clone(),
+            code: req.code.clone(),
+        };
+        let notification = (
+            &*t!("gui.notify_pair_title"),
+            &*t!("gui.notify_pair", name = &req.name, code = &req.code),
         );
-        self.notify(
-            &t!("gui.notify_pair_title"),
-            &t!("gui.notify_pair", name = &req.name, code = &req.code),
-        );
-
-        let accepted = matches!(
-            tokio::time::timeout(PAIR_UI_TIMEOUT, rx).await,
-            Ok(Ok(true))
-        );
-        if state.pending.lock().await.remove(&id).is_some() {
-            let _ = self.app.emit("pair-cancelled", id);
-        }
-        if !accepted {
+        if !self
+            .ask(&id, "pair-request", request, PAIR_UI_TIMEOUT, notification)
+            .await
+        {
             return false;
         }
+        let state = self.state();
         let mut config = state.config.lock().await;
         let saved = config
             .add_paired(req.peer, &req.name, req.addr, false)
@@ -307,56 +319,43 @@ impl TransferHandler for GuiHandler {
     }
 
     async fn receive_text(&self, peer: EndpointId, text: String) -> TextDecision {
-        let state = self.state();
-        let peer_info = state
-            .config
-            .lock()
-            .await
-            .find_peer(&peer.to_string())
-            .cloned();
-        let alias = peer_info.as_ref().map(|p| p.alias.clone());
+        let (alias, auto_accept) = self.sender_info(&peer).await;
         let sender = alias
             .clone()
             .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
-
-        if !peer_info.is_some_and(|p| p.auto_accept) {
-            let id = request_id("text", &peer);
-            let (tx, rx) = oneshot::channel();
-            state.pending.lock().await.insert(id.clone(), tx);
-            let _ = self.app.emit(
-                "incoming-text",
-                IncomingText {
-                    id: id.clone(),
-                    peer: peer.to_string(),
-                    alias: alias.clone(),
-                    text: text.clone(),
-                },
-            );
-            self.notify(
-                &t!("gui.notify_text_title"),
-                &t!("gui.notify_text", sender = &sender),
-            );
-            let accepted = matches!(
-                tokio::time::timeout(DECISION_TIMEOUT, rx).await,
-                Ok(Ok(true))
-            );
-            if state.pending.lock().await.remove(&id).is_some() {
-                let _ = self.app.emit("request-cancelled", id);
-            }
-            if !accepted {
-                return TextDecision::Rejected {
-                    reason: t!("transfer.user_rejected").into_owned(),
-                };
-            }
+        let id = request_id("text", &peer);
+        let request = IncomingText {
+            id: id.clone(),
+            peer: peer.to_string(),
+            alias: alias.clone(),
+            text: text.clone(),
+        };
+        let notification = (
+            &*t!("gui.notify_text_title"),
+            &*t!("gui.notify_text", sender = &sender),
+        );
+        if !auto_accept
+            && !self
+                .ask(
+                    &id,
+                    "incoming-text",
+                    request,
+                    DECISION_TIMEOUT,
+                    notification,
+                )
+                .await
+        {
+            return TextDecision::Rejected {
+                reason: t!("transfer.user_rejected").into_owned(),
+            };
         }
 
-        let copied = match self.app.clipboard().write_text(text.clone()) {
-            Ok(()) => true,
-            Err(e) => {
-                warn!("Could not copy the received text: {e}");
-                false
-            }
-        };
+        let copied = self
+            .app
+            .clipboard()
+            .write_text(text.clone())
+            .inspect_err(|e| warn!("Could not copy the received text: {e}"))
+            .is_ok();
         let _ = self.app.emit(
             "text-received",
             ReceivedText {

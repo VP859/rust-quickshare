@@ -15,7 +15,7 @@ use crate::protocol::codec::{read_msg, write_msg};
 use crate::protocol::messages::{
     CHUNK_WINDOW, ChunkHeader, TransferDecision, TransferOffer, TransferResult,
 };
-use crate::transfer::hash::compute_file_hash;
+use crate::transfer::hash::hash_prefix;
 use crate::transfer::security::{
     resolve_secure_target_path, sanitize_filename, unique_destination,
 };
@@ -95,9 +95,12 @@ pub async fn receive_on_channel(
         .unwrap_or(0);
     let start_chunk_index = (existing / chunk_size).min(total_chunks);
     let valid_bytes = (start_chunk_index * chunk_size).min(offer.file_size);
-    if start_chunk_index > 0 {
+    let mut hasher = if start_chunk_index > 0 {
         info!("Resuming '{safe_name}' from chunk #{start_chunk_index} ({valid_bytes} B on disk)");
-    }
+        hash_prefix(&part_path, valid_bytes).await?
+    } else {
+        blake3::Hasher::new()
+    };
 
     write_msg(
         &mut channel.send,
@@ -122,13 +125,14 @@ pub async fn receive_on_channel(
         start_chunk_index,
         valid_bytes,
         &mut part_file,
+        &mut hasher,
         progress,
     )
     .await?;
     part_file.sync_all().await?;
     drop(part_file);
 
-    if compute_file_hash(&part_path).await? != offer.file_hash {
+    if *hasher.finalize().as_bytes() != offer.file_hash {
         let _ = tokio::fs::remove_file(&part_path).await;
         let reason = t!("receiver.hash_mismatch").into_owned();
         write_msg(
@@ -145,7 +149,7 @@ pub async fn receive_on_channel(
     let final_path = unique_destination(&final_target);
     tokio::fs::rename(&part_path, &final_path)
         .await
-        .context(t!("receiver.rename"))?;
+        .with_context(|| t!("receiver.rename"))?;
 
     write_msg(&mut channel.send, &TransferResult::Verified).await?;
     channel.finish().await;
@@ -163,19 +167,26 @@ impl Drop for ChunkTask {
 }
 
 impl ChunkTask {
+    /// Waits for the chunk; fails when the task failed or was aborted.
     async fn join(mut self) -> Result<Vec<u8>> {
-        (&mut self.0).await.context(t!("transfer.task_aborted"))?
+        (&mut self.0)
+            .await
+            .with_context(|| t!("transfer.task_aborted"))?
     }
 }
 
 /// Reads chunks concurrently but writes them strictly in order, so the `.part`
 /// file always holds a contiguous prefix of the file (the basis for resuming).
+///
+/// Every written chunk is also fed to `hasher`, which therefore ends up with
+/// the hash of the whole file without reading it back from disk.
 async fn receive_chunks(
     conn: &Connection,
     offer: &TransferOffer,
     start_chunk_index: u64,
     mut done: u64,
     part_file: &mut File,
+    hasher: &mut blake3::Hasher,
     progress: ProgressFn<'_>,
 ) -> Result<()> {
     let mut pending: VecDeque<ChunkTask> = VecDeque::with_capacity(CHUNK_WINDOW);
@@ -185,6 +196,7 @@ async fn receive_chunks(
             && let Some(task) = pending.pop_front()
         {
             let payload = task.join().await?;
+            hasher.update(&payload);
             part_file.write_all(&payload).await?;
             done += payload.len() as u64;
             progress(done);
@@ -192,11 +204,11 @@ async fn receive_chunks(
 
         let expected_len = offer
             .chunk_len(chunk_index)
-            .context(t!("transfer.chunk_len"))?;
+            .with_context(|| t!("transfer.chunk_len"))?;
         let stream = conn
             .accept_uni()
             .await
-            .context(t!("receiver.connection_lost"))?;
+            .with_context(|| t!("receiver.connection_lost"))?;
         pending.push_back(ChunkTask(tokio::spawn(read_chunk(
             stream,
             chunk_index,
@@ -206,6 +218,7 @@ async fn receive_chunks(
 
     while let Some(task) = pending.pop_front() {
         let payload = task.join().await?;
+        hasher.update(&payload);
         part_file.write_all(&payload).await?;
         done += payload.len() as u64;
         progress(done);
@@ -214,6 +227,7 @@ async fn receive_chunks(
     Ok(())
 }
 
+/// Reads one chunk stream and checks its index, length and BLAKE3 hash.
 async fn read_chunk(
     mut stream: RecvStream,
     chunk_index: u64,
@@ -240,7 +254,7 @@ async fn read_chunk(
     stream
         .read_exact(&mut payload)
         .await
-        .context(t!("receiver.chunk_read"))?;
+        .with_context(|| t!("receiver.chunk_read"))?;
 
     if *blake3::hash(&payload).as_bytes() != header.chunk_hash {
         warn!("Chunk #{chunk_index} failed BLAKE3 verification");

@@ -112,9 +112,11 @@ in English. Translations live in `locales/app.yml` (backend) and in `src-tauri/u
   other as trusted, along with their current LAN address.
 * The announcement only helps locate a device – identity is still authenticated by the NodeID in
   TLS. A daemon without a terminal rejects pairing.
-* **When it doesn't work:** the firewall must let UDP 47823 through on the LAN; a VPN with a kill
-  switch can block the local network (e.g. NordVPN: `nordvpn set lan-discovery on`). Then use
-  **My TICKET** / QR – it works over the internet as well.
+* **When it doesn't work:** the firewall must let UDP 47823 (discovery) and 47824 (QUIC transfers)
+  through on the LAN. firewalld (default on Fedora and openSUSE) is detected and the app shows the
+  exact command: `sudo firewall-cmd --permanent --add-port=47823-47824/udp && sudo firewall-cmd --reload`.
+  A VPN with a kill switch can block the local network (e.g. NordVPN: `nordvpn set lan-discovery on`).
+  Then use **My TICKET** / QR – it works over the internet as well.
 * Android holds a `MulticastLock` in the foreground service; its device name is the phone's model.
 * **Android 17+** (targetSdk 37) blocks all local network traffic (broadcast, multicast, direct
   LAN connections) without the **ACCESS_LOCAL_NETWORK** permission ("Nearby devices" group).
@@ -167,6 +169,7 @@ src-tauri/gen/android/          Android project (Share Target, foreground servic
 ```bash
 cargo build --release -p rqs_p2p            # CLI `rqs`
 cargo test                                   # unit + end-to-end tests (two iroh nodes)
+cargo bench --bench transfer_benchmarks      # hashing, framing and a 64 MiB transfer over QUIC
 cargo doc --no-deps -p rqs_p2p -p rqs-gui --open   # API documentation
 
 # GUI (Linux needs: libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev)

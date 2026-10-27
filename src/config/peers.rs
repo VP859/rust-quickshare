@@ -60,8 +60,8 @@ impl Config {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let content = std::fs::read_to_string(&path).context(t!("config.read"))?;
-        toml::from_str(&content).context(t!("config.parse"))
+        let content = std::fs::read_to_string(&path).with_context(|| t!("config.read"))?;
+        toml::from_str(&content).with_context(|| t!("config.parse"))
     }
 
     /// Saves the configuration atomically (temporary file + rename), so an
@@ -72,10 +72,10 @@ impl Config {
     /// Fails on serialization or I/O errors.
     pub fn save(&self) -> Result<()> {
         let path = Self::file_path()?;
-        let content = toml::to_string_pretty(self).context(t!("config.serialize"))?;
+        let content = toml::to_string_pretty(self).with_context(|| t!("config.serialize"))?;
         let tmp = path.with_extension("toml.tmp");
-        std::fs::write(&tmp, content).context(t!("config.write"))?;
-        std::fs::rename(&tmp, &path).context(t!("config.write"))?;
+        std::fs::write(&tmp, content).with_context(|| t!("config.write"))?;
+        std::fs::rename(&tmp, &path).with_context(|| t!("config.write"))?;
         Ok(())
     }
 
@@ -237,13 +237,14 @@ impl Config {
                 return Ok(t.addr);
             }
             return Ok(EndpointId::from_str(&key)
-                .context(t!("config.corrupted_node_id"))?
+                .with_context(|| t!("config.corrupted_node_id"))?
                 .into());
         }
         NodeTicket::parse_target(target)
     }
 }
 
+/// Alias for a device without a name: `Device <first 8 characters of the Node ID>`.
 fn fallback_alias(node_id: &str) -> String {
     t!(
         "config.fallback_alias",

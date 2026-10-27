@@ -5,6 +5,7 @@ use rust_i18n::t;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+/// Directory set with [`set_config_dir`]; takes precedence over everything else.
 static CONFIG_DIR_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
 
 /// Overrides the configuration directory for the whole process.
@@ -29,7 +30,7 @@ pub fn config_dir() -> Result<PathBuf> {
         PathBuf::from(dir)
     } else {
         dirs::config_dir()
-            .context(t!("config.no_config_dir"))?
+            .with_context(|| t!("config.no_config_dir"))?
             .join("rqs")
     };
     std::fs::create_dir_all(&dir).with_context(|| t!("config.create_dir", path = dir.display()))?;

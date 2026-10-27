@@ -28,6 +28,7 @@ const ONLINE_TIMEOUT: Duration = Duration::from_secs(5);
 /// Cheap to clone: all clones share the same endpoint.
 #[derive(Clone, Debug)]
 pub struct NodeEngine {
+    /// The iroh endpoint shared by all clones.
     endpoint: Endpoint,
 }
 
@@ -57,7 +58,7 @@ impl NodeEngine {
                 builder(secret_key)
                     .bind()
                     .await
-                    .context(t!("engine.bind"))?
+                    .with_context(|| t!("engine.bind"))?
             }
         };
         info!(
@@ -109,7 +110,7 @@ impl NodeEngine {
         let Some(incoming) = self.endpoint.accept().await else {
             return Ok(None);
         };
-        let conn = incoming.await.context(t!("engine.incoming"))?;
+        let conn = incoming.await.with_context(|| t!("engine.incoming"))?;
         info!("Incoming connection from {}", conn.remote_id());
         Ok(Some(conn))
     }
@@ -126,7 +127,7 @@ impl NodeEngine {
             .endpoint
             .connect(target, ALPN_RQS)
             .await
-            .context(t!("engine.connect"))?;
+            .with_context(|| t!("engine.connect"))?;
         info!("Connected to {}", conn.remote_id());
         Ok(conn)
     }

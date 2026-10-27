@@ -14,6 +14,7 @@ const PAIR_LOOKUP_TIMEOUT: Duration = Duration::from_secs(8);
 /// How long `rqs peer add` looks for a fresher LAN address of the device.
 const NEARBY_LOOKUP: Duration = Duration::from_millis(1500);
 
+/// Prints the table of nearby devices, or a hint why none were found.
 fn print_devices(devices: &[NearbyDevice], config: &Config, health: &DiscoveryHealth) {
     if devices.is_empty() {
         println!("{}", t!("nearby.none"));

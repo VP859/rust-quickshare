@@ -78,6 +78,7 @@ pub async fn run_tui() -> Result<()> {
     res
 }
 
+/// Main loop: applies background messages, draws a frame and handles one key.
 async fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     mut app: App,

@@ -38,6 +38,7 @@ pub fn reveal_path(path: &Path) -> io::Result<()> {
     spawn_detached(opener(path, true)?)
 }
 
+/// A localized `NotFound` error when `path` does not exist.
 fn ensure_exists(path: &Path) -> io::Result<()> {
     if path.exists() {
         Ok(())
@@ -49,6 +50,7 @@ fn ensure_exists(path: &Path) -> io::Result<()> {
     }
 }
 
+/// `xdg-open` for the file, or for its folder when revealing.
 #[cfg(target_os = "linux")]
 fn opener(path: &Path, reveal: bool) -> io::Result<Command> {
     let target = if reveal {
@@ -61,6 +63,7 @@ fn opener(path: &Path, reveal: bool) -> io::Result<Command> {
     Ok(cmd)
 }
 
+/// `open` for the file, or `open -R` to select it in Finder.
 #[cfg(target_os = "macos")]
 fn opener(path: &Path, reveal: bool) -> io::Result<Command> {
     let mut cmd = Command::new("open");
@@ -71,6 +74,7 @@ fn opener(path: &Path, reveal: bool) -> io::Result<Command> {
     Ok(cmd)
 }
 
+/// `explorer` for the file, or `explorer /select,` to select it in its folder.
 #[cfg(windows)]
 fn opener(path: &Path, reveal: bool) -> io::Result<Command> {
     let mut cmd = Command::new("explorer");
@@ -84,6 +88,7 @@ fn opener(path: &Path, reveal: bool) -> io::Result<Command> {
     Ok(cmd)
 }
 
+/// Other platforms (e.g. Android) have no opener program.
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn opener(_path: &Path, _reveal: bool) -> io::Result<Command> {
     Err(io::Error::new(
@@ -92,6 +97,7 @@ fn opener(_path: &Path, _reveal: bool) -> io::Result<Command> {
     ))
 }
 
+/// Starts `cmd` without inheriting the terminal and reaps it in the background.
 fn spawn_detached(mut cmd: Command) -> io::Result<()> {
     let mut child = cmd
         .stdin(Stdio::null())

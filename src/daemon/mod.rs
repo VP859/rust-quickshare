@@ -23,8 +23,11 @@ use crate::transfer::service::{
     self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
 
+/// [`TransferHandler`] of the daemon: Auto-Accept, console questions or rejection.
 struct DaemonHandler {
+    /// Folder from `--downloads-dir`; the configured one when `None`.
     downloads_dir: Option<PathBuf>,
+    /// A console is attached, so questions can be asked.
     interactive: bool,
     /// Serializes console questions when offers arrive concurrently.
     prompt_lock: tokio::sync::Mutex<()>,
@@ -35,6 +38,7 @@ struct DaemonHandler {
 }
 
 impl DaemonHandler {
+    /// Asks a yes/no question on the console; anything but `y` means no.
     async fn ask_user(&self, question: String) -> bool {
         let _guard = self.prompt_lock.lock().await;
         tokio::task::spawn_blocking(move || {
@@ -48,6 +52,7 @@ impl DaemonHandler {
         .unwrap_or(false)
     }
 
+    /// Puts `text` into the system clipboard; `false` when there is none (e.g. no display).
     fn copy_to_clipboard(&self, text: &str) -> bool {
         #[cfg(not(target_os = "android"))]
         {

@@ -13,6 +13,7 @@ use rqs_p2p::daemon::run_daemon;
 use rqs_p2p::telemetry::doctor::run_doctor;
 use rqs_p2p::tui::run_tui;
 
+/// Parses arguments, sets the language and logging, and runs the command.
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();

@@ -19,16 +19,15 @@ path = "src/main.rs"
 dist = false
 
 [build-dependencies]
-tauri-build = { version = "2.0", features = [] }
+tauri-build = { version = "2.7.4", features = [] }
 
 [dependencies]
 rqs_p2p = { path = ".." }
-tauri = { version = "2.12.4", features = [] }
+tauri = { version = "2.12.5", features = [] }
 tauri-plugin-dialog = "2.8.3"
 tauri-plugin-notification = "2"
 tauri-plugin-clipboard-manager = "2"
 qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
-serde_json = "1.0.154"
 serde = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
@@ -39,7 +38,7 @@ rust-i18n = "4.2.4"
 
 # System tray and autostart only make sense on Linux/Windows/macOS.
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri = { version = "2.12.4", features = ["tray-icon", "image-png"] }
+tauri = { version = "2.12.5", features = ["tray-icon", "image-png"] }
 tauri-plugin-autostart = "2"
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]

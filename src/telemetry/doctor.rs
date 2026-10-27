@@ -77,6 +77,7 @@ pub async fn run_doctor() -> Result<DoctorReport> {
     })
 }
 
+/// Runs local network discovery for a few seconds and prints what it found.
 async fn check_discovery() {
     use crate::discovery::{DISCOVERY_PORT, Discovery, DiscoveryOptions};
     let config = crate::config::Config::load().unwrap_or_default();
@@ -132,6 +133,7 @@ async fn check_discovery() {
     engine.close().await;
 }
 
+/// Whether a public STUN server is routable (a hint that hole punching can work).
 async fn check_stun_reachability() -> bool {
     if let Ok(socket) = tokio::net::UdpSocket::bind("0.0.0.0:0").await {
         socket.connect("108.177.14.127:19302").await.is_ok()
@@ -140,6 +142,8 @@ async fn check_stun_reachability() -> bool {
     }
 }
 
+/// Whether an interface name looks like a VPN or tunnel (tun/tap, WireGuard,
+/// NordVPN, Tailscale).
 #[cfg(not(target_os = "android"))]
 fn check_vpn_interfaces() -> bool {
     let Ok(interfaces) = network_interface::NetworkInterface::show() else {
@@ -157,6 +161,7 @@ fn check_vpn_interfaces() -> bool {
     })
 }
 
+/// Android does not expose interface names reliably; VPN detection is skipped.
 #[cfg(target_os = "android")]
 fn check_vpn_interfaces() -> bool {
     false

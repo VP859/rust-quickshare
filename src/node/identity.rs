@@ -63,6 +63,7 @@ pub fn load_or_generate_secret_key(path: Option<&Path>) -> Result<SecretKey> {
     Ok(secret_key)
 }
 
+/// Creates a new file readable only by the owner (`0600` on Unix) and syncs it to disk.
 fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut opts = std::fs::OpenOptions::new();
     opts.write(true).create_new(true);

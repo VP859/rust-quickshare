@@ -7,7 +7,6 @@ use iroh::EndpointId;
 use rust_i18n::t;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
 
@@ -57,10 +56,12 @@ pub enum PendingKind {
 pub struct Pending {
     /// Subject of the decision.
     pub kind: PendingKind,
+    /// Delivers the answer to the waiting handler.
     responder: oneshot::Sender<bool>,
 }
 
 impl Pending {
+    /// Short description used in status messages.
     fn label(&self) -> &str {
         match &self.kind {
             PendingKind::File { file_name, .. } => file_name,
@@ -98,6 +99,8 @@ pub struct TuiHandler {
 }
 
 impl TuiHandler {
+    /// Queues a decision in the UI and waits for `y`/`n`; no answer within
+    /// [`DECISION_TIMEOUT`] means no.
     async fn ask(&self, kind: PendingKind) -> bool {
         let (responder, answer) = oneshot::channel();
         let _ = self
@@ -196,6 +199,7 @@ pub enum Focus {
 }
 
 impl Focus {
+    /// The following (or, with `back`, the previous) panel.
     fn next(self, back: bool) -> Self {
         match (self, back) {
             (Focus::Trusted, false) | (Focus::Transfers, true) => Focus::Nearby,
@@ -276,6 +280,7 @@ pub struct TransferRow {
     pub ev: TransferEvent,
     /// Smoothed speed in bytes per second.
     pub speed: f64,
+    /// Bytes done and time of the last speed sample.
     last_sample: (u64, Instant),
 }
 
@@ -313,7 +318,9 @@ pub struct App {
     pub popup: Option<Popup>,
     /// Explanation why no nearby devices are visible.
     pub discovery_hint: Option<String>,
+    /// Channel for messages from background tasks.
     tx: mpsc::UnboundedSender<UiMessage>,
+    /// Time of the last configuration reload.
     last_reload: Instant,
     /// On Linux the clipboard content disappears with this object, so it lives
     /// as long as the TUI.
@@ -395,6 +402,7 @@ impl App {
         }
     }
 
+    /// Keeps every selection inside its list after the lists changed.
     fn clamp_selection(&mut self) {
         let max = |len: usize| len.saturating_sub(1);
         self.sel_trusted = self.sel_trusted.min(max(self.config.peers.len()));
@@ -442,6 +450,7 @@ impl App {
         }
     }
 
+    /// Applies a transfer event and updates the smoothed speed of its row.
     fn update_transfer(&mut self, ev: TransferEvent) {
         let now = Instant::now();
         match self.transfers.iter_mut().find(|t| t.ev.id == ev.id) {
@@ -490,6 +499,7 @@ impl App {
         }
     }
 
+    /// Node ID and settings of the selected trusted device.
     fn selected_trusted(&self) -> Option<(String, PeerInfo)> {
         self.trusted().get(self.sel_trusted).cloned()
     }
@@ -540,6 +550,7 @@ impl App {
         );
     }
 
+    /// Opens the dialog asking for paths of files to send to a device.
     fn ask_send(&mut self, node_id: String, label: String) {
         self.open_input(
             InputKind::SendFile {
@@ -552,6 +563,7 @@ impl App {
         );
     }
 
+    /// Opens a text input dialog.
     fn open_input(&mut self, kind: InputKind, title: String, hint: String, value: String) {
         self.input = Some(Input {
             kind,
@@ -670,6 +682,7 @@ impl App {
         self.after_config_change(result);
     }
 
+    /// Reloads the configuration after a change and shows the result in the status line.
     fn after_config_change(&mut self, result: Result<String>) {
         match result {
             Ok(msg) => {
@@ -855,22 +868,13 @@ impl App {
         }
     }
 
-    /// Address of a device: the fresh LAN address from discovery, the stored
-    /// one, or a bare Node ID.
+    /// Address of a device; see [`crate::discovery::resolve_target`].
     fn target_addr(&self, node_id: &str) -> Result<iroh::EndpointAddr, String> {
-        let nearby = self.discovery.as_ref().and_then(|d| {
-            EndpointId::from_str(node_id)
-                .ok()
-                .and_then(|id| d.addr_of(&id))
-        });
-        match (nearby, self.config.resolve_target(node_id)) {
-            (Some(addr), _) | (None, Ok(addr)) => Ok(addr),
-            (None, Err(_)) => EndpointId::from_str(node_id)
-                .map(Into::into)
-                .map_err(|e| t!("tui.error", error = e).into_owned()),
-        }
+        crate::discovery::resolve_target(&self.config, self.discovery.as_ref(), node_id)
+            .map_err(|e| t!("tui.error", error = format!("{e:#}")).into_owned())
     }
 
+    /// Sends text to a device in the background; the result goes to the status line.
     fn submit_text(&mut self, node_id: &str, label: &str, value: &str) -> Result<(), String> {
         if value.is_empty() {
             return Err(t!("service.text_empty").into_owned());
@@ -898,6 +902,7 @@ impl App {
         Ok(())
     }
 
+    /// Validates the paths and sends the files in the background.
     fn submit_send(&mut self, node_id: &str, label: &str, value: &str) -> Result<(), String> {
         let paths = parse_paths(value);
         if paths.is_empty() {
@@ -927,6 +932,7 @@ impl App {
         Ok(())
     }
 
+    /// Saves a new alias of a trusted device.
     fn submit_rename(&mut self, node_id: &str, value: &str) -> Result<(), String> {
         let alias = clean_device_name(value);
         if alias.is_empty() {
@@ -963,18 +969,14 @@ impl App {
             .find_peer(&node_id)
             .map(|p| p.alias.clone())
             .unwrap_or_default();
-        let addr = config.resolve_target(&node_id).map_err(|e| e.to_string())?;
-        let addr = self
-            .discovery
-            .as_ref()
-            .and_then(|d| d.addr_of(&addr.id))
-            .unwrap_or(addr);
         self.config = config;
+        let addr = self.target_addr(&node_id)?;
         self.focus = Focus::Trusted;
         self.start_pairing(addr.id, addr, alias.clone(), Some(alias));
         Ok(())
     }
 
+    /// Creates and saves a new download folder.
     fn submit_download_dir(&mut self, value: &str) -> Result<(), String> {
         let dir = expand_path(value);
         if dir.as_os_str().is_empty() {
@@ -991,6 +993,7 @@ impl App {
         Ok(())
     }
 
+    /// Saves and announces a new name of this device.
     fn submit_device_name(&mut self, value: &str) -> Result<(), String> {
         let name = clean_device_name(value);
         if name.is_empty() {

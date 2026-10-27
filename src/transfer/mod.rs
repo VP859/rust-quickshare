@@ -37,7 +37,7 @@ impl Channel {
     ///
     /// Fails when the stream cannot be opened or written to.
     pub async fn open(conn: &Connection, hello: &Hello) -> Result<Self> {
-        let (mut send, recv) = conn.open_bi().await.context(t!("channel.open"))?;
+        let (mut send, recv) = conn.open_bi().await.with_context(|| t!("channel.open"))?;
         write_msg(&mut send, hello).await?;
         Ok(Self { send, recv })
     }
@@ -58,7 +58,7 @@ impl Channel {
                 | ConnectionError::LocallyClosed
                 | ConnectionError::TimedOut,
             ) => return Ok(None),
-            Err(e) => return Err(e).context(t!("channel.accept")),
+            Err(e) => return Err(e).with_context(|| t!("channel.accept")),
         };
         let hello: Hello = read_msg(&mut recv).await?;
         Ok(Some((Self { send, recv }, hello)))
@@ -77,6 +77,7 @@ impl Channel {
     }
 }
 
+/// Lowercase hexadecimal form of `bytes`.
 pub(crate) fn short_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }

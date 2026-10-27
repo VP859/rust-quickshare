@@ -1321,11 +1321,13 @@
     await listen('incoming-text', ({ payload }) => { textRequests.push(payload); if (textRequests.length === 1) showNextTextRequest(); else $('text-in-queue').textContent = t('queued', { n: textRequests.length - 1 }); });
     await listen('text-received', ({ payload }) => onTextReceived(payload));
     await listen('request-cancelled', ({ payload }) => {
-      const i = textRequests.findIndex(r => r.id === payload);
-      if (i < 0) return;
-      textRequests.splice(i, 1);
-      if (i === 0) showNextTextRequest();
-      toast(t('text_expired'), true);
+      for (const [queue, show, expired] of [[offers, showNextOffer, null], [pairRequests, showNextPairRequest, 'pair_expired'], [textRequests, showNextTextRequest, 'text_expired']]) {
+        const i = queue.findIndex(r => r.id === payload);
+        if (i < 0) continue;
+        queue.splice(i, 1);
+        if (i === 0) show();
+        if (expired) toast(t(expired), true);
+      }
     });
     await listen('nearby', ({ payload }) => setNearby(payload));
     await listen('peers-changed', async () => { await refreshPeers(); renderNearby(); });
@@ -1335,13 +1337,6 @@
       renderNearby();
     });
     await listen('pair-request', ({ payload }) => { pairRequests.push(payload); if (pairRequests.length === 1) showNextPairRequest(); else $('pair-req-queue').textContent = t('queued', { n: pairRequests.length - 1 }); });
-    await listen('pair-cancelled', ({ payload }) => {
-      const i = pairRequests.findIndex(r => r.id === payload);
-      if (i < 0) return;
-      pairRequests.splice(i, 1);
-      if (i === 0) showNextPairRequest();
-      toast(t('pair_expired'), true);
-    });
     await setupDragDrop();
     await refreshPeers();
     await ensureDeviceName();

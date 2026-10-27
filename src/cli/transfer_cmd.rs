@@ -65,6 +65,7 @@ async fn resolve_receiver(engine: &NodeEngine, target: &str) -> Result<iroh::End
     Ok(addr)
 }
 
+/// Pushes `files` to the device named by `target`, showing progress bars.
 async fn send_to_peer(engine: &NodeEngine, files: &[PathBuf], target: &str) -> Result<()> {
     let addr = resolve_receiver(engine, target).await?;
     let progress = TerminalProgress::default();
@@ -108,8 +109,11 @@ pub async fn run_send_text(text: Option<String>, to: &str) -> Result<()> {
 
 /// Serves one file under a share token and rejects incoming offers.
 struct ShareHandler {
+    /// Token from the share TICKET.
     token: ShareToken,
+    /// The shared file.
     file: PreparedFile,
+    /// Transfer events, consumed by the progress display.
     events: mpsc::UnboundedSender<TransferEvent>,
 }
 
@@ -167,8 +171,8 @@ async fn share_by_ticket(engine: &NodeEngine, files: &[PathBuf]) -> Result<()> {
 ///
 /// Fails when the TICKET is invalid or the download fails.
 pub async fn run_receive(ticket_str: &str, output_dir: Option<&Path>) -> Result<()> {
-    let ticket =
-        NodeTicket::deserialize_from_str(ticket_str).context(t!("ticket.invalid_target"))?;
+    let ticket = NodeTicket::deserialize_from_str(ticket_str)
+        .with_context(|| t!("ticket.invalid_target"))?;
     let dest_dir = match output_dir {
         Some(dir) => dir.to_path_buf(),
         None => Config::load().unwrap_or_default().download_dir(),

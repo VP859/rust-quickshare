@@ -19,6 +19,7 @@ use crate::transfer::service::{Direction, TransferEvent, TransferStatus};
 /// assert_eq!(human_size(5 * 1024 * 1024), "5.0 MB");
 /// ```
 pub fn human_size(bytes: u64) -> String {
+    /// Units for successive powers of 1024.
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
     if bytes < 1024 {
         return format!("{bytes} B");
@@ -70,6 +71,7 @@ pub fn print_ticket(title: &str, ticket: &str) {
 /// Renders [`TransferEvent`]s as progress bars, one per file.
 #[derive(Default)]
 pub struct TerminalProgress {
+    /// Transfer ID and bar of the transfer shown last.
     current: Mutex<Option<(String, ProgressBar)>>,
 }
 

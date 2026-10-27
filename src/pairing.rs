@@ -110,8 +110,8 @@ pub async fn request_pairing(
     let response: PairResponse =
         tokio::time::timeout(PAIR_RESPONSE_TIMEOUT, read_msg(&mut channel.recv))
             .await
-            .context(t!("pairing.no_answer"))?
-            .context(t!("pairing.interrupted"))?;
+            .with_context(|| t!("pairing.no_answer"))?
+            .with_context(|| t!("pairing.interrupted"))?;
     channel.finish().await;
     conn.close(0u32.into(), b"paired");
 
