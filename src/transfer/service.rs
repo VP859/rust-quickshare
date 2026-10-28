@@ -1,12 +1,13 @@
 //! Node service shared by every user interface (daemon, TUI, GUI).
 //!
 //! [`serve`] accepts connections and dispatches incoming control streams:
-//! file offers, downloads of files shared by TICKET, pairing requests and
-//! texts for the clipboard. [`send_files`], [`pull_shared`] and [`send_text`]
-//! are the outgoing counterparts.
+//! file offers (one by one or announced together as a batch), downloads of
+//! files shared by TICKET, pairing requests and texts for the clipboard.
+//! [`send_files`], [`pull_shared`] and [`send_text`] are the outgoing
+//! counterparts.
 //!
-//! An interface only implements [`TransferHandler`] (decisions, shared files,
-//! pairing confirmation, received texts) and renders the [`TransferEvent`]s it
+//! An interface only implements [`TransferHandler`] (decisions about files and
+//! batches, shared files, pairing confirmation, received texts) and renders the [`TransferEvent`]s it
 //! receives.
 
 use anyhow::{Context, Result};
@@ -27,13 +28,16 @@ use crate::node::{NodeEngine, NodeTicket};
 use crate::pairing::{PAIR_DECISION_TIMEOUT, PairRequest, clean_device_name, pairing_code};
 use crate::protocol::codec::{read_msg, write_msg};
 use crate::protocol::messages::{
-    Hello, MAX_TEXT_LEN, PairResponse, ShareToken, TextDecision, TransferOffer,
+    BatchDecision, BatchOffer, Hello, MAX_BATCH_NAMES, MAX_TEXT_LEN, PairResponse, ShareToken,
+    TextDecision, TransferOffer,
 };
+use crate::transfer::security::sanitize_filename;
 
 /// Application close code sent when a download asks for an unknown share token.
 const CLOSE_UNKNOWN_SHARE: u32 = 2;
-/// Upper bound for a handler to decide about a received text.
-const TEXT_DECISION_TIMEOUT: Duration = Duration::from_secs(150);
+/// Upper bound for a handler to answer a question (a received text or a batch
+/// of files); no answer counts as a rejection.
+const QUESTION_TIMEOUT: Duration = Duration::from_secs(150);
 
 /// Direction of a transfer as seen from this device.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -159,6 +163,47 @@ pub trait TransferHandler: Send + Sync + 'static {
             }
         }
     }
+
+    /// Decides about several files announced together ([`Hello::Batch`]).
+    ///
+    /// `Some(OfferDecision::Accept { .. })` accepts all announced files at once:
+    /// the following offers on the same connection are received without calling
+    /// [`TransferHandler::decide`], up to the announced number of files and
+    /// total size. `Some(OfferDecision::Reject { .. })` declines all of them.
+    /// `None` (the default) keeps asking about every file separately.
+    fn decide_batch(
+        &self,
+        _peer: EndpointId,
+        _batch: &BatchOffer,
+    ) -> impl Future<Output = Option<OfferDecision>> + Send {
+        async { None }
+    }
+}
+
+/// Files of an accepted batch that may still arrive on a connection without
+/// asking again. The sender cannot exceed what the user agreed to: neither
+/// more files nor more bytes than announced.
+#[derive(Debug)]
+struct BatchApproval {
+    /// Files that may still be accepted automatically.
+    remaining_files: u32,
+    /// Bytes that may still be accepted automatically.
+    remaining_bytes: u64,
+    /// Folder chosen when the batch was accepted.
+    dest_dir: PathBuf,
+}
+
+impl BatchApproval {
+    /// Uses the approval for `offer`; returns the folder to save it to, or
+    /// `None` when the offer exceeds what is left of the batch.
+    fn take(&mut self, offer: &TransferOffer) -> Option<PathBuf> {
+        if self.remaining_files == 0 || offer.file_size > self.remaining_bytes {
+            return None;
+        }
+        self.remaining_files -= 1;
+        self.remaining_bytes -= offer.file_size;
+        Some(self.dest_dir.clone())
+    }
 }
 
 /// Emits the successive states of a single transfer.
@@ -259,9 +304,13 @@ async fn handle_connection<H: TransferHandler>(
     conn: Connection,
     handler: Arc<H>,
 ) -> Result<()> {
+    let mut approval: Option<BatchApproval> = None;
     while let Some((channel, hello)) = Channel::accept(&conn).await? {
         let result = match hello {
-            Hello::Push => handle_push(&conn, channel, handler.as_ref()).await,
+            Hello::Push => handle_push(&conn, channel, handler.as_ref(), &mut approval).await,
+            Hello::Batch(batch) => handle_batch(&conn, channel, &batch, handler.as_ref())
+                .await
+                .map(|granted| approval = granted),
             Hello::Pull { token } => handle_pull(&conn, channel, &token, handler.as_ref()).await,
             Hello::Pair { name, addr } => {
                 handle_pair(engine, &conn, channel, &name, addr, handler.as_ref()).await
@@ -276,11 +325,13 @@ async fn handle_connection<H: TransferHandler>(
     Ok(())
 }
 
-/// Incoming file offer ([`Hello::Push`]): asks the handler and receives the file.
+/// Incoming file offer ([`Hello::Push`]): receives the file when it belongs to
+/// an accepted batch, otherwise asks the handler first.
 async fn handle_push<H: TransferHandler>(
     conn: &Connection,
     mut channel: Channel,
     handler: &H,
+    approval: &mut Option<BatchApproval>,
 ) -> Result<()> {
     let peer = conn.remote_id();
     let offer = read_offer(&mut channel).await?;
@@ -292,9 +343,14 @@ async fn handle_push<H: TransferHandler>(
         Direction::Download,
         &sink,
     );
-    tracker.emit(0, TransferStatus::AwaitingDecision);
-
-    match handler.decide(peer, tracker.id(), &offer).await {
+    let decision = match approval.as_mut().and_then(|a| a.take(&offer)) {
+        Some(dest_dir) => OfferDecision::Accept { dest_dir },
+        None => {
+            tracker.emit(0, TransferStatus::AwaitingDecision);
+            handler.decide(peer, tracker.id(), &offer).await
+        }
+    };
+    match decision {
         OfferDecision::Reject { reason } => {
             reject(channel, &reason).await?;
             tracker.emit(0, TransferStatus::Rejected { reason });
@@ -381,7 +437,7 @@ async fn handle_text<H: TransferHandler>(
         }
     } else {
         info!("Text ({} bytes) from {peer}", text.len());
-        tokio::time::timeout(TEXT_DECISION_TIMEOUT, handler.receive_text(peer, text))
+        tokio::time::timeout(QUESTION_TIMEOUT, handler.receive_text(peer, text))
             .await
             .unwrap_or_else(|_| TextDecision::Rejected {
                 reason: t!("transfer.user_rejected").into_owned(),
@@ -390,6 +446,44 @@ async fn handle_text<H: TransferHandler>(
     write_msg(&mut channel.send, &decision).await?;
     channel.finish().await;
     Ok(())
+}
+
+/// Announcement of several files ([`Hello::Batch`]): asks the handler once and
+/// returns the approval for the files that follow, if they were accepted.
+async fn handle_batch<H: TransferHandler>(
+    conn: &Connection,
+    mut channel: Channel,
+    batch: &BatchOffer,
+    handler: &H,
+) -> Result<Option<BatchApproval>> {
+    batch.validate()?;
+    let peer = conn.remote_id();
+    info!(
+        "{} files ({} B) announced by {peer}",
+        batch.count, batch.total_size
+    );
+    let decision = tokio::time::timeout(QUESTION_TIMEOUT, handler.decide_batch(peer, batch))
+        .await
+        .unwrap_or_else(|_| {
+            Some(OfferDecision::Reject {
+                reason: t!("transfer.user_rejected").into_owned(),
+            })
+        });
+    let (answer, approval) = match decision {
+        None => (BatchDecision::AskEach, None),
+        Some(OfferDecision::Accept { dest_dir }) => (
+            BatchDecision::Accepted,
+            Some(BatchApproval {
+                remaining_files: batch.count,
+                remaining_bytes: batch.total_size,
+                dest_dir,
+            }),
+        ),
+        Some(OfferDecision::Reject { reason }) => (BatchDecision::Rejected { reason }, None),
+    };
+    write_msg(&mut channel.send, &answer).await?;
+    channel.finish().await;
+    Ok(approval)
 }
 
 /// Emits the final event of an upload; a rejection is not an error.
@@ -406,9 +500,46 @@ fn report_send(tracker: &Tracker<'_>, result: Result<SendOutcome>) -> Result<()>
     }
 }
 
+/// Name and size of a file about to be sent, read without hashing it.
+async fn file_summary(path: &Path) -> (String, u64) {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let size = tokio::fs::metadata(path)
+        .await
+        .map(|m| m.len())
+        .unwrap_or(0);
+    (name, size)
+}
+
+/// Announces several files with [`Hello::Batch`] and waits for the decision.
+///
+/// # Errors
+///
+/// Fails when the stream cannot be opened or the peer does not answer, e.g.
+/// an older version that does not know batches and closes the connection.
+async fn announce_batch(conn: &Connection, files: &[(String, u64)]) -> Result<BatchDecision> {
+    let batch = BatchOffer {
+        count: u32::try_from(files.len()).unwrap_or(u32::MAX),
+        total_size: files.iter().map(|(_, size)| size).sum(),
+        names: files
+            .iter()
+            .take(MAX_BATCH_NAMES)
+            .map(|(name, _)| sanitize_filename(name).unwrap_or_else(|_| "file".to_string()))
+            .collect(),
+    };
+    let mut channel = Channel::open(conn, &Hello::Batch(batch)).await?;
+    read_msg(&mut channel.recv).await
+}
+
 /// Sends files to a device over one connection, one control stream per file.
 ///
-/// A failure of one file does not stop the remaining ones.
+/// Several files are first announced together, so the receiver confirms them
+/// once. When the receiver declines the batch nothing is sent and every file
+/// is reported as rejected. A receiver that does not support batches gets a
+/// new connection and decides about every file. A failure of one file does
+/// not stop the remaining ones.
 ///
 /// # Errors
 ///
@@ -420,18 +551,35 @@ pub async fn send_files(
     sink: EventSink<'_>,
 ) -> Result<()> {
     let peer = target.id;
-    let conn = engine.connect(target).await?;
-    let mut failures = 0usize;
+    let mut conn = engine.connect(target.clone()).await?;
+    let mut files = Vec::with_capacity(paths.len());
     for path in paths {
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let size = tokio::fs::metadata(path)
-            .await
-            .map(|m| m.len())
-            .unwrap_or(0);
-        let tracker = Tracker::new(peer, &name, size, Direction::Upload, sink);
+        files.push(file_summary(path).await);
+    }
+    if files.len() > 1 {
+        match announce_batch(&conn, &files).await {
+            Ok(BatchDecision::Rejected { reason }) => {
+                for (name, size) in &files {
+                    Tracker::new(peer, name, *size, Direction::Upload, sink).emit(
+                        0,
+                        TransferStatus::Rejected {
+                            reason: reason.clone(),
+                        },
+                    );
+                }
+                conn.close(0u32.into(), b"rejected");
+                return Ok(());
+            }
+            Ok(BatchDecision::Accepted | BatchDecision::AskEach) => {}
+            Err(e) => {
+                debug!("Batch not supported by {peer} ({e:#}), offering files one by one");
+                conn = engine.connect(target).await?;
+            }
+        }
+    }
+    let mut failures = 0usize;
+    for (path, (name, size)) in paths.iter().zip(&files) {
+        let tracker = Tracker::new(peer, name, *size, Direction::Upload, sink);
         tracker.emit(0, TransferStatus::Preparing);
         let result = async {
             let file = prepare_file(path).await?;
@@ -540,4 +688,41 @@ pub fn text_preview(text: &str, max_chars: usize) -> String {
 /// Generates a random share token.
 pub fn new_share_token() -> ShareToken {
     *uuid::Uuid::new_v4().as_bytes()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn offer(size: u64) -> TransferOffer {
+        TransferOffer {
+            file_name: "a.jpg".into(),
+            file_size: size,
+            chunk_size: 1024,
+            file_hash: [0; 32],
+        }
+    }
+
+    #[test]
+    fn batch_approval_never_exceeds_the_announcement() {
+        let mut approval = BatchApproval {
+            remaining_files: 2,
+            remaining_bytes: 100,
+            dest_dir: PathBuf::from("/tmp"),
+        };
+        assert!(
+            approval.take(&offer(101)).is_none(),
+            "more bytes than announced"
+        );
+        assert!(approval.take(&offer(60)).is_some());
+        assert!(
+            approval.take(&offer(41)).is_none(),
+            "over the remaining bytes"
+        );
+        assert!(approval.take(&offer(40)).is_some());
+        assert!(
+            approval.take(&offer(0)).is_none(),
+            "more files than announced"
+        );
+    }
 }

@@ -7,6 +7,9 @@ protocol.bad_chunk_size:
 protocol.bad_file_name_len:
   en: "Invalid file name length"
   pl: "Nieprawidłowa długość nazwy pliku"
+protocol.bad_batch:
+  en: "Invalid announcement of several files"
+  pl: "Nieprawidłowa zapowiedź kilku plików"
 codec.serialize:
   en: "Failed to serialize a protocol message"
   pl: "Błąd serializacji wiadomości protokołu"
@@ -725,6 +728,9 @@ gui.notify_offer_title:
 gui.notify_offer:
   en: "%{sender} wants to send \"%{name}\""
   pl: "%{sender} chce wysłać „%{name}”"
+gui.notify_batch:
+  en: "%{sender} wants to send %{count} files"
+  pl: "%{sender} chce wysłać pliki (%{count})"
 gui.notify_pair_title:
   en: "Pairing request"
   pl: "Prośba o sparowanie"
@@ -850,3 +856,20 @@ gui.text_rejected:
 gui.not_a_link:
   en: "Only http(s) links can be opened"
   pl: "Można otwierać tylko linki http(s)"
+
+# ---------------------------------------------------------------- batches of files
+daemon.batch:
+  en: "[OFFER] %{count} files (%{size}) from '%{alias}': %{names}. Accept all?"
+  pl: "[OFERTA] %{count} plików (%{size}) od '%{alias}': %{names}. Odebrać wszystkie?"
+tui.new_batch:
+  en: "New offer: %{count} files"
+  pl: "Nowa oferta: %{count} plików"
+tui.batch_title:
+  en: "Incoming files"
+  pl: "Przychodzące pliki"
+tui.batch_files:
+  en: "%{count} files"
+  pl: "Pliki: %{count}"
+tui.batch_more:
+  en: "…and %{count} more"
+  pl: "…i %{count} więcej"

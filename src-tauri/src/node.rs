@@ -12,7 +12,7 @@ use rqs_p2p::config::Config;
 use rqs_p2p::discovery::{Discovery, DiscoveryOptions};
 use rqs_p2p::node::NodeEngine;
 use rqs_p2p::pairing::PairRequest;
-use rqs_p2p::protocol::messages::{ShareToken, TextDecision, TransferOffer};
+use rqs_p2p::protocol::messages::{BatchOffer, ShareToken, TextDecision, TransferOffer};
 use rqs_p2p::transfer::sender::PreparedFile;
 use rqs_p2p::transfer::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
@@ -129,10 +129,14 @@ pub struct IncomingOffer {
     pub peer: String,
     /// Alias of the sender if it is trusted.
     pub alias: Option<String>,
-    /// Offered file name.
+    /// Offered file name; for a batch the name of its first file.
     pub file_name: String,
-    /// Offered file size in bytes.
+    /// Offered size in bytes; for a batch the size of all files.
     pub size: u64,
+    /// Number of files: 1 for a single file, more for a batch.
+    pub count: u32,
+    /// Names of the files of a batch (at most the first 20); empty for a single file.
+    pub names: Vec<String>,
 }
 
 /// Payload of the `incoming-text` event.
@@ -252,6 +256,8 @@ impl TransferHandler for GuiHandler {
                         alias,
                         file_name: offer.file_name.clone(),
                         size: offer.file_size,
+                        count: 1,
+                        names: Vec::new(),
                     },
                     DECISION_TIMEOUT,
                     (
@@ -267,6 +273,45 @@ impl TransferHandler for GuiHandler {
                 reason: t!("transfer.user_rejected").into_owned(),
             }
         }
+    }
+
+    async fn decide_batch(&self, peer: EndpointId, batch: &BatchOffer) -> Option<OfferDecision> {
+        let dest_dir = self.state().download_dir().await;
+        let (alias, auto_accept) = self.sender_info(&peer).await;
+        let sender = alias
+            .clone()
+            .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
+        let id = request_id("batch", &peer);
+        let request = IncomingOffer {
+            id: id.clone(),
+            peer: peer.to_string(),
+            alias,
+            file_name: batch.names.first().cloned().unwrap_or_default(),
+            size: batch.total_size,
+            count: batch.count,
+            names: batch.names.clone(),
+        };
+        let notification = (
+            &*t!("gui.notify_offer_title"),
+            &*t!("gui.notify_batch", sender = &sender, count = batch.count),
+        );
+        let accepted = auto_accept
+            || self
+                .ask(
+                    &id,
+                    "incoming-offer",
+                    request,
+                    DECISION_TIMEOUT,
+                    notification,
+                )
+                .await;
+        Some(if accepted {
+            OfferDecision::Accept { dest_dir }
+        } else {
+            OfferDecision::Reject {
+                reason: t!("transfer.user_rejected").into_owned(),
+            }
+        })
     }
 
     fn shared_file(&self, token: &ShareToken) -> Option<PreparedFile> {

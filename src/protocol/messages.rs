@@ -5,15 +5,19 @@
 //! *control stream* opened by the dialing peer:
 //!
 //! ```text
-//! dialer   ── Hello::Push | Hello::Pull { token } | Hello::Pair { … } | Hello::Text { … } ─▶
+//! dialer   ── Hello::Push | Hello::Pull { token } | Hello::Pair { … } | Hello::Text { … }
+//!             | Hello::Batch(BatchOffer) ─▶
 //! sender   ── TransferOffer ──────────────────────────────────────────────────▶
 //! receiver ◀─ TransferDecision::Accept { start_chunk_index } | Reject { reason } ─
 //! sender   ── one unidirectional stream per chunk: ChunkHeader + payload ─────▶
 //! receiver ◀─ TransferResult::Verified | Failed { reason } ───────────────────
 //! ```
 //!
-//! [`Hello::Pair`] is answered with a single [`PairResponse`] and [`Hello::Text`]
-//! with a single [`TextDecision`] instead.
+//! [`Hello::Pair`] is answered with a single [`PairResponse`], [`Hello::Text`]
+//! with a single [`TextDecision`] and [`Hello::Batch`] with a single
+//! [`BatchDecision`] instead. A batch announces several files that follow as
+//! [`Hello::Push`] streams on the same connection, so the receiver decides
+//! once for all of them.
 
 use iroh::EndpointAddr;
 use rust_i18n::t;
@@ -31,6 +35,8 @@ pub const MAX_FILE_NAME_LEN: usize = 255;
 pub const MAX_DEVICE_NAME_LEN: usize = 64;
 /// Largest text sent with [`Hello::Text`], in bytes; it fits in one frame.
 pub const MAX_TEXT_LEN: usize = 32 * 1024;
+/// Largest number of file names carried by a [`BatchOffer`] for display.
+pub const MAX_BATCH_NAMES: usize = 20;
 /// Number of chunk streams in flight at the same time.
 pub const CHUNK_WINDOW: usize = 8;
 
@@ -62,6 +68,56 @@ pub enum Hello {
     Text {
         /// The text, at most [`MAX_TEXT_LEN`] bytes.
         text: String,
+    },
+    /// The dialing peer is about to push several files over this connection
+    /// and asks for one decision for all of them.
+    ///
+    /// Added after [`Hello::Text`] for the same compatibility reasons: an older
+    /// peer closes the connection, and the sender then reconnects and offers
+    /// every file separately.
+    Batch(BatchOffer),
+}
+
+/// Announcement of several files sent together ([`Hello::Batch`]).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BatchOffer {
+    /// Number of files that follow.
+    pub count: u32,
+    /// Sum of their sizes in bytes.
+    pub total_size: u64,
+    /// Names of the first files, at most [`MAX_BATCH_NAMES`], for display only.
+    pub names: Vec<String>,
+}
+
+impl BatchOffer {
+    /// Rejects announcements that are empty or carry too many or too long names.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `count` is zero, or when `names` has more than
+    /// [`MAX_BATCH_NAMES`] entries or an entry longer than [`MAX_FILE_NAME_LEN`].
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if self.count == 0
+            || self.names.len() > MAX_BATCH_NAMES
+            || self.names.iter().any(|n| n.len() > MAX_FILE_NAME_LEN)
+        {
+            anyhow::bail!(t!("protocol.bad_batch"));
+        }
+        Ok(())
+    }
+}
+
+/// Answer to [`Hello::Batch`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum BatchDecision {
+    /// All announced files are accepted; they will not be asked about again.
+    Accepted,
+    /// The receiver will decide about every file separately.
+    AskEach,
+    /// The whole batch was declined; the sender should not push the files.
+    Rejected {
+        /// Human readable reason shown to the sender.
+        reason: String,
     },
 }
 

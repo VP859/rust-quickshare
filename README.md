@@ -20,6 +20,8 @@ The command line tool is called `rqs`, and the crates keep their `rqs_p2p` / `rq
 * **Resume** – downloads go to a `.part` file; after a dropped connection (IP/VPN change) the
   transfer resumes from the last complete chunk.
 * **Trusted devices** – alias + Auto-Accept per device; untrusted offers require confirmation.
+  Several files sent at once are confirmed once for the whole batch (never more files or bytes
+  than announced).
 * **Nearby devices + one-button pairing** – Ferry apps on the same network show up
   automatically; **Pair** adds a device without retyping a TICKET or scanning a QR code.
 * **Text and links** – send copied text or a link; after the receiver accepts it (or right away
@@ -134,8 +136,9 @@ in English. Translations live in `locales/app.yml` (backend) and in `src-tauri/u
 
 ```
 dialer ─ bi stream ─▶ Hello::Push | Hello::Pull{token} | Hello::Pair{name, addr} | Hello::Text{text}
+                     | Hello::Batch{count, total_size, names}
                      (Pair → PairResponse{accepted, name, addr}; Text → TextDecision;
-                      otherwise one stream per file)
+                      Batch → BatchDecision; otherwise one stream per file)
 sender ────────────▶ TransferOffer {name, size, chunk_size=1MiB, blake3}
 receiver ──────────▶ TransferDecision::Accept{start_chunk_index} | Reject{reason}
 sender ─ uni stream per chunk (≤8 in flight) ─▶ ChunkHeader{index, len, blake3} + payload

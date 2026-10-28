@@ -363,6 +363,7 @@
         <div class="avatar"><svg class="i"><use href="#i-file"/></svg></div>
         <div class="body"><div class="title" id="offer-file"></div><div class="sub" id="offer-meta"></div></div>
       </div>
+      <div class="codebox textbox small" id="offer-names" hidden></div>
       <p class="muted small" id="offer-queue"></p>
       <div class="modal-actions"><button class="danger" id="btn-offer-reject" data-i18n="reject"></button><button class="primary" id="btn-offer-accept" data-i18n="accept"></button></div>
     </div>
@@ -488,7 +489,7 @@
       cancel: 'Cancel', save: 'Save', copy: 'Copy', close: 'Close', download: 'Download',
       choose_recipient: 'Send to…', share_by_ticket: 'Share with a one-time TICKET / QR code',
       receive_title: 'Receive from TICKET', share_ticket: 'Share TICKET',
-      incoming_file: 'Incoming file', reject: 'Decline', accept: 'Accept', pair: 'Pair',
+      incoming_file: 'Incoming file', incoming_files: 'Incoming files', and_more: '…and {n} more', reject: 'Decline', accept: 'Accept', pair: 'Pair',
       pairing_confirm_hint: 'Confirm on the other device and check that it shows the same code:',
       pair_request: 'Pairing request', pair_request_text: 'wants to add this device to its trusted devices.',
       pair_request_hint: 'Pair only if the other device shows the same code:',
@@ -554,7 +555,7 @@
       cancel: 'Anuluj', save: 'Zapisz', copy: 'Kopiuj', close: 'Zamknij', download: 'Pobierz',
       choose_recipient: 'Wyślij do…', share_by_ticket: 'Udostępnij jednorazowym TICKETEM / kodem QR',
       receive_title: 'Odbierz z TICKETU', share_ticket: 'TICKET udostępnienia',
-      incoming_file: 'Przychodzący plik', reject: 'Odrzuć', accept: 'Odbierz', pair: 'Sparuj',
+      incoming_file: 'Przychodzący plik', incoming_files: 'Przychodzące pliki', and_more: '…i {n} więcej', reject: 'Odrzuć', accept: 'Odbierz', pair: 'Sparuj',
       pairing_confirm_hint: 'Potwierdź na drugim urządzeniu i sprawdź, czy pokazuje ten sam kod:',
       pair_request: 'Prośba o sparowanie', pair_request_text: 'chce dodać to urządzenie do zaufanych.',
       pair_request_hint: 'Sparuj tylko wtedy, gdy drugie urządzenie pokazuje ten sam kod:',
@@ -1208,7 +1209,12 @@
   function showNextOffer() {
     const o = offers[0];
     if (!o) return close('modal-offer');
-    $('offer-file').textContent = o.file_name;
+    const batch = (o.count ?? 1) > 1;
+    $('offer-title').textContent = t(batch ? 'incoming_files' : 'incoming_file');
+    $('offer-file').textContent = batch ? t('n_files', { n: o.count }) : o.file_name;
+    const more = o.count - o.names.length;
+    $('offer-names').textContent = batch ? o.names.join('\n') + (more > 0 ? '\n' + t('and_more', { n: more }) : '') : '';
+    $('offer-names').hidden = !batch;
     $('offer-meta').textContent = t('from', { size: fmtSize(o.size), name: o.alias ?? t('unknown_device', { id: shortId(o.peer) }) });
     $('offer-queue').textContent = offers.length > 1 ? t('queued', { n: offers.length - 1 }) : '';
     open('modal-offer');

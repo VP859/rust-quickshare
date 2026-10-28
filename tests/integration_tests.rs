@@ -7,8 +7,8 @@ use rqs_p2p::node::{NodeEngine, NodeTicket, load_or_generate_secret_key};
 use rqs_p2p::pairing::{PairOutcome, PairRequest, pairing_code, request_pairing};
 use rqs_p2p::protocol::codec::{read_msg, write_msg};
 use rqs_p2p::protocol::messages::{
-    DEFAULT_CHUNK_SIZE, Hello, MAX_TEXT_LEN, ShareToken, TextDecision, TransferDecision,
-    TransferOffer,
+    BatchOffer, DEFAULT_CHUNK_SIZE, Hello, MAX_TEXT_LEN, ShareToken, TextDecision,
+    TransferDecision, TransferOffer,
 };
 use rqs_p2p::transfer::Channel;
 use rqs_p2p::transfer::receiver::part_path_for;
@@ -18,6 +18,7 @@ use rqs_p2p::transfer::service::{
     self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tempfile::tempdir;
@@ -31,6 +32,10 @@ struct TestHandler {
     events: Mutex<Vec<TransferEvent>>,
     pair_requests: Mutex<Vec<PairRequest>>,
     texts: Mutex<Vec<String>>,
+    /// Answer to batches: `None` asks about every file, `Some(accept)` decides all.
+    batch: Option<bool>,
+    batches: Mutex<Vec<BatchOffer>>,
+    decisions: AtomicUsize,
 }
 
 impl TestHandler {
@@ -42,6 +47,9 @@ impl TestHandler {
             events: Mutex::new(Vec::new()),
             pair_requests: Mutex::new(Vec::new()),
             texts: Mutex::new(Vec::new()),
+            batch: None,
+            batches: Mutex::new(Vec::new()),
+            decisions: AtomicUsize::new(0),
         }
     }
 
@@ -57,6 +65,7 @@ impl TestHandler {
 
 impl TransferHandler for TestHandler {
     async fn decide(&self, _: EndpointId, _: &str, _: &TransferOffer) -> OfferDecision {
+        self.decisions.fetch_add(1, Ordering::SeqCst);
         if self.accept {
             OfferDecision::Accept {
                 dest_dir: self.dest_dir.clone(),
@@ -86,6 +95,21 @@ impl TransferHandler for TestHandler {
     async fn confirm_pair(&self, request: PairRequest) -> bool {
         self.pair_requests.lock().unwrap().push(request);
         self.accept
+    }
+
+    async fn decide_batch(&self, _: EndpointId, batch: &BatchOffer) -> Option<OfferDecision> {
+        self.batches.lock().unwrap().push(batch.clone());
+        self.batch.map(|accept| {
+            if accept {
+                OfferDecision::Accept {
+                    dest_dir: self.dest_dir.clone(),
+                }
+            } else {
+                OfferDecision::Reject {
+                    reason: "batch".into(),
+                }
+            }
+        })
     }
 
     async fn receive_text(&self, _: EndpointId, text: String) -> TextDecision {
@@ -415,6 +439,97 @@ async fn pairing_with_one_button_accept_and_reject() -> Result<()> {
                 PairOutcome::Rejected => assert!(!accept),
             }
         }
+        Ok(())
+    })
+    .await
+}
+
+/// Writes `count` small files and returns their paths and contents.
+async fn write_files(dir: &Path, count: usize) -> Result<Vec<(PathBuf, Vec<u8>)>> {
+    let mut files = Vec::new();
+    for i in 0..count {
+        let path = dir.join(format!("photo-{i}.jpg"));
+        let data = pattern(1000 + i * 777);
+        tokio::fs::write(&path, &data).await?;
+        files.push((path, data));
+    }
+    Ok(files)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn accepted_batch_is_confirmed_once() -> Result<()> {
+    with_timeout(async {
+        let (src, dst) = (tempdir()?, tempdir()?);
+        let files = write_files(src.path(), 3).await?;
+        let mut handler = TestHandler::new(false, dst.path());
+        handler.batch = Some(true);
+        let handler = Arc::new(handler);
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        let paths: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
+        service::send_files(&sender, addr, &paths, &|_| {}).await?;
+
+        let batches = handler.batches.lock().unwrap().clone();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].count, 3);
+        assert_eq!(
+            batches[0].total_size,
+            files.iter().map(|(_, d)| d.len() as u64).sum::<u64>()
+        );
+        assert_eq!(
+            handler.decisions.load(Ordering::SeqCst),
+            0,
+            "asked per file"
+        );
+        for (path, data) in &files {
+            let name = path.file_name().unwrap();
+            assert_eq!(&tokio::fs::read(dst.path().join(name)).await?, data);
+        }
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejected_batch_sends_nothing() -> Result<()> {
+    with_timeout(async {
+        let (src, dst) = (tempdir()?, tempdir()?);
+        let files = write_files(src.path(), 2).await?;
+        let mut handler = TestHandler::new(true, dst.path());
+        handler.batch = Some(false);
+        let handler = Arc::new(handler);
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        let paths: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
+        let sent = Mutex::new(Vec::new());
+        service::send_files(&sender, addr, &paths, &|e| sent.lock().unwrap().push(e)).await?;
+
+        assert_eq!(handler.decisions.load(Ordering::SeqCst), 0);
+        assert_eq!(std::fs::read_dir(dst.path())?.count(), 0);
+        let sent = sent.lock().unwrap();
+        assert_eq!(sent.len(), 2);
+        assert!(sent.iter().all(
+            |e| matches!(&e.status, TransferStatus::Rejected { reason } if reason == "batch")
+        ));
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn batch_without_handler_support_asks_per_file() -> Result<()> {
+    with_timeout(async {
+        let (src, dst) = (tempdir()?, tempdir()?);
+        let files = write_files(src.path(), 3).await?;
+        let handler = Arc::new(TestHandler::new(true, dst.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        let paths: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
+        service::send_files(&sender, addr, &paths, &|_| {}).await?;
+
+        assert_eq!(handler.batches.lock().unwrap().len(), 1);
+        assert_eq!(handler.decisions.load(Ordering::SeqCst), 3);
+        assert_eq!(std::fs::read_dir(dst.path())?.count(), 3);
         Ok(())
     })
     .await

@@ -18,7 +18,7 @@ use crate::config::Config;
 use crate::discovery::{Discovery, DiscoveryOptions};
 use crate::node::NodeEngine;
 use crate::pairing::PairRequest;
-use crate::protocol::messages::{TextDecision, TransferOffer};
+use crate::protocol::messages::{BatchOffer, TextDecision, TransferOffer};
 use crate::transfer::service::{
     self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
@@ -114,6 +114,41 @@ impl TransferHandler for DaemonHandler {
                 reason: t!("transfer.user_rejected").into_owned(),
             }
         }
+    }
+
+    async fn decide_batch(&self, peer: EndpointId, batch: &BatchOffer) -> Option<OfferDecision> {
+        let config = Config::load().unwrap_or_default();
+        let dest_dir = self
+            .downloads_dir
+            .clone()
+            .unwrap_or_else(|| config.download_dir());
+        let peer_info = config.find_peer(&peer.to_string());
+        let alias = peer_info
+            .map(|p| p.alias.clone())
+            .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
+        if peer_info.is_some_and(|p| p.auto_accept) {
+            info!("Auto-Accept: {} files from '{alias}'", batch.count);
+            return Some(OfferDecision::Accept { dest_dir });
+        }
+        if !self.interactive {
+            return Some(OfferDecision::Reject {
+                reason: t!("daemon.no_auto_accept", alias = &alias).into_owned(),
+            });
+        }
+        let question = t!(
+            "daemon.batch",
+            count = batch.count,
+            size = human_size(batch.total_size),
+            alias = &alias,
+            names = batch.names.join(", ")
+        );
+        Some(if self.ask_user(format!("\n{question}")).await {
+            OfferDecision::Accept { dest_dir }
+        } else {
+            OfferDecision::Reject {
+                reason: t!("transfer.user_rejected").into_owned(),
+            }
+        })
     }
 
     async fn confirm_pair(&self, req: PairRequest) -> bool {

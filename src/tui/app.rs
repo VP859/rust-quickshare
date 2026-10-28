@@ -15,7 +15,7 @@ use crate::discovery::{Discovery, DiscoveryOptions, NearbyDevice};
 use crate::i18n;
 use crate::node::NodeEngine;
 use crate::pairing::{PairOutcome, PairRequest, clean_device_name, pairing_code, request_pairing};
-use crate::protocol::messages::{MAX_TEXT_LEN, TextDecision, TransferOffer};
+use crate::protocol::messages::{BatchOffer, MAX_TEXT_LEN, TextDecision, TransferOffer};
 use crate::transfer::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
@@ -35,6 +35,17 @@ pub enum PendingKind {
         file_name: String,
         /// Offered file size in bytes.
         file_size: u64,
+    },
+    /// Several incoming files announced together.
+    Batch {
+        /// Alias of the sender or a short Node ID.
+        peer_label: String,
+        /// Number of files.
+        count: u32,
+        /// Size of all files in bytes.
+        total_size: u64,
+        /// Names of the first files.
+        names: Vec<String>,
     },
     /// An incoming text for the clipboard.
     Text {
@@ -65,6 +76,7 @@ impl Pending {
     fn label(&self) -> &str {
         match &self.kind {
             PendingKind::File { file_name, .. } => file_name,
+            PendingKind::Batch { peer_label, .. } => peer_label,
             PendingKind::Text { preview, .. } => preview,
             PendingKind::Pair { name, .. } => name,
         }
@@ -159,6 +171,31 @@ impl TransferHandler for TuiHandler {
             t!("tui.pair_save_failed").into_owned()
         }));
         ok
+    }
+
+    async fn decide_batch(&self, peer: EndpointId, batch: &BatchOffer) -> Option<OfferDecision> {
+        let config = Config::load().unwrap_or_default();
+        let dest_dir = config.download_dir();
+        let peer_info = config.find_peer(&peer.to_string());
+        if peer_info.is_some_and(|p| p.auto_accept) {
+            return Some(OfferDecision::Accept { dest_dir });
+        }
+        let peer_label = peer_info
+            .map(|p| p.alias.clone())
+            .unwrap_or_else(|| t!("tui.unknown_device", id = peer.fmt_short()).into_owned());
+        let kind = PendingKind::Batch {
+            peer_label,
+            count: batch.count,
+            total_size: batch.total_size,
+            names: batch.names.clone(),
+        };
+        Some(if self.ask(kind).await {
+            OfferDecision::Accept { dest_dir }
+        } else {
+            OfferDecision::Reject {
+                reason: t!("transfer.user_rejected").into_owned(),
+            }
+        })
     }
 
     async fn receive_text(&self, peer: EndpointId, text: String) -> TextDecision {
@@ -417,6 +454,9 @@ impl App {
                 self.status_msg = match &p.kind {
                     PendingKind::File { file_name, .. } => {
                         t!("tui.new_offer", name = file_name).into_owned()
+                    }
+                    PendingKind::Batch { count, .. } => {
+                        t!("tui.new_batch", count = count).into_owned()
                     }
                     PendingKind::Text { peer_label, .. } => {
                         t!("tui.new_text", name = peer_label).into_owned()

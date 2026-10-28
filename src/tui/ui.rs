@@ -400,6 +400,42 @@ fn render_pending(f: &mut Frame, app: &App) {
                 ),
             ],
         ),
+        PendingKind::Batch {
+            peer_label,
+            count,
+            total_size,
+            names,
+        } => {
+            let mut lines = vec![Line::styled(
+                t!("tui.batch_files", count = count).into_owned(),
+                Style::default().add_modifier(Modifier::BOLD),
+            )];
+            lines.push(Line::raw(
+                t!(
+                    "tui.offer_from",
+                    size = human_size(*total_size),
+                    from = peer_label
+                )
+                .into_owned(),
+            ));
+            lines.push(Line::raw(""));
+            lines.extend(
+                names
+                    .iter()
+                    .take(8)
+                    .map(|n| Line::styled(format!("• {n}"), Style::default().fg(Color::Cyan))),
+            );
+            let more = (*count as usize).saturating_sub(names.len().min(8));
+            if more > 0 {
+                lines.push(Line::raw(t!("tui.batch_more", count = more).into_owned()));
+            }
+            lines.push(Line::raw(""));
+            lines.push(Line::styled(
+                t!("tui.offer_keys").into_owned(),
+                Style::default().fg(Color::Yellow),
+            ));
+            (format!(" {}{queue} ", t!("tui.batch_title")), lines)
+        }
         PendingKind::Text {
             peer_label,
             preview,
