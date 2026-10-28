@@ -1,4 +1,4 @@
-//! `rqs daemon`: receiving files in the background.
+//! `ferry daemon`: receiving files in the background.
 //!
 //! Trusted devices with Auto-Accept are accepted automatically. Other offers,
 //! texts and pairing requests are confirmed in the console when one is
@@ -74,7 +74,7 @@ impl DaemonHandler {
 }
 
 impl TransferHandler for DaemonHandler {
-    /// Reloads the configuration for every offer, so `rqs peer` changes apply
+    /// Reloads the configuration for every offer, so `ferry peer` changes apply
     /// without a restart.
     async fn decide(&self, peer: EndpointId, _: &str, offer: &TransferOffer) -> OfferDecision {
         let config = Config::load().unwrap_or_else(|e| {

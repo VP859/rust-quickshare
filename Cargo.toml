@@ -22,7 +22,7 @@ blake3 = { version = "1.8.7", features = ["mmap", "rayon"] }
 
 [package]
 name = "rqs_p2p"
-version = "0.1.7"
+version = "0.1.9"
 edition = "2024"
 description = "Ferry – secure P2P file sharing over QUIC"
 repository = "https://github.com/VP859/rust-quickshare"
@@ -32,7 +32,7 @@ name = "rqs_p2p"
 path = "src/lib.rs"
 
 [[bin]]
-name = "rqs"
+name = "ferry"
 path = "src/main.rs"
 
 [dependencies]

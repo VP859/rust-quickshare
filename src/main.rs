@@ -1,4 +1,4 @@
-//! `rqs`: command line, terminal UI and daemon of Ferry.
+//! `ferry`: command line, terminal UI and daemon of Ferry.
 
 use anyhow::Result;
 use clap::Parser;
@@ -6,7 +6,7 @@ use clap::Parser;
 use rqs_p2p::cli::args::{Cli, Commands};
 use rqs_p2p::cli::nearby_cmd::{run_discover, run_pair};
 use rqs_p2p::cli::peer_cmd::handle_peer_cmd;
-use rqs_p2p::cli::settings_cmd::{run_language, run_name};
+use rqs_p2p::cli::settings_cmd::{run_language, run_name, run_network};
 use rqs_p2p::cli::transfer_cmd::{run_receive, run_send, run_send_text, run_show_ticket};
 use rqs_p2p::config::Config;
 use rqs_p2p::daemon::run_daemon;
@@ -49,6 +49,7 @@ async fn main() -> Result<()> {
         } => run_pair(&target, auto_accept).await?,
         Commands::Name { name } => run_name(name.as_deref())?,
         Commands::Language { code } => run_language(code.as_deref())?,
+        Commands::Network { mode } => run_network(mode.as_deref())?,
         Commands::Peer { command } => handle_peer_cmd(command).await?,
         Commands::Doctor => {
             run_doctor().await?;

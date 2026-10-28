@@ -58,7 +58,7 @@ struct Beacon {
     name: String,
     /// Operating system of the sender (`std::env::consts::OS`).
     platform: String,
-    /// iroh address of the sender (Node ID, relay, direct addresses).
+    /// iroh address of the sender (Node ID and direct addresses).
     addr: EndpointAddr,
     /// IPv4 QUIC ports; combined with the packet's source address they give a
     /// LAN address even before iroh has discovered its own addresses.
@@ -326,9 +326,9 @@ impl Discovery {
 
 /// Address of `target`: an alias, nearby device name, Node ID or TICKET.
 ///
-/// A fresh LAN address announced on the local network is preferred (it works
-/// without internet); otherwise the address stored in `config` or carried by
-/// the TICKET is used, and a bare Node ID is resolved later through DNS/pkarr.
+/// A fresh LAN address announced on the local network is preferred; otherwise
+/// the address stored in `config` or carried by the TICKET is used. A bare
+/// Node ID of a device that is not visible on the network cannot be reached.
 ///
 /// # Errors
 ///

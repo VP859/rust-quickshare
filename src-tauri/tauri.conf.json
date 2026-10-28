@@ -1,12 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Ferry",
-  "version": "0.1.0",
+  "version": "0.1.9",
   "identifier": "com.rqs.quickshare",
   "build": {
     "frontendDist": "./ui",
     "beforeDevCommand": "",
-    "beforeBuildCommand": ""
+    "beforeBuildCommand": "",
+    "beforeBundleCommand": "cargo build --release -p rqs_p2p --bin ferry"
   },
   "app": {
     "withGlobalTauri": true,
@@ -40,6 +41,18 @@
     ],
     "android": {
       "minSdkVersion": 24
+    },
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/bin/ferry": "../target/release/ferry"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/bin/ferry": "../target/release/ferry"
+        }
+      }
     }
   }
 }

@@ -1,13 +1,14 @@
-//! `rqs name` and `rqs language`: device settings.
+//! `ferry name`, `ferry language` and `ferry network`: device settings.
 
 use anyhow::Result;
 use rust_i18n::t;
 
 use crate::config::Config;
 use crate::i18n::{self, Language};
+use crate::node::NetworkMode;
 use crate::pairing::clean_device_name;
 
-/// `rqs name [new name]`: shows or changes the name visible to other devices.
+/// `ferry name [new name]`: shows or changes the name visible to other devices.
 ///
 /// # Errors
 ///
@@ -26,7 +27,7 @@ pub fn run_name(name: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-/// `rqs language [code]`: shows or saves the interface language.
+/// `ferry language [code]`: shows or saves the interface language.
 ///
 /// # Errors
 ///
@@ -52,5 +53,37 @@ pub fn run_language(code: Option<&str>) -> Result<()> {
             available = available.join(", ")
         )
     );
+    Ok(())
+}
+
+/// `ferry network [local|internet]`: shows or saves the [`NetworkMode`].
+///
+/// The mode applies to nodes started afterwards (CLI commands, the daemon, the
+/// TUI and the GUI after a restart).
+///
+/// # Errors
+///
+/// Fails when the mode is unknown or the configuration cannot be saved.
+pub fn run_network(mode: Option<&str>) -> Result<()> {
+    let mut config = Config::load()?;
+    if let Some(mode) = mode {
+        config.network_mode = mode.parse()?;
+        config.save()?;
+    }
+    let description = match config.network_mode {
+        NetworkMode::Local => t!("settings.network_local"),
+        NetworkMode::Internet => t!("settings.network_internet"),
+    };
+    println!(
+        "{}",
+        t!(
+            "settings.network",
+            mode = config.network_mode,
+            description = description
+        )
+    );
+    if mode.is_some() {
+        println!("{}", t!("settings.network_restart"));
+    }
     Ok(())
 }

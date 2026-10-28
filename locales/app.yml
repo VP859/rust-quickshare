@@ -202,10 +202,10 @@ discovery.unknown_error:
   pl: "nieznany błąd"
 discovery.android_blocked:
   en: "Android blocks access to the local network (%{error}). Grant the app the \"Nearby devices\" permission (Settings → Apps → Ferry → Permissions) and check that a VPN on the phone allows the local network."
-  pl: "Android blokuje dostęp do sieci lokalnej (%{error}). Nadaj aplikacji uprawnienie „Urządzenia w pobliżu” (Ustawienia → Aplikacje → Ferry Share → Uprawnienia) i sprawdź, czy VPN na telefonie zezwala na sieć lokalną."
+  pl: "Android blokuje dostęp do sieci lokalnej (%{error}). Nadaj aplikacji uprawnienie „Urządzenia w pobliżu” (Ustawienia → Aplikacje → Ferry → Uprawnienia) i sprawdź, czy VPN na telefonie zezwala na sieć lokalną."
 discovery.lan_blocked:
-  en: "Sending to the local network is blocked (%{error}) – usually by a VPN or a firewall. NordVPN: nordvpn set lan-discovery on. You can also use a TICKET."
-  pl: "Wysyłanie do sieci lokalnej jest blokowane (%{error}) – zwykle przez VPN lub zaporę. NordVPN: nordvpn set lan-discovery on. Możesz też użyć TICKETU."
+  en: "Sending to the local network is blocked (%{error}) – usually by a VPN or a firewall. NordVPN: nordvpn set lan-discovery on."
+  pl: "Wysyłanie do sieci lokalnej jest blokowane (%{error}) – zwykle przez VPN lub zaporę. NordVPN: nordvpn set lan-discovery on."
 discovery.nothing_received:
   en: "No announcements from other devices on the network yet. Check that they are on the same network and that firewalls on both devices allow UDP %{port}."
   pl: "Brak ogłoszeń od innych urządzeń w sieci. Sprawdź, czy są w tej samej sieci, a zapory na obu urządzeniach przepuszczają UDP %{port}."
@@ -223,15 +223,9 @@ doctor.udp_ok:
 doctor.udp_failed:
   en: "UDP socket: could not open a socket: %{error}"
   pl: "Gniazdo UDP: błąd otwarcia gniazda: %{error}"
-doctor.stun_ok:
-  en: "STUN servers: reachable."
-  pl: "Serwery STUN: dostępne i odpowiadają poprawnie."
-doctor.stun_failed:
-  en: "STUN servers: no answer. Connections may go through a relay."
-  pl: "Serwery STUN: brak odpowiedzi. Połączenia mogą przechodzić przez relay."
 doctor.vpn_found:
-  en: "An active VPN/tunnel interface was found. It may affect direct UDP hole punching."
-  pl: "Wykryto aktywny interfejs VPN/tunel. Może to wpływać na bezpośredni UDP hole punching."
+  en: "An active VPN/tunnel interface was found. It may block the local network."
+  pl: "Wykryto aktywny interfejs VPN/tunel. Może blokować sieć lokalną."
 doctor.vpn_none:
   en: "VPN: no tunnel interfaces found."
   pl: "VPN: brak aktywnych interfejsów tunelowych."
@@ -283,14 +277,14 @@ cli.connecting:
   en: "Connecting to %{id}..."
   pl: "Łączenie z %{id}..."
 cli.share_only:
-  en: "This node only shares a file (run `rqs daemon` to receive)"
-  pl: "Ten węzeł tylko udostępnia plik (użyj `rqs daemon`, aby odbierać)"
+  en: "This node only shares a file (run `ferry daemon` to receive)"
+  pl: "Ten węzeł tylko udostępnia plik (użyj `ferry daemon`, aby odbierać)"
 cli.share_single:
   en: "Sharing by TICKET supports a single file – use --to for several files"
   pl: "Udostępnianie przez TICKET obsługuje jeden plik – użyj --to dla wielu plików"
 cli.shared:
-  en: "Shared '%{name}'. Receiver: rqs receive <TICKET>"
-  pl: "Udostępniono '%{name}'. Odbiorca: rqs receive <TICKET>"
+  en: "Shared '%{name}'. Receiver: ferry receive <TICKET>"
+  pl: "Udostępniono '%{name}'. Odbiorca: ferry receive <TICKET>"
 cli.ticket_title:
   en: "This device's TICKET – scan it or paste it into \"Add device\""
   pl: "TICKET tego urządzenia – zeskanuj lub wklej w „Dodaj urządzenie”"
@@ -334,8 +328,8 @@ nearby.paired_as:
   en: "paired as '%{alias}'"
   pl: "sparowane jako '%{alias}'"
 nearby.pair_hint:
-  en: "rqs pair <name>"
-  pl: "rqs pair <nazwa>"
+  en: "ferry pair <name>"
+  pl: "ferry pair <nazwa>"
 nearby.searching:
   en: "Searching for devices for %{seconds} s (this device: '%{name}')..."
   pl: "Szukanie urządzeń przez %{seconds} s (to urządzenie: '%{name}')..."
@@ -358,8 +352,8 @@ pair.done:
   en: "[SUCCESS] Paired with '%{alias}' (Auto-Accept: %{auto})."
   pl: "[SUKCES] Sparowano z '%{alias}' (Auto-Accept: %{auto})."
 pair.send_hint:
-  en: "Send files with: rqs send <file> --to \"%{alias}\""
-  pl: "Wysyłka: rqs send <plik> --to \"%{alias}\""
+  en: "Send files with: ferry send <file> --to \"%{alias}\""
+  pl: "Wysyłka: ferry send <plik> --to \"%{alias}\""
 pair.rejected:
   en: "The other device declined the pairing"
   pl: "Drugie urządzenie odrzuciło parowanie"
@@ -873,3 +867,35 @@ tui.batch_files:
 tui.batch_more:
   en: "…and %{count} more"
   pl: "…i %{count} więcej"
+
+# ---------------------------------------------------------------- network mode
+engine.bad_mode:
+  en: "Unknown network mode '%{mode}' (use: local, internet)"
+  pl: "Nieznany tryb sieci '%{mode}' (dostępne: local, internet)"
+settings.network:
+  en: "Network mode: %{mode} – %{description}"
+  pl: "Tryb sieci: %{mode} – %{description}"
+settings.network_local:
+  en: "direct connections only, nothing is sent to external servers (devices must be on the same network)"
+  pl: "tylko połączenia bezpośrednie, nic nie trafia na zewnętrzne serwery (urządzenia muszą być w tej samej sieci)"
+settings.network_internet:
+  en: "direct connections when possible, otherwise through the free public iroh relays (encrypted end-to-end; the relays see IP addresses and Node IDs)"
+  pl: "połączenia bezpośrednie, gdy to możliwe, w przeciwnym razie przez darmowe publiczne przekaźniki iroh (szyfrowanie end-to-end; przekaźniki widzą adresy IP i Node ID)"
+settings.network_restart:
+  en: "The new mode applies after restarting Ferry (GUI, TUI or daemon)."
+  pl: "Nowy tryb zacznie działać po ponownym uruchomieniu Ferry (GUI, TUI lub demona)."
+doctor.network_mode:
+  en: "Network mode: %{mode}"
+  pl: "Tryb sieci: %{mode}"
+tui.network_saved:
+  en: "Network mode saved: %{mode} – restart the TUI to apply"
+  pl: "Zapisano tryb sieci: %{mode} – uruchom TUI ponownie, aby zastosować"
+tui.header_network:
+  en: "network: %{mode}"
+  pl: "sieć: %{mode}"
+tui.network_pending:
+  en: " (after restart: %{mode})"
+  pl: " (po restarcie: %{mode})"
+tui.help_network:
+  en: "network mode: local (no servers) / internet (public iroh relays)"
+  pl: "tryb sieci: lokalny (bez serwerów) / internet (publiczne przekaźniki iroh)"

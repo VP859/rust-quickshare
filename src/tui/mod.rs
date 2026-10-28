@@ -1,4 +1,4 @@
-//! `rqs tui`: interactive terminal user interface built with ratatui.
+//! `ferry tui`: interactive terminal user interface built with ratatui.
 //!
 //! Three panels (trusted devices, nearby devices, transfers) plus dialogs for
 //! decisions, text input, the TICKET with its QR code and help. Press `?` in
@@ -206,6 +206,7 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Char('g') => app.open_download_dir(),
         KeyCode::Char('N') => app.open_device_name(),
         KeyCode::Char('L') => app.cycle_language(),
+        KeyCode::Char('M') => app.toggle_network_mode(),
         KeyCode::Char('r') => app.refresh_nearby(),
         KeyCode::Char('t') => app.popup = Some(Popup::Ticket),
         KeyCode::Char('c') => app.copy_ticket_to_clipboard(),

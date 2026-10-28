@@ -12,7 +12,7 @@ use crate::protocol::messages::ShareToken;
 /// Prefix of the textual form of a TICKET (also used as QR code content).
 pub const TICKET_PREFIX: &str = "rqs:";
 
-/// Address of a node (Node ID, relay URL, direct addresses) and an optional
+/// Address of a node (Node ID and direct IP addresses) and an optional
 /// token of a file shared for download.
 ///
 /// The text form is `rqs:` followed by URL-safe base64 of the [`postcard`]
@@ -80,7 +80,8 @@ impl NodeTicket {
 
     /// Accepts a TICKET or a raw Node ID.
     ///
-    /// A bare Node ID carries no addresses; they are resolved later through DNS/pkarr.
+    /// A bare Node ID carries no addresses; the device must then be found on
+    /// the local network (see [`crate::discovery::resolve_target`]).
     ///
     /// # Errors
     ///

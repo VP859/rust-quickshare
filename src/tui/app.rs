@@ -673,6 +673,20 @@ impl App {
         self.after_config_change(result);
     }
 
+    /// Switches the saved [`NetworkMode`](crate::node::NetworkMode) between
+    /// local and internet; it applies after restarting the TUI.
+    pub fn toggle_network_mode(&mut self) {
+        let result = Config::load().and_then(|mut c| {
+            c.network_mode = match c.network_mode {
+                crate::node::NetworkMode::Local => crate::node::NetworkMode::Internet,
+                crate::node::NetworkMode::Internet => crate::node::NetworkMode::Local,
+            };
+            c.save()?;
+            Ok(t!("tui.network_saved", mode = c.network_mode).into_owned())
+        });
+        self.after_config_change(result);
+    }
+
     /// Toggles Auto-Accept of the selected trusted device.
     pub fn toggle_auto_accept(&mut self) {
         if self.focus != Focus::Trusted {

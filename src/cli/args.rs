@@ -1,11 +1,11 @@
-//! Command line arguments of the `rqs` binary.
+//! Command line arguments of the `ferry` binary.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-/// Ferry – secure P2P file sharing over QUIC, without servers, cloud or mDNS.
+/// Ferry – secure P2P file sharing over QUIC, without a cloud or mDNS.
 #[derive(Parser, Debug)]
-#[command(name = "rqs", author, version, long_about = None)]
+#[command(name = "ferry", author, version, long_about = None)]
 pub struct Cli {
     /// Interface language for this run (`en`, `pl`); overrides the saved setting.
     #[arg(long, global = true, value_name = "CODE")]
@@ -25,7 +25,7 @@ pub enum Commands {
         #[arg(required = true, num_args = 1..)]
         files: Vec<PathBuf>,
         /// Alias, nearby device name, Node ID or TICKET of the receiver
-        /// (it must run `rqs daemon`, the TUI or the GUI).
+        /// (it must run `ferry daemon`, the TUI or the GUI).
         #[arg(short, long)]
         to: Option<String>,
     },
@@ -39,7 +39,7 @@ pub enum Commands {
     },
     /// Download a file shared by TICKET.
     Receive {
-        /// Share TICKET printed by `rqs send` or shown by the GUI.
+        /// Share TICKET printed by `ferry send` or shown by the GUI.
         ticket: String,
         /// Destination folder (default: the download folder).
         output_dir: Option<PathBuf>,
@@ -60,7 +60,7 @@ pub enum Commands {
         #[arg(short, long, default_value_t = 5)]
         timeout: u64,
     },
-    /// Pair with a nearby device (name or Node ID from `rqs discover`); the other
+    /// Pair with a nearby device (name or Node ID from `ferry discover`); the other
     /// side confirms and both show the same code.
     Pair {
         /// Name or Node ID of a nearby device, or a TICKET / Node ID.
@@ -79,6 +79,13 @@ pub enum Commands {
         /// Language code to save.
         code: Option<String>,
     },
+    /// Show or change the network mode: `local` (no external servers, default)
+    /// or `internet` (also through the free public iroh relays, for devices in
+    /// different networks).
+    Network {
+        /// Mode to save.
+        mode: Option<String>,
+    },
     /// Manage trusted devices.
     Peer {
         /// Peer subcommand.
@@ -89,7 +96,7 @@ pub enum Commands {
     Doctor,
 }
 
-/// Subcommands of `rqs peer`.
+/// Subcommands of `ferry peer`.
 #[derive(Subcommand, Debug)]
 pub enum PeerCommands {
     /// Add a device by TICKET or Node ID and send it a pairing request.

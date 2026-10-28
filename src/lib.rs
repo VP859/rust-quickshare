@@ -3,8 +3,10 @@
 //! Secure peer-to-peer file sharing over QUIC for Linux, Windows, macOS and
 //! Android. Files go directly between devices: no storage server, no cloud,
 //! no mDNS or Bluetooth. Connections use [iroh](https://docs.rs/iroh) (TLS 1.3
-//! with Ed25519 identities, UDP hole punching and an encrypted relay fallback),
-//! so transfers keep working behind NAT and with a VPN enabled.
+//! with Ed25519 identities) and reach devices at the addresses announced on the
+//! local network or carried by a TICKET. By default no external servers are
+//! contacted; the optional [`node::NetworkMode::Internet`] adds the public iroh
+//! relays for devices in different networks.
 //!
 //! ## Overview
 //!
@@ -17,7 +19,7 @@
 //! - [`pairing`] – one-button pairing with a verification code.
 //! - [`config`] – trusted devices and settings in `config.toml`.
 //! - [`i18n`] – interface language (English, Polish).
-//! - [`cli`], [`tui`], [`daemon`] – the terminal user interfaces of the `rqs` binary.
+//! - [`cli`], [`tui`], [`daemon`] – the terminal user interfaces of the `ferry` binary.
 //!
 //! ## Example
 //!

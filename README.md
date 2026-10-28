@@ -2,20 +2,22 @@
 
 <h1 align="center">Ferry</h1>
 
-<p align="center"><b>Secure, peer-to-peer and VPN-friendly file sharing for Linux, Windows, macOS and Android.</b></p>
+<p align="center"><b>Secure, peer-to-peer file sharing for Linux, Windows, macOS and Android.</b></p>
 
-Ferry transfers files directly between devices over QUIC. There is no storage server and no cloud;
-devices find each other by **TICKET** (text or QR code) instead of mDNS or Bluetooth, so it keeps
-working with a VPN enabled on either side.
+Ferry transfers files directly between devices over QUIC, end-to-end encrypted. There is no storage
+server and no cloud. By default nothing is sent to external servers: devices find each other
+automatically on the local network, or by **TICKET** (text or QR code). Optionally, paired devices
+can also connect from different networks through the free public iroh relays – see
+[Network modes](#network-modes).
 
-The command line tool is called `rqs`, and the crates keep their `rqs_p2p` / `rqs-gui` names.
+The command line tool is called `ferry`, and the crates keep their `rqs_p2p` / `rqs-gui` names.
 
 ## Features
 
 * **End-to-end encryption** – QUIC + TLS 1.3 with a persistent Ed25519 identity per device (`NodeID`).
-  Relays (fallback when hole punching fails) only forward encrypted packets.
-* **VPN & NAT friendly** – [`iroh`](https://github.com/n0-computer/iroh): UDP hole punching,
-  connection migration, encrypted relay fallback, NodeID lookup via DNS/pkarr.
+* **No external servers by default** – [`iroh`](https://github.com/n0-computer/iroh) runs with
+  relays and DNS/pkarr address lookup disabled. The optional internet mode enables them for
+  transfers between different networks without hosting anything yourself.
 * **Integrity** – BLAKE3 hash of every 1 MiB chunk and of the whole file.
 * **Resume** – downloads go to a `.part` file; after a dropped connection (IP/VPN change) the
   transfer resumes from the last complete chunk.
@@ -33,31 +35,32 @@ The command line tool is called `rqs`, and the crates keep their `rqs_p2p` / `rq
 ## Usage (CLI)
 
 ```bash
-rqs discover                                 # devices on the local network
-rqs pair "Laptop"                            # pairing: the other side confirms, both show the same code
-rqs name "My laptop"                         # this device's name visible to others
-rqs language pl                              # interface language (en, pl); no argument = show
+ferry discover                                 # devices on the local network
+ferry pair "Laptop"                            # pairing: the other side confirms, both show the same code
+ferry name "My laptop"                         # this device's name visible to others
+ferry language pl                              # interface language (en, pl); no argument = show
+ferry network internet                         # network mode: local (default) or internet
 
-rqs ticket                                   # this device's TICKET + QR code (pairing outside the LAN)
-rqs peer add <TICKET> --alias "Laptop" --auto-accept   # + pairing request (--no-pair: only on this side)
-rqs peer list | rqs peer edit Laptop --auto-accept false | rqs peer remove Laptop
+ferry ticket                                   # this device's TICKET + QR code (pairing outside the LAN)
+ferry peer add <TICKET> --alias "Laptop" --auto-accept   # + pairing request (--no-pair: only on this side)
+ferry peer list | ferry peer edit Laptop --auto-accept false | ferry peer remove Laptop
 
-rqs daemon                                   # receive in the background (Auto-Accept for trusted)
-rqs send film.mkv notes.pdf --to Laptop      # send by alias, nearby name, NodeID or TICKET
+ferry daemon                                   # receive in the background (Auto-Accept for trusted)
+ferry send film.mkv notes.pdf --to Laptop      # send by alias, nearby name, NodeID or TICKET
 
-rqs text "https://example.org" --to Laptop # text/link → the receiver's clipboard (stdin when omitted)
+ferry text "https://example.org" --to Laptop # text/link → the receiver's clipboard (stdin when omitted)
 
-rqs send film.mkv                            # share via a one-time TICKET (prints QR)
-rqs receive <TICKET> ~/Downloads             # download a shared file
+ferry send film.mkv                            # share via a one-time TICKET (prints QR)
+ferry receive <TICKET> ~/Downloads             # download a shared file
 
-rqs tui                                      # terminal UI (see below)
-rqs doctor                                   # network, local network discovery and config diagnostics
+ferry tui                                      # terminal UI (see below)
+ferry doctor                                   # network, local network discovery and config diagnostics
 ```
 
 Set `RQS_CONFIG_DIR` to run several independent identities on one machine (e.g. for testing).
 Configuration lives in `~/.config/rqs/` (`config.toml`, `secret.key`).
 
-### TUI (`rqs tui`)
+### TUI (`ferry tui`)
 
 Panels: **[1] Trusted devices**, **[2] Nearby**, **[3] Transfers** (`Tab` / `1 2 3` switches, `↑↓` selects).
 
@@ -72,6 +75,7 @@ Panels: **[1] Trusted devices**, **[2] Nearby**, **[3] Transfers** (`Tab` / `1 2
 | `t` / `c` | this device's TICKET with QR code / copy TICKET |
 | `g` / `N` | download folder / device name |
 | `L` | switch the interface language |
+| `M` | switch the network mode (applies after restarting the TUI) |
 | `y` / `n` | answer a file offer or pairing request |
 | `?` | help |
 
@@ -79,8 +83,8 @@ Panels: **[1] Trusted devices**, **[2] Nearby**, **[3] Transfers** (`Tab` / `1 2
 
 | System  | File | Installation |
 |---------|------|--------------|
-| Linux   | `dist/systemd/rqs-daemon.service` | `systemctl --user enable --now rqs-daemon` (instructions in the file) |
-| macOS   | `dist/launchd/com.rqs.daemon.plist` | `launchctl bootstrap gui/$(id -u) …` (instructions in the file) |
+| Linux   | `dist/systemd/ferry-daemon.service` | `systemctl --user enable --now ferry-daemon` (instructions in the file) |
+| macOS   | `dist/launchd/com.ferry.daemon.plist` | `launchctl bootstrap gui/$(id -u) …` (instructions in the file) |
 | Windows | `dist/windows/install-autostart.ps1` | Task Scheduler task at logon |
 
 A daemon without a terminal accepts files **only** from devices with Auto-Accept.
@@ -91,9 +95,9 @@ running in the system tray.
 
 English is the default. The language is chosen in this order:
 
-1. `--lang <code>` on the command line (`rqs --lang pl tui`),
+1. `--lang <code>` on the command line (`ferry --lang pl tui`),
 2. the `RQS_LANG` environment variable,
-3. `language` in `config.toml`, saved by `rqs language <code>`, the `L` key in the TUI or
+3. `language` in `config.toml`, saved by `ferry language <code>`, the `L` key in the TUI or
    **Settings → Language** in the GUI (the tray menu follows it too),
 4. English.
 
@@ -101,6 +105,20 @@ The Android parts outside the web view (notification, foreground service) use th
 or per-app language (Settings → Apps → Ferry → Language). Log messages are always
 in English. Translations live in `locales/app.yml` (backend) and in `src-tauri/ui/index.html`
 (GUI); a unit test checks that every key has both languages.
+
+## Network modes
+
+| | `local` (default) | `internet` |
+|---|---|---|
+| Servers contacted | none | public iroh relays and DNS (`iroh.link`) of n0, free of charge |
+| Transfers between | devices on the same network (or connected by a VPN) | also devices in different networks (mobile data, another home, …) |
+| Encryption | QUIC + TLS 1.3, end-to-end | the same; relays forward only encrypted packets |
+| Speed | direct | direct whenever possible; through a relay only when no direct path exists (slower) |
+| Visible to the servers | nothing | IP addresses, Node IDs and connection times, never file contents |
+
+Set it with `ferry network local|internet`, the `M` key in the TUI or **Settings → Network** in the
+GUI; it applies after a restart. Both devices should use the internet mode to connect through a
+relay. TICKETs created in internet mode contain the relay address, so they work from anywhere.
 
 ## Discovery and pairing
 
@@ -118,14 +136,13 @@ in English. Translations live in `locales/app.yml` (backend) and in `src-tauri/u
   through on the LAN. firewalld (default on Fedora and openSUSE) is detected and the app shows the
   exact command: `sudo firewall-cmd --permanent --add-port=47823-47824/udp && sudo firewall-cmd --reload`.
   A VPN with a kill switch can block the local network (e.g. NordVPN: `nordvpn set lan-discovery on`).
-  Then use **My TICKET** / QR – it works over the internet as well.
 * Android holds a `MulticastLock` in the foreground service; its device name is the phone's model.
 * **Android 17+** (targetSdk 37) blocks all local network traffic (broadcast, multicast, direct
   LAN connections) without the **ACCESS_LOCAL_NETWORK** permission ("Nearby devices" group).
   The app requests it at startup; if it was denied: Settings → Apps → Ferry →
-  Permissions → Nearby devices. Without it only transfers through the internet relay work.
+  Permissions → Nearby devices. Without it Ferry cannot reach other devices.
 * Android logs (Rust + Kotlin): `adb logcat -s RqsCore RqsService RqsShare`.
-* When the list stays empty, every interface (GUI, TUI, `rqs discover`, `rqs doctor`) shows the
+* When the list stays empty, every interface (GUI, TUI, `ferry discover`, `ferry doctor`) shows the
   reason: LAN sending blocked (VPN/firewall), no local network, or no announcements received.
 * Adding a device manually (TICKET/Node ID) in any interface also sends a pairing request – once
   the other side accepts, both devices trust each other.
@@ -170,7 +187,7 @@ src-tauri/gen/android/          Android project (Share Target, foreground servic
 ## Building
 
 ```bash
-cargo build --release -p rqs_p2p            # CLI `rqs`
+cargo build --release -p rqs_p2p            # CLI `ferry`
 cargo test                                   # unit + end-to-end tests (two iroh nodes)
 cargo bench --bench transfer_benchmarks      # hashing, framing and a 64 MiB transfer over QUIC
 cargo doc --no-deps -p rqs_p2p -p rqs-gui --open   # API documentation

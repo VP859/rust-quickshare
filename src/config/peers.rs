@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use crate::node::NodeTicket;
+use crate::node::{NetworkMode, NodeTicket};
 
 /// A trusted device stored in the configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,7 +20,8 @@ pub struct PeerInfo {
     pub auto_accept: bool,
     /// When the device was first added.
     pub added_at: DateTime<Utc>,
-    /// Last known TICKET (relay and direct addresses); speeds up connecting.
+    /// Last known TICKET (direct addresses); used when the device is not visible
+    /// on the local network.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ticket: Option<String>,
 }
@@ -38,6 +39,10 @@ pub struct Config {
     /// User interface language code (`en`, `pl`); English when unset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+    /// Whether external servers may be used; [`NetworkMode::Local`] when unset.
+    /// Applies when the node starts.
+    #[serde(default, skip_serializing_if = "NetworkMode::is_local")]
+    pub network_mode: NetworkMode,
 }
 
 impl Config {
@@ -222,8 +227,8 @@ impl Config {
 
     /// Turns an alias, Node ID or TICKET into a connection address.
     ///
-    /// Known devices use their stored TICKET when available; otherwise the
-    /// address is resolved later through DNS/pkarr.
+    /// Known devices use their stored TICKET when available; otherwise only the
+    /// Node ID is known and the device must be found on the local network.
     ///
     /// # Errors
     ///

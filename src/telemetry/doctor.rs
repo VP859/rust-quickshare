@@ -1,4 +1,4 @@
-//! `rqs doctor`: diagnostics of the network environment and configuration.
+//! `ferry doctor`: diagnostics of the network environment and configuration.
 
 use anyhow::Result;
 #[cfg(not(target_os = "android"))]
@@ -12,8 +12,6 @@ use tracing::info;
 pub struct DoctorReport {
     /// A UDP socket can be opened.
     pub udp_socket_ok: bool,
-    /// A public STUN server is reachable (direct connections are likely to work).
-    pub stun_reachable: bool,
     /// A VPN or tunnel interface is active.
     pub vpn_interface_detected: bool,
     /// `config.toml` is missing or parses correctly.
@@ -39,12 +37,10 @@ pub async fn run_doctor() -> Result<DoctorReport> {
         }
     };
 
-    let stun_ok = check_stun_reachability().await;
-    if stun_ok {
-        println!("[✓] {}", t!("doctor.stun_ok"));
-    } else {
-        println!("[!] {}", t!("doctor.stun_failed"));
-    }
+    let mode = crate::config::Config::load()
+        .map(|c| c.network_mode)
+        .unwrap_or_default();
+    println!("[i] {}", t!("doctor.network_mode", mode = mode));
 
     let vpn_detected = check_vpn_interfaces();
     if vpn_detected {
@@ -71,7 +67,6 @@ pub async fn run_doctor() -> Result<DoctorReport> {
 
     Ok(DoctorReport {
         udp_socket_ok: udp_ok,
-        stun_reachable: stun_ok,
         vpn_interface_detected: vpn_detected,
         config_valid: config_ok,
     })
@@ -131,15 +126,6 @@ async fn check_discovery() {
         ),
     }
     engine.close().await;
-}
-
-/// Whether a public STUN server is routable (a hint that hole punching can work).
-async fn check_stun_reachability() -> bool {
-    if let Ok(socket) = tokio::net::UdpSocket::bind("0.0.0.0:0").await {
-        socket.connect("108.177.14.127:19302").await.is_ok()
-    } else {
-        false
-    }
 }
 
 /// Whether an interface name looks like a VPN or tunnel (tun/tap, WireGuard,

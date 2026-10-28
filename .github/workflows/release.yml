@@ -1,6 +1,6 @@
 # Cross-platform release triggered by a `v*` tag (e.g. `git tag v0.2.0 && git push --tags`).
 #
-#  cli      – cargo-dist: `rqs` archives + shell/PowerShell installers (Linux/Windows/macOS)
+#  cli      – cargo-dist: `ferry` archives + shell/PowerShell installers (Linux/Windows/macOS)
 #  desktop  – Tauri: .deb/.AppImage/.rpm (Linux), .msi/.exe (Windows), .dmg Universal (macOS)
 #  android  – Tauri Mobile: .apk/.aab (signed when the keystore secrets are set)
 #  publish  – collects all artifacts into a draft GitHub release with SHA-256 sums

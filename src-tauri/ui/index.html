@@ -25,6 +25,7 @@
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
   html, body { background: var(--bg); color: var(--text); }
   body {
     font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, sans-serif;
@@ -447,6 +448,17 @@
       <div class="group-title" data-i18n="section_app"></div>
       <div class="group">
         <div class="field"><label for="language" data-i18n="language"></label><select id="language"></select></div>
+        <div class="field"><label for="network-mode" data-i18n="network_mode"></label>
+          <select id="network-mode">
+            <option value="local" data-i18n="network_local"></option>
+            <option value="internet" data-i18n="network_internet"></option>
+          </select>
+          <div class="muted small" id="network-desc"></div>
+          <div class="toggle" id="network-pending" hidden>
+            <div class="small" style="color: var(--warn)" data-i18n="network_restart"></div>
+            <button class="desktop-only" id="btn-restart" data-i18n="restart_now"></button>
+          </div>
+        </div>
         <div class="about">
           <span class="logo"><svg class="i"><use href="#i-logo"/></svg></span>
           <div style="flex:1; min-width:0"><div style="font-weight:600" id="about-version">Ferry</div><div class="muted small" data-i18n="about_text"></div></div>
@@ -494,6 +506,10 @@
       pair_request: 'Pairing request', pair_request_text: 'wants to add this device to its trusted devices.',
       pair_request_hint: 'Pair only if the other device shows the same code:',
       section_device: 'This device', section_receiving: 'Receiving', section_app: 'Application',
+      network_mode: 'Network', network_local: 'Local network only', network_internet: 'Local network and internet',
+      network_local_desc: 'Direct connections only – nothing is sent to external servers. Devices must be on the same network.',
+      network_internet_desc: 'Direct when possible, otherwise through the free public iroh relays, so paired devices can connect from different networks. Data stays end-to-end encrypted; the relays see IP addresses and Node IDs.',
+      network_restart: 'Applies after restarting Ferry.', restart_now: 'Restart now',
       device_name: 'Device name (visible to nearby devices)', language: 'Language',
       node_id_label: 'Node ID', download_dir: 'Download folder', change_dir: 'Change folder…',
       autostart: 'Start at login', autostart_hint: 'Starts hidden in the tray and receives files in the background',
@@ -519,7 +535,7 @@
       no_devices: 'No devices yet – share with a TICKET instead.', nearby_unpaired: 'Nearby · the recipient confirms the transfer',
       ticket_one_file: 'A TICKET carries a single file',
       shared_title: 'Shared: {name}',
-      shared_desc: 'Scan the code or paste the TICKET into "Receive from TICKET" (or run: rqs receive <TICKET>). Keep Ferry open until the transfer finishes.',
+      shared_desc: 'Scan the code or paste the TICKET into "Receive from TICKET" (or run: ferry receive <TICKET>). Keep Ferry open until the transfer finishes.',
       downloading: 'Downloading…',
       st_preparing: 'Computing BLAKE3 hash…', st_awaiting_decision: 'Waiting for the recipient…', st_completed: 'Completed', st_rejected: 'Declined', st_failed: 'Failed',
       tr_failed: 'Failed: {error}', tr_rejected: 'Declined: {reason}', tr_saved: 'Saved to {path}',
@@ -560,6 +576,10 @@
       pair_request: 'Prośba o sparowanie', pair_request_text: 'chce dodać to urządzenie do zaufanych.',
       pair_request_hint: 'Sparuj tylko wtedy, gdy drugie urządzenie pokazuje ten sam kod:',
       section_device: 'To urządzenie', section_receiving: 'Odbieranie', section_app: 'Aplikacja',
+      network_mode: 'Sieć', network_local: 'Tylko sieć lokalna', network_internet: 'Sieć lokalna i internet',
+      network_local_desc: 'Tylko połączenia bezpośrednie – nic nie trafia na zewnętrzne serwery. Urządzenia muszą być w tej samej sieci.',
+      network_internet_desc: 'Bezpośrednio, gdy to możliwe, w przeciwnym razie przez darmowe publiczne przekaźniki iroh, więc sparowane urządzenia połączą się z różnych sieci. Dane pozostają szyfrowane end-to-end; przekaźniki widzą adresy IP i Node ID.',
+      network_restart: 'Zacznie działać po ponownym uruchomieniu Ferry.', restart_now: 'Uruchom ponownie',
       device_name: 'Nazwa urządzenia (widoczna w pobliżu)', language: 'Język',
       node_id_label: 'Node ID', download_dir: 'Folder pobranych plików', change_dir: 'Zmień folder…',
       autostart: 'Uruchamiaj po zalogowaniu', autostart_hint: 'Startuje ukryta w zasobniku i odbiera pliki w tle',
@@ -585,7 +605,7 @@
       no_devices: 'Brak urządzeń – udostępnij plik TICKETEM.', nearby_unpaired: 'W pobliżu · odbiorca potwierdzi transfer',
       ticket_one_file: 'TICKET obsługuje jeden plik',
       shared_title: 'Udostępniono: {name}',
-      shared_desc: 'Zeskanuj kod lub wklej TICKET w „Odbierz z TICKETU” (albo: rqs receive <TICKET>). Nie zamykaj Ferry do końca transferu.',
+      shared_desc: 'Zeskanuj kod lub wklej TICKET w „Odbierz z TICKETU” (albo: ferry receive <TICKET>). Nie zamykaj Ferry do końca transferu.',
       downloading: 'Pobieranie…',
       st_preparing: 'Liczenie haszu BLAKE3…', st_awaiting_decision: 'Oczekiwanie na odbiorcę…', st_completed: 'Zakończono', st_rejected: 'Odrzucono', st_failed: 'Błąd',
       tr_failed: 'Błąd: {error}', tr_rejected: 'Odrzucono: {reason}', tr_saved: 'Zapisano w {path}',
@@ -1238,7 +1258,27 @@
     if (offers.length) showNextOffer();
     if (pairRequests.length) showNextPairRequest();
     if (textRequests.length) showNextTextRequest();
+    renderNetwork();
   }
+  let network = { active: 'local', saved: 'local' };
+  function renderNetwork() {
+    $('network-mode').value = network.saved;
+    $('network-desc').textContent = t(network.saved === 'internet' ? 'network_internet_desc' : 'network_local_desc');
+    $('network-pending').hidden = network.saved === network.active;
+  }
+  async function loadNetwork() {
+    try { network = await invoke('get_network_mode'); } catch (e) { console.warn('Network mode:', e); }
+    renderNetwork();
+  }
+  $('network-mode').onchange = async (e) => {
+    try {
+      await invoke('set_network_mode', { mode: e.target.value });
+      network.saved = e.target.value;
+    } catch (err) { fail(err); }
+    renderNetwork();
+  };
+  $('btn-restart').onclick = () => invoke('restart_app').catch(fail);
+
   async function loadLanguage() {
     try {
       const info = await invoke('get_language');
@@ -1271,6 +1311,7 @@
     try { $('device-name').value = (await invoke('get_device_name')).name; } catch {}
     $('settings-dir').textContent = nodeInfo?.download_dir ?? '—';
     $('language').value = lang;
+    await loadNetwork();
     if (!isMobile) { try { $('autostart').checked = await invoke('plugin:autostart|is_enabled'); } catch {} }
     open('modal-settings');
   };

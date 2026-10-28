@@ -1,10 +1,23 @@
-//! The P2P endpoint: QUIC connections with hole punching and relay fallback.
+//! The P2P endpoint: end-to-end encrypted QUIC connections between devices.
+//!
+//! The [`NetworkMode`] decides whether external servers may be used:
+//!
+//! - [`NetworkMode::Local`] (default): no external servers. Devices connect
+//!   directly to the addresses learned from local network discovery or carried
+//!   by a TICKET, so traffic never leaves the network path between them.
+//! - [`NetworkMode::Internet`]: additionally the free public relays and the DNS
+//!   address lookup of n0 (the iroh developers) are used, so paired devices can
+//!   reach each other from different networks. Relays forward only encrypted
+//!   packets, but they see IP addresses and Node IDs.
 
 use anyhow::{Context, Result};
 use iroh::endpoint::{Connection, presets};
-use iroh::{Endpoint, EndpointAddr, EndpointId, SecretKey};
+use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, SecretKey, Watcher};
 use rust_i18n::t;
+use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::str::FromStr;
 use std::time::Duration;
 use tracing::{debug, info};
 
@@ -20,30 +33,102 @@ pub const ALPN_RQS: &[u8] = b"rqs/0.2";
 /// port is used.
 pub const QUIC_PORT: u16 = 47824;
 
-/// How long to wait for a relay connection before building a TICKET.
+/// How long to wait for the first local address before building a TICKET.
+const ADDR_TIMEOUT: Duration = Duration::from_secs(2);
+/// How long to wait for a relay connection before building a TICKET in
+/// [`NetworkMode::Internet`], so the TICKET includes the relay URL.
 const ONLINE_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Thin wrapper over [`iroh::Endpoint`] (QUIC, hole punching, encrypted relay).
+/// Whether connections may use servers on the internet.
+///
+/// Encryption is the same in both modes: QUIC with TLS 1.3, authenticated by
+/// the Node ID. Speed is the same whenever a direct connection is possible.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NetworkMode {
+    /// Direct connections only; nothing is sent to external servers. Devices
+    /// must be on the same network (or reachable directly, e.g. through a VPN).
+    #[default]
+    Local,
+    /// Direct connections when possible, otherwise through the public relays
+    /// of n0; addresses are also published and looked up through n0's DNS
+    /// server. Works between different networks without hosting anything.
+    Internet,
+}
+
+impl NetworkMode {
+    /// Both modes, in display order.
+    pub const ALL: [NetworkMode; 2] = [NetworkMode::Local, NetworkMode::Internet];
+
+    /// Name used in the configuration file and on the command line.
+    pub fn code(self) -> &'static str {
+        match self {
+            NetworkMode::Local => "local",
+            NetworkMode::Internet => "internet",
+        }
+    }
+
+    /// Whether this is [`NetworkMode::Local`] (used to omit the default from `config.toml`).
+    pub fn is_local(&self) -> bool {
+        *self == NetworkMode::Local
+    }
+}
+
+impl fmt::Display for NetworkMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+impl FromStr for NetworkMode {
+    type Err = anyhow::Error;
+
+    /// Parses `local` or `internet` (case-insensitive).
+    fn from_str(s: &str) -> Result<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|m| m.code().eq_ignore_ascii_case(s.trim()))
+            .with_context(|| t!("engine.bad_mode", mode = s))
+    }
+}
+
+/// Thin wrapper over [`iroh::Endpoint`] (QUIC with TLS 1.3).
 ///
 /// Cheap to clone: all clones share the same endpoint.
 #[derive(Clone, Debug)]
 pub struct NodeEngine {
     /// The iroh endpoint shared by all clones.
     endpoint: Endpoint,
+    /// Whether relays and DNS address lookup are used.
+    mode: NetworkMode,
 }
 
 impl NodeEngine {
-    /// Binds a new endpoint with the given identity and the default n0 relays
-    /// and address lookup, on IPv4 port [`QUIC_PORT`] when it is free.
+    /// Binds a new endpoint in [`NetworkMode::Local`]: no relay servers and no
+    /// DNS/pkarr address lookup, so it never contacts servers on the internet.
     ///
     /// # Errors
     ///
     /// Fails when the endpoint cannot bind its UDP sockets.
     pub async fn new(secret_key: SecretKey) -> Result<Self> {
+        Self::with_mode(secret_key, NetworkMode::Local).await
+    }
+
+    /// Binds a new endpoint with the given identity and [`NetworkMode`], on
+    /// IPv4 port [`QUIC_PORT`] when it is free.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the endpoint cannot bind its UDP sockets.
+    pub async fn with_mode(secret_key: SecretKey, mode: NetworkMode) -> Result<Self> {
         let builder = |key: SecretKey| {
-            Endpoint::builder(presets::N0)
-                .secret_key(key)
-                .alpns(vec![ALPN_RQS.to_vec()])
+            let builder = match mode {
+                NetworkMode::Local => {
+                    Endpoint::builder(presets::Minimal).relay_mode(RelayMode::Disabled)
+                }
+                NetworkMode::Internet => Endpoint::builder(presets::N0),
+            };
+            builder.secret_key(key).alpns(vec![ALPN_RQS.to_vec()])
         };
         let preferred = match builder(secret_key.clone())
             .bind_addr(SocketAddr::from((Ipv4Addr::UNSPECIFIED, QUIC_PORT)))
@@ -62,33 +147,58 @@ impl NodeEngine {
             }
         };
         info!(
-            "P2P node started, Node ID {}, sockets {:?}",
+            "P2P node started in {mode} mode, Node ID {}, sockets {:?}",
             endpoint.id(),
             endpoint.bound_sockets()
         );
-        Ok(Self { endpoint })
+        Ok(Self { endpoint, mode })
     }
 
-    /// A node using the persistent identity from the configuration directory.
+    /// A node using the persistent identity and the [`NetworkMode`] saved in
+    /// the configuration directory.
     ///
     /// # Errors
     ///
     /// Fails when the key cannot be loaded or the endpoint cannot bind.
     pub async fn with_persistent_identity() -> Result<Self> {
-        Self::new(super::load_or_generate_default_key()?).await
+        let mode = crate::config::Config::load()
+            .map(|c| c.network_mode)
+            .unwrap_or_default();
+        Self::with_mode(super::load_or_generate_default_key()?, mode).await
     }
 
-    /// Current address of this node.
+    /// The network mode this node was started with.
+    pub fn mode(&self) -> NetworkMode {
+        self.mode
+    }
+
+    /// Current address of this node: its Node ID, IP addresses and, in
+    /// [`NetworkMode::Internet`], its relay URL.
     ///
-    /// Waits briefly for a relay connection so that the address (and any TICKET
-    /// built from it) includes the relay URL.
+    /// Right after startup it waits briefly until the address is usable: at
+    /// most 5 s for a relay connection in internet mode, otherwise at most 2 s
+    /// for the first IP address.
     ///
     /// # Errors
     ///
     /// Currently infallible; kept fallible for API stability.
     pub async fn node_addr(&self) -> Result<EndpointAddr> {
-        let _ = tokio::time::timeout(ONLINE_TIMEOUT, self.endpoint.online()).await;
-        Ok(self.endpoint.addr())
+        if self.mode == NetworkMode::Internet {
+            let _ = tokio::time::timeout(ONLINE_TIMEOUT, self.endpoint.online()).await;
+            return Ok(self.endpoint.addr());
+        }
+        let mut watcher = self.endpoint.watch_addr();
+        let with_ip = async {
+            loop {
+                let addr = watcher.get();
+                if addr.ip_addrs().next().is_some() || watcher.updated().await.is_err() {
+                    return addr;
+                }
+            }
+        };
+        Ok(tokio::time::timeout(ADDR_TIMEOUT, with_ip)
+            .await
+            .unwrap_or_else(|_| self.endpoint.addr()))
     }
 
     /// A pairing TICKET for this node.
@@ -119,7 +229,8 @@ impl NodeEngine {
     ///
     /// # Errors
     ///
-    /// Fails when the node cannot be reached directly or through a relay.
+    /// Fails when the node cannot be reached at any of its known addresses (and,
+    /// in [`NetworkMode::Internet`], not through a relay either).
     pub async fn connect(&self, target: impl Into<EndpointAddr>) -> Result<Connection> {
         let target = target.into();
         debug!("Connecting to {}", target.id);
@@ -156,5 +267,56 @@ impl NodeEngine {
     /// Gracefully closes all connections and the endpoint.
     pub async fn close(&self) {
         self.endpoint.close().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    #[test]
+    fn network_mode_parses_and_defaults_to_local() {
+        assert_eq!(
+            "internet".parse::<NetworkMode>().unwrap(),
+            NetworkMode::Internet
+        );
+        assert_eq!(
+            " LOCAL ".parse::<NetworkMode>().unwrap(),
+            NetworkMode::Local
+        );
+        assert!("relay".parse::<NetworkMode>().is_err());
+        assert_eq!(NetworkMode::default(), NetworkMode::Local);
+    }
+
+    #[test]
+    fn network_mode_in_config_file() {
+        let old: Config = toml::from_str("[peers]\n").unwrap();
+        assert_eq!(
+            old.network_mode,
+            NetworkMode::Local,
+            "old configs stay local"
+        );
+        assert!(!toml::to_string(&old).unwrap().contains("network_mode"));
+
+        let config = Config {
+            network_mode: NetworkMode::Internet,
+            ..Config::default()
+        };
+        let text = toml::to_string(&config).unwrap();
+        assert!(text.contains("network_mode = \"internet\""), "{text}");
+        let back: Config = toml::from_str(&text).unwrap();
+        assert_eq!(back.network_mode, NetworkMode::Internet);
+    }
+
+    #[tokio::test]
+    async fn local_node_has_no_relay_address() -> Result<()> {
+        let engine = NodeEngine::new(SecretKey::generate()).await?;
+        assert_eq!(engine.mode(), NetworkMode::Local);
+        let addr = engine.node_addr().await?;
+        assert_eq!(addr.relay_urls().count(), 0);
+        assert!(addr.ip_addrs().next().is_some(), "no direct address");
+        engine.close().await;
+        Ok(())
     }
 }

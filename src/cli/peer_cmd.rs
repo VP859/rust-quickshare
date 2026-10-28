@@ -1,4 +1,4 @@
-//! `rqs peer`: management of trusted devices.
+//! `ferry peer`: management of trusted devices.
 
 use anyhow::{Context, Result};
 use rust_i18n::t;
@@ -7,7 +7,7 @@ use crate::cli::args::PeerCommands;
 use crate::cli::nearby_cmd::run_peer_add;
 use crate::config::Config;
 
-/// Runs a `rqs peer` subcommand.
+/// Runs a `ferry peer` subcommand.
 ///
 /// # Errors
 ///
@@ -30,7 +30,7 @@ pub async fn handle_peer_cmd(cmd: PeerCommands) -> Result<()> {
     }
 }
 
-/// `rqs peer list`: prints trusted devices sorted by alias.
+/// `ferry peer list`: prints trusted devices sorted by alias.
 fn list() -> Result<()> {
     let config = Config::load()?;
     if config.peers.is_empty() {
@@ -60,7 +60,7 @@ fn list() -> Result<()> {
     Ok(())
 }
 
-/// `rqs peer edit`: changes the alias and/or Auto-Accept of a device.
+/// `ferry peer edit`: changes the alias and/or Auto-Accept of a device.
 fn edit(target: &str, alias: Option<String>, auto_accept: Option<bool>) -> Result<()> {
     let mut config = Config::load()?;
     let key = config
@@ -81,7 +81,7 @@ fn edit(target: &str, alias: Option<String>, auto_accept: Option<bool>) -> Resul
     config.save()
 }
 
-/// `rqs peer remove`: removes a device by alias or Node ID.
+/// `ferry peer remove`: removes a device by alias or Node ID.
 fn remove(target: &str) -> Result<()> {
     let mut config = Config::load()?;
     if config.remove_peer(target) {

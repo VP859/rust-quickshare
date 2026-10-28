@@ -1,4 +1,4 @@
-# cargo-dist configuration for the `rqs` CLI (archives + shell/PowerShell installers).
+# cargo-dist configuration for the `ferry` CLI (archives + shell/PowerShell installers).
 # The GUI (Tauri: .deb/.AppImage/.msi/.exe/.dmg) and Android (.apk/.aab) are built by
 # separate jobs in .github/workflows/release.yml, so that workflow is edited by hand.
 [workspace]
@@ -19,4 +19,4 @@ install-path = "CARGO_HOME"
 # release.yml has extra Tauri and Android jobs – do not regenerate it with `dist init`.
 allow-dirty = ["ci"]
 # System service files bundled with the CLI archives.
-include = ["dist/systemd/rqs-daemon.service", "dist/launchd/com.rqs.daemon.plist", "dist/windows/install-autostart.ps1"]
+include = ["dist/systemd/ferry-daemon.service", "dist/launchd/com.ferry.daemon.plist", "dist/windows/install-autostart.ps1"]

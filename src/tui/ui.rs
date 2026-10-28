@@ -80,6 +80,11 @@ fn highlight(focused: bool) -> Style {
 
 /// Header: app name, key hints, Node ID, device name and download folder.
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
+    let running = app.engine.mode();
+    let mut network = t!("tui.header_network", mode = running).into_owned();
+    if app.config.network_mode != running {
+        network.push_str(&t!("tui.network_pending", mode = app.config.network_mode));
+    }
     let lines = vec![
         Line::from(vec![
             Span::styled(
@@ -87,7 +92,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::raw(format!(
-                "  ·  Node ID {}…  ·  {}",
+                "  ·  Node ID {}…  ·  {}  ·  {network}",
                 &app.node_id[..12],
                 t!(
                     "tui.header_folder",
@@ -630,6 +635,7 @@ fn render_help(f: &mut Frame) {
         ("t / c", t!("tui.help_ticket")),
         ("g / N", t!("tui.help_settings")),
         ("L", t!("tui.help_language")),
+        ("M", t!("tui.help_network")),
         ("r", t!("tui.help_search")),
         ("y / n", t!("tui.help_answer")),
         ("q / Esc", t!("tui.help_quit")),

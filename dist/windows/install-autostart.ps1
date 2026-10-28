@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Registers the Ferry daemon (`rqs daemon`) in Task Scheduler to start at logon.
+  Registers the Ferry daemon (`ferry daemon`) in Task Scheduler to start at logon.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File install-autostart.ps1
@@ -11,7 +11,7 @@
   The GUI app has its own "Start at login" switch in Settings.
 #>
 param(
-    [string]$RqsPath = (Join-Path $env:USERPROFILE ".cargo\bin\rqs.exe"),
+    [string]$FerryPath = (Join-Path $env:USERPROFILE ".cargo\bin\ferry.exe"),
     [switch]$Uninstall
 )
 
@@ -24,11 +24,11 @@ if ($Uninstall) {
     exit 0
 }
 
-if (-not (Test-Path $RqsPath)) {
-    throw "$RqsPath not found. Pass the path: -RqsPath C:\path\to\rqs.exe"
+if (-not (Test-Path $FerryPath)) {
+    throw "$FerryPath not found. Pass the path: -FerryPath C:\path\to\ferry.exe"
 }
 
-$action = New-ScheduledTaskAction -Execute $RqsPath -Argument "daemon"
+$action = New-ScheduledTaskAction -Execute $FerryPath -Argument "daemon"
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -Hidden

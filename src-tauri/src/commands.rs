@@ -434,7 +434,7 @@ pub async fn send_text(text: String, target: String, state: State<'_, AppState>)
     }
 }
 
-/// Shares a file by a one-time TICKET (the receiver scans the QR code or runs `rqs receive`).
+/// Shares a file by a one-time TICKET (the receiver scans the QR code or runs `ferry receive`).
 ///
 /// # Errors
 ///
@@ -650,6 +650,50 @@ pub async fn set_device_name(name: String, state: State<'_, AppState>) -> CmdRes
         d.set_name(&clean);
     }
     Ok(clean)
+}
+
+/// Network mode of the running node and the saved one.
+#[derive(Serialize)]
+pub struct NetworkModeInfo {
+    /// Mode the running node was started with (`local` or `internet`).
+    pub active: &'static str,
+    /// Mode saved in the configuration; applies after a restart.
+    pub saved: &'static str,
+}
+
+/// The network mode of the running node and the one saved for the next start.
+///
+/// # Errors
+///
+/// When the P2P node cannot start.
+#[tauri::command]
+pub async fn get_network_mode(state: State<'_, AppState>) -> CmdResult<NetworkModeInfo> {
+    let active = state.engine().await?.mode().code();
+    let saved = state.config.lock().await.network_mode.code();
+    Ok(NetworkModeInfo { active, saved })
+}
+
+/// Saves the network mode (`local` or `internet`); it applies after a restart.
+///
+/// # Errors
+///
+/// When the mode is unknown or the configuration cannot be saved.
+#[tauri::command]
+pub async fn set_network_mode(mode: String, state: State<'_, AppState>) -> CmdResult<()> {
+    let mode: rqs_p2p::node::NetworkMode = mode.parse().map_err(|e| format!("{e:#}"))?;
+    let mut config = state.config.lock().await;
+    config.network_mode = mode;
+    config.save().map_err(err)
+}
+
+/// Restarts the application, e.g. to apply a new network mode (desktop only;
+/// on Android the app is restarted by closing it from the recent apps).
+#[tauri::command]
+pub fn restart_app(app: AppHandle) {
+    #[cfg(desktop)]
+    app.restart();
+    #[cfg(not(desktop))]
+    let _ = app;
 }
 
 /// The active interface language and the supported ones.

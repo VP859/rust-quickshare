@@ -1,15 +1,15 @@
-# systemd user service for the Ferry daemon (`rqs daemon`).
+# systemd user service for the Ferry daemon (`ferry daemon`).
 #
 # Installation (no root needed):
 #   mkdir -p ~/.config/systemd/user
-#   cp rqs-daemon.service ~/.config/systemd/user/
+#   cp ferry-daemon.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload
-#   systemctl --user enable --now rqs-daemon.service
+#   systemctl --user enable --now ferry-daemon.service
 #   loginctl enable-linger "$USER"    # optional: keep running without a login session
 #
-# TICKET and logs: journalctl --user -u rqs-daemon -f
+# TICKET and logs: journalctl --user -u ferry-daemon -f
 # Without a terminal the daemon only accepts files from Auto-Accept devices
-# (rqs peer add <TICKET> --alias Laptop --auto-accept).
+# (ferry peer add <TICKET> --alias Laptop --auto-accept).
 
 [Unit]
 Description=Ferry – P2P file receiving daemon
@@ -21,8 +21,8 @@ Wants=network-online.target
 Type=simple
 # The directories must exist before ReadWritePaths is applied ("+" = outside the sandbox).
 ExecStartPre=+/usr/bin/mkdir -p %h/.config/rqs %h/Downloads
-# Default cargo-dist install path; change to /usr/bin/rqs when installed from a package.
-ExecStart=%h/.cargo/bin/rqs daemon
+# Default cargo-dist install path; change to /usr/bin/ferry when installed from a package.
+ExecStart=%h/.cargo/bin/ferry daemon
 Restart=on-failure
 RestartSec=5s
 Environment=RUST_LOG=info

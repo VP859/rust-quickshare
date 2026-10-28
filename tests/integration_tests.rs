@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use iroh::EndpointId;
 use rqs_p2p::discovery::{Discovery, DiscoveryHealth, DiscoveryOptions};
-use rqs_p2p::node::{NodeEngine, NodeTicket, load_or_generate_secret_key};
+use rqs_p2p::node::{NetworkMode, NodeEngine, NodeTicket, load_or_generate_secret_key};
 use rqs_p2p::pairing::{PairOutcome, PairRequest, pairing_code, request_pairing};
 use rqs_p2p::protocol::codec::{read_msg, write_msg};
 use rqs_p2p::protocol::messages::{
@@ -587,6 +587,37 @@ async fn oversized_text_is_refused_on_both_sides() -> Result<()> {
 fn text_preview_is_single_line_and_short() {
     assert_eq!(service::text_preview("a\n\tb   c\u{7}d", 50), "a b c d");
     assert_eq!(service::text_preview("abcdef", 4), "abc…");
+}
+
+/// Needs internet access: run with `cargo test -- --ignored`.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "uses the public iroh relays over the internet"]
+async fn internet_mode_transfers_through_a_relay() -> Result<()> {
+    with_timeout(async {
+        let (src, dst) = (tempdir()?, tempdir()?);
+        let data = pattern(3 * DEFAULT_CHUNK_SIZE as usize + 17);
+        let path = src.path().join("relay.bin");
+        tokio::fs::write(&path, &data).await?;
+
+        let key = || load_or_generate_secret_key(None);
+        let receiver = NodeEngine::with_mode(key()?, NetworkMode::Internet).await?;
+        let addr = receiver.node_addr().await?;
+        let relay_only = iroh::EndpointAddr::from_parts(
+            addr.id,
+            addr.relay_urls().cloned().map(iroh::TransportAddr::Relay),
+        );
+        assert!(relay_only.relay_urls().next().is_some(), "no relay URL");
+        tokio::spawn(service::serve(
+            receiver.clone(),
+            Arc::new(TestHandler::new(true, dst.path())),
+        ));
+
+        let sender = NodeEngine::with_mode(key()?, NetworkMode::Internet).await?;
+        service::send_files(&sender, relay_only, &[path], &|_| {}).await?;
+        assert_eq!(tokio::fs::read(dst.path().join("relay.bin")).await?, data);
+        Ok(())
+    })
+    .await
 }
 
 fn free_udp_port() -> Result<u16> {

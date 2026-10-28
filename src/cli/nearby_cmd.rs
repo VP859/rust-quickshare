@@ -1,4 +1,4 @@
-//! `rqs discover`, `rqs pair` and adding devices with a pairing request.
+//! `ferry discover`, `ferry pair` and adding devices with a pairing request.
 
 use anyhow::{Context, Result};
 use rust_i18n::t;
@@ -9,9 +9,9 @@ use crate::discovery::{Discovery, DiscoveryHealth, DiscoveryOptions, NearbyDevic
 use crate::node::{NodeEngine, NodeTicket};
 use crate::pairing::{PairOutcome, pairing_code, request_pairing};
 
-/// How long `rqs pair` looks for the named device on the local network.
+/// How long `ferry pair` looks for the named device on the local network.
 const PAIR_LOOKUP_TIMEOUT: Duration = Duration::from_secs(8);
-/// How long `rqs peer add` looks for a fresher LAN address of the device.
+/// How long `ferry peer add` looks for a fresher LAN address of the device.
 const NEARBY_LOOKUP: Duration = Duration::from_millis(1500);
 
 /// Prints the table of nearby devices, or a hint why none were found.
@@ -47,7 +47,7 @@ fn print_devices(devices: &[NearbyDevice], config: &Config, health: &DiscoveryHe
     println!();
 }
 
-/// `rqs discover`: lists devices found on the local network within `timeout` seconds.
+/// `ferry discover`: lists devices found on the local network within `timeout` seconds.
 ///
 /// # Errors
 ///
@@ -76,7 +76,7 @@ pub async fn run_discover(timeout: u64) -> Result<()> {
     Ok(())
 }
 
-/// `rqs pair <name|Node ID|TICKET>`: pairs with a device and stores it as trusted.
+/// `ferry pair <name|Node ID|TICKET>`: pairs with a device and stores it as trusted.
 ///
 /// Outside the local network a TICKET or Node ID can still be used.
 ///
@@ -128,7 +128,7 @@ pub async fn run_pair(target: &str, auto_accept: bool) -> Result<()> {
     }
 }
 
-/// `rqs peer add <TICKET|Node ID>`: stores the device and sends it a pairing
+/// `ferry peer add <TICKET|Node ID>`: stores the device and sends it a pairing
 /// request, so that after confirmation the other side trusts this device too.
 ///
 /// A failed or declined pairing is reported but not treated as an error: the

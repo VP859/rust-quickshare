@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  launchd agent (macOS) starting the Ferry daemon (`rqs daemon`) at login.
+  launchd agent (macOS) starting the Ferry daemon (`ferry daemon`) at login.
 
   Installation (replaces __HOME__ with the home directory):
-    sed "s|__HOME__|$HOME|g" com.rqs.daemon.plist > ~/Library/LaunchAgents/com.rqs.daemon.plist
-    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.rqs.daemon.plist
+    sed "s|__HOME__|$HOME|g" com.ferry.daemon.plist > ~/Library/LaunchAgents/com.ferry.daemon.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ferry.daemon.plist
 
   Removal:
-    launchctl bootout gui/$(id -u)/com.rqs.daemon && rm ~/Library/LaunchAgents/com.rqs.daemon.plist
+    launchctl bootout gui/$(id -u)/com.ferry.daemon && rm ~/Library/LaunchAgents/com.ferry.daemon.plist
 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.rqs.daemon</string>
+    <string>com.ferry.daemon</string>
     <key>ProgramArguments</key>
     <array>
-        <string>__HOME__/.cargo/bin/rqs</string>
+        <string>__HOME__/.cargo/bin/ferry</string>
         <string>daemon</string>
     </array>
     <key>RunAtLoad</key>
@@ -31,8 +31,8 @@
     <key>ProcessType</key>
     <string>Background</string>
     <key>StandardOutPath</key>
-    <string>__HOME__/Library/Logs/rqs-daemon.log</string>
+    <string>__HOME__/Library/Logs/ferry-daemon.log</string>
     <key>StandardErrorPath</key>
-    <string>__HOME__/Library/Logs/rqs-daemon.log</string>
+    <string>__HOME__/Library/Logs/ferry-daemon.log</string>
 </dict>
 </plist>

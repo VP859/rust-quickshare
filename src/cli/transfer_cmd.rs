@@ -1,4 +1,4 @@
-//! `rqs send`, `rqs text`, `rqs receive` and `rqs ticket`.
+//! `ferry send`, `ferry text`, `ferry receive` and `ferry ticket`.
 
 use anyhow::{Context, Result};
 use iroh::EndpointId;
@@ -21,7 +21,7 @@ use crate::transfer::service::{
 /// How long to look for the receiver on the local network before sending.
 const NEARBY_LOOKUP: Duration = Duration::from_millis(1500);
 
-/// `rqs send <files> [--to <device>]`.
+/// `ferry send <files> [--to <device>]`.
 ///
 /// With `--to` the files are pushed to the device; otherwise a single file is
 /// shared by a one-time TICKET until it has been downloaded once.
@@ -39,8 +39,8 @@ pub async fn run_send(files: &[PathBuf], to: Option<&str>) -> Result<()> {
     result
 }
 
-/// Address of the receiver; prefers a fresh address from local discovery (works
-/// without internet). `target` may also be the name of an unpaired nearby device.
+/// Address of the receiver; prefers a fresh address from local discovery.
+/// `target` may also be the name of an unpaired nearby device.
 async fn resolve_receiver(engine: &NodeEngine, target: &str) -> Result<iroh::EndpointAddr> {
     let config = Config::load()?;
     let resolved = config.resolve_target(target);
@@ -72,7 +72,7 @@ async fn send_to_peer(engine: &NodeEngine, files: &[PathBuf], target: &str) -> R
     service::send_files(engine, addr, files, &|ev| progress.handle(ev)).await
 }
 
-/// `rqs text [TEXT] --to <device>`; without `TEXT` the text is read from
+/// `ferry text [TEXT] --to <device>`; without `TEXT` the text is read from
 /// standard input.
 ///
 /// # Errors
@@ -165,7 +165,7 @@ async fn share_by_ticket(engine: &NodeEngine, files: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
-/// `rqs receive <TICKET> [folder]`.
+/// `ferry receive <TICKET> [folder]`.
 ///
 /// # Errors
 ///
@@ -184,7 +184,7 @@ pub async fn run_receive(ticket_str: &str, output_dir: Option<&Path>) -> Result<
     result.map(|_| ())
 }
 
-/// `rqs ticket`: prints this device's Node ID, TICKET and QR code.
+/// `ferry ticket`: prints this device's Node ID, TICKET and QR code.
 ///
 /// # Errors
 ///

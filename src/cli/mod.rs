@@ -1,4 +1,4 @@
-//! The `rqs` command line interface.
+//! The `ferry` command line interface.
 
 pub mod args;
 pub mod display;
