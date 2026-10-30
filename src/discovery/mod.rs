@@ -1,27 +1,35 @@
 //! Automatic discovery of Ferry devices on the local network.
 //!
 //! No mDNS or Bluetooth is used. Every node announces itself every few seconds
-//! with a small UDP packet (`RQSd`, port [`DISCOVERY_PORT`]) sent to the
+//! with a small UDP packet (`FRYd`, port [`DISCOVERY_PORT`]) sent to the
 //! broadcast address of each of its networks and to the multicast group
 //! [`MULTICAST_GROUP`] (TTL 1, also over loopback, so several instances on one
 //! computer see each other even behind a VPN that blocks the LAN). The first
 //! packet from a new device is answered directly with unicast, so it is enough
 //! for announcements to get through in one direction.
 //!
-//! An announcement carries the device name and its iroh address. It is not a
-//! proof of identity: connections still authenticate the Node ID with TLS and
-//! pairing requires consent and a matching verification code. When the local
-//! network is unavailable (e.g. a VPN with LAN blocking), TICKETs and QR codes
-//! keep working.
+//! An announcement carries the device name and its iroh address and is signed
+//! with the device's Ed25519 key (the one behind its Node ID) together with a
+//! timestamp. Nobody can therefore announce a false address for someone else's
+//! Node ID, and recorded announcements are rejected after
+//! [`MAX_BEACON_AGE`]. The *name* is still chosen freely by the sender, so it
+//! is not a proof of identity: connections authenticate the Node ID with TLS
+//! and pairing requires consent and a matching verification code. When the
+//! local network is unavailable (e.g. a VPN with LAN blocking), TICKETs and QR
+//! codes keep working.
+//!
+//! A *hidden* device ([`Visibility::hidden`]) does not announce itself; it
+//! only answers announcements of its paired devices, which can verify the
+//! answer by its signature. Everyone else on the network does not see it.
 
 use anyhow::{Context, Result};
 use iroh::{EndpointAddr, EndpointId, TransportAddr};
 use rust_i18n::t;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::net::UdpSocket;
 use tokio::sync::{Notify, watch};
 use tracing::{debug, info, warn};
@@ -37,7 +45,7 @@ pub const DISCOVERY_PORT: u16 = 47823;
 pub const MULTICAST_GROUP: Ipv4Addr = Ipv4Addr::new(239, 255, 71, 83);
 
 /// First bytes of every announcement; other packets on the port are ignored.
-const MAGIC: [u8; 4] = *b"RQSd";
+const MAGIC: [u8; 4] = *b"FRYd";
 /// Interval between announcements.
 const ANNOUNCE_INTERVAL: Duration = Duration::from_secs(5);
 /// A device disappears from the list after about three missed announcements.
@@ -48,12 +56,30 @@ const MAX_DEVICES: usize = 256;
 const MAX_BEACON_LEN: usize = 2048;
 /// Largest number of QUIC ports taken from one announcement.
 const MAX_QUIC_PORTS: usize = 4;
+/// Announcements whose timestamp differs from the local clock by more than
+/// this are ignored, so recorded packets cannot be replayed later. Generous
+/// enough for phones and computers whose clocks are a few minutes off.
+pub const MAX_BEACON_AGE: Duration = Duration::from_secs(300);
+/// Domain separation of the announcement signature.
+const SIGNATURE_CONTEXT: &[u8] = b"ferry discovery beacon v1";
+
+/// Datagram on the discovery port: a signed, serialized [`Beacon`].
+#[derive(Serialize, Deserialize)]
+struct SignedBeacon {
+    /// Always [`MAGIC`].
+    magic: [u8; 4],
+    /// The postcard-encoded [`Beacon`].
+    body: Vec<u8>,
+    /// Ed25519 signature of [`SIGNATURE_CONTEXT`] followed by `body`, made
+    /// with the key of `Beacon::addr.id`.
+    signature: iroh::Signature,
+}
 
 /// Announcement sent to the local network and answered directly.
 #[derive(Serialize, Deserialize)]
 struct Beacon {
-    /// Always [`MAGIC`].
-    magic: [u8; 4],
+    /// Seconds since the Unix epoch when the announcement was made.
+    timestamp: u64,
     /// Device name of the sender.
     name: String,
     /// Operating system of the sender (`std::env::consts::OS`).
@@ -74,7 +100,7 @@ pub struct NearbyDevice {
     pub node_id: String,
     /// Announced device name.
     pub name: String,
-    /// Operating system (`linux`, `windows`, `macos`, `android`, …).
+    /// Operating system (`linux`, `windows`, `android`, …).
     pub platform: String,
     /// Node ID.
     #[serde(skip)]
@@ -82,6 +108,30 @@ pub struct NearbyDevice {
     /// Current address including the LAN address the announcement came from.
     #[serde(skip)]
     pub addr: EndpointAddr,
+}
+
+/// Who may see this device on the local network.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Visibility {
+    /// Do not announce this device; answer only devices in `trusted`.
+    pub hidden: bool,
+    /// Paired devices, which see this device even when it is hidden.
+    pub trusted: HashSet<EndpointId>,
+}
+
+impl Visibility {
+    /// Visibility stored in the configuration (`hidden` and the paired devices).
+    pub fn from_config(config: &Config) -> Self {
+        Self {
+            hidden: config.hidden,
+            trusted: config.trusted_ids().collect(),
+        }
+    }
+
+    /// Whether this device may answer an announcement of `peer`.
+    fn answers(&self, peer: &EndpointId) -> bool {
+        !self.hidden || self.trusted.contains(peer)
+    }
 }
 
 /// Configuration of a [`Discovery`] service.
@@ -92,6 +142,8 @@ pub struct DiscoveryOptions {
     /// Fixed announcement targets instead of broadcast/multicast (tests,
     /// networks without broadcast).
     pub targets: Option<Vec<SocketAddr>>,
+    /// Initial visibility; change it later with [`Discovery::set_visibility`].
+    pub visibility: Visibility,
 }
 
 impl Default for DiscoveryOptions {
@@ -99,6 +151,17 @@ impl Default for DiscoveryOptions {
         Self {
             port: DISCOVERY_PORT,
             targets: None,
+            visibility: Visibility::default(),
+        }
+    }
+}
+
+impl DiscoveryOptions {
+    /// Default options with the visibility stored in `config`.
+    pub fn from_config(config: &Config) -> Self {
+        Self {
+            visibility: Visibility::from_config(config),
+            ..Self::default()
         }
     }
 }
@@ -116,6 +179,8 @@ struct Entry {
 pub struct DiscoveryHealth {
     /// The socket listens on [`DISCOVERY_PORT`]; otherwise announcements are not received.
     pub listening: bool,
+    /// This device does not announce itself ([`Visibility::hidden`]).
+    pub hidden: bool,
     /// The first announcement round has completed; before that the state is unknown.
     pub announced: bool,
     /// Number of local IPv4 networks (Wi-Fi/LAN) in the last round.
@@ -138,6 +203,9 @@ impl DiscoveryHealth {
     pub fn hint(&self) -> Option<String> {
         if !self.listening {
             return Some(t!("discovery.port_busy", port = DISCOVERY_PORT).into_owned());
+        }
+        if self.hidden {
+            return Some(t!("discovery.hidden").into_owned());
         }
         if !self.announced {
             return None;
@@ -187,6 +255,8 @@ struct Shared {
     /// IPv4 addresses of this computer from the last announcement round, used
     /// to tell announcements of other local instances from the network.
     own_addrs: Mutex<Vec<Ipv4Addr>>,
+    /// Who may see this device.
+    visibility: RwLock<Visibility>,
 }
 
 impl Shared {
@@ -242,9 +312,11 @@ impl Discovery {
             tx,
             health: Mutex::new(DiscoveryHealth {
                 listening,
+                hidden: opts.visibility.hidden,
                 ..Default::default()
             }),
             own_addrs: Mutex::new(Vec::new()),
+            visibility: RwLock::new(opts.visibility.clone()),
         });
         info!(
             "Discovery listening on UDP {} ({})",
@@ -290,6 +362,21 @@ impl Discovery {
             *current = clean_device_name(name);
         }
         self.probe();
+    }
+
+    /// Changes who may see this device. Becoming visible announces it at once;
+    /// devices that saw it before keep it in their lists until it expires there.
+    pub fn set_visibility(&self, visibility: Visibility) {
+        let hidden = visibility.hidden;
+        if let Ok(mut current) = self.shared.visibility.write() {
+            *current = visibility;
+        }
+        if let Ok(mut health) = self.shared.health.lock() {
+            health.hidden = hidden;
+        }
+        if !hidden {
+            self.shared.probe.notify_one();
+        }
     }
 
     /// Finds a visible device; see [`find_in`].
@@ -452,11 +539,20 @@ async fn run(engine: NodeEngine, socket: UdpSocket, opts: DiscoveryOptions, shar
     }
 }
 
-/// Serializes the current announcement; `None` if it would not fit in one datagram.
+/// Current time in seconds since the Unix epoch (0 if the clock is before it).
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Serializes and signs the current announcement; `None` if it would not fit
+/// in one datagram.
 fn encode_beacon(engine: &NodeEngine, shared: &Shared, reply: bool) -> Option<Vec<u8>> {
     let endpoint = engine.endpoint();
     let beacon = Beacon {
-        magic: MAGIC,
+        timestamp: unix_now(),
         name: shared.name.read().map(|n| n.clone()).unwrap_or_default(),
         platform: std::env::consts::OS.to_string(),
         addr: endpoint.addr(),
@@ -469,9 +565,36 @@ fn encode_beacon(engine: &NodeEngine, shared: &Shared, reply: bool) -> Option<Ve
             .collect(),
         reply,
     };
-    postcard::to_allocvec(&beacon)
-        .ok()
-        .filter(|b| b.len() <= MAX_BEACON_LEN)
+    let body = postcard::to_allocvec(&beacon).ok()?;
+    let signature = endpoint
+        .secret_key()
+        .sign(&[SIGNATURE_CONTEXT, &body].concat());
+    postcard::to_allocvec(&SignedBeacon {
+        magic: MAGIC,
+        body,
+        signature,
+    })
+    .ok()
+    .filter(|b| b.len() <= MAX_BEACON_LEN)
+}
+
+/// Decodes a datagram and checks its signature and age; `None` for anything
+/// that is not a valid, fresh announcement.
+fn decode_beacon(data: &[u8], now: u64) -> Option<Beacon> {
+    let signed = postcard::from_bytes::<SignedBeacon>(data).ok()?;
+    if signed.magic != MAGIC {
+        return None;
+    }
+    let beacon = postcard::from_bytes::<Beacon>(&signed.body).ok()?;
+    beacon
+        .addr
+        .id
+        .verify(
+            &[SIGNATURE_CONTEXT, &signed.body].concat(),
+            &signed.signature,
+        )
+        .ok()?;
+    (beacon.timestamp.abs_diff(now) <= MAX_BEACON_AGE.as_secs()).then_some(beacon)
 }
 
 /// Sends one announcement round and updates [`DiscoveryHealth`].
@@ -484,6 +607,9 @@ async fn announce(
     opts: &DiscoveryOptions,
     shared: &Shared,
 ) {
+    if shared.visibility.read().is_ok_and(|v| v.hidden) {
+        return;
+    }
     let Some(bytes) = encode_beacon(engine, shared, false) else {
         return;
     };
@@ -617,10 +743,10 @@ async fn handle_packet(
     data: &[u8],
     from: SocketAddr,
 ) {
-    let Ok(beacon) = postcard::from_bytes::<Beacon>(data) else {
+    let Some(beacon) = decode_beacon(data, unix_now()) else {
         return;
     };
-    if beacon.magic != MAGIC || beacon.addr.id == engine.node_id() {
+    if beacon.addr.id == engine.node_id() {
         return;
     }
     let from_this_computer = match from.ip() {
@@ -694,6 +820,7 @@ async fn handle_packet(
 
     if changed
         && !beacon.reply
+        && shared.visibility.read().is_ok_and(|v| v.answers(&id))
         && let Some(bytes) = encode_beacon(engine, shared, true)
         && let Err(e) = socket.send_to(&bytes, from).await
     {
@@ -769,7 +896,9 @@ fn platform_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
 /// without extra permissions (without MAC addresses since Android 11).
 ///
 /// Also compiled in Linux tests, where glibc provides the same API.
+/// One of the two places that need `unsafe` (C FFI); every block is justified.
 #[cfg(any(target_os = "android", all(test, target_os = "linux")))]
+#[allow(unsafe_code)]
 mod android {
     use std::net::Ipv4Addr;
 
@@ -885,13 +1014,78 @@ mod tests {
             ))));
         }
         let beacon = Beacon {
-            magic: MAGIC,
+            timestamp: unix_now(),
             name: "x".repeat(64),
             platform: "android".into(),
             addr,
             quic_ports: vec![1, 2, 3, 4],
             reply: false,
         };
-        assert!(postcard::to_allocvec(&beacon).unwrap().len() < MAX_BEACON_LEN);
+        let body = postcard::to_allocvec(&beacon).unwrap();
+        let signed = SignedBeacon {
+            magic: MAGIC,
+            signature: iroh::SecretKey::generate().sign(&body),
+            body,
+        };
+        assert!(postcard::to_allocvec(&signed).unwrap().len() < MAX_BEACON_LEN);
+    }
+
+    /// Signs `beacon` with `key` the way [`encode_beacon`] does.
+    fn sign(key: &iroh::SecretKey, beacon: &Beacon) -> Vec<u8> {
+        let body = postcard::to_allocvec(beacon).unwrap();
+        let signature = key.sign(&[SIGNATURE_CONTEXT, &body].concat());
+        postcard::to_allocvec(&SignedBeacon {
+            magic: MAGIC,
+            body,
+            signature,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn beacons_are_signed_and_fresh() {
+        let key = iroh::SecretKey::generate();
+        let now = 1_800_000_000;
+        let beacon = |id: EndpointId, timestamp| Beacon {
+            timestamp,
+            name: "Laptop".into(),
+            platform: "linux".into(),
+            addr: id.into(),
+            quic_ports: vec![],
+            reply: false,
+        };
+        let valid = sign(&key, &beacon(key.public(), now));
+        assert!(decode_beacon(&valid, now).is_some());
+        assert!(decode_beacon(&valid, now + MAX_BEACON_AGE.as_secs()).is_some());
+        assert!(
+            decode_beacon(&valid, now + MAX_BEACON_AGE.as_secs() + 1).is_none(),
+            "replayed too late"
+        );
+
+        let victim = iroh::SecretKey::generate().public();
+        let forged = sign(&key, &beacon(victim, now));
+        assert!(
+            decode_beacon(&forged, now).is_none(),
+            "someone else's Node ID"
+        );
+
+        let mut tampered = valid.clone();
+        let last = tampered.len() - 70;
+        tampered[last] ^= 1;
+        assert!(decode_beacon(&tampered, now).is_none(), "modified body");
+    }
+
+    #[test]
+    fn hidden_devices_answer_only_trusted_ones() {
+        let friend = iroh::SecretKey::generate().public();
+        let stranger = iroh::SecretKey::generate().public();
+        let visible = Visibility::default();
+        assert!(visible.answers(&stranger));
+        let hidden = Visibility {
+            hidden: true,
+            trusted: [friend].into(),
+        };
+        assert!(hidden.answers(&friend));
+        assert!(!hidden.answers(&stranger));
     }
 }

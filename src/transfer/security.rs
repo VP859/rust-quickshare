@@ -54,7 +54,7 @@ const WINDOWS_RESERVED: &[&str] = &[
 /// # Examples
 ///
 /// ```
-/// use rqs_p2p::transfer::security::sanitize_filename;
+/// use ferry::transfer::security::sanitize_filename;
 ///
 /// assert_eq!(sanitize_filename("report.pdf").unwrap(), "report.pdf");
 /// assert_eq!(sanitize_filename("CON.txt").unwrap(), "_CON.txt");
@@ -145,6 +145,42 @@ pub fn resolve_secure_target_path(
     Ok(target_path)
 }
 
+/// Creates the folder `components` (each sanitized like a file name) inside
+/// `base_dir` and returns it. The result is checked after resolving links, so
+/// an existing symbolic link cannot lead outside `base_dir`.
+///
+/// # Errors
+///
+/// Any [`SecurityError`] from [`sanitize_filename`], plus
+/// [`SecurityError::IoError`] and [`SecurityError::OutsideBaseDirectory`].
+pub fn resolve_secure_folder(
+    base_dir: &Path,
+    components: &[String],
+) -> Result<PathBuf, SecurityError> {
+    std::fs::create_dir_all(base_dir).map_err(|e| SecurityError::IoError(e.to_string()))?;
+    let canonical_base = base_dir
+        .canonicalize()
+        .map_err(|e| SecurityError::IoError(e.to_string()))?;
+    let mut dir = canonical_base.clone();
+    for component in components {
+        dir.push(sanitize_filename(component)?);
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| SecurityError::IoError(e.to_string()))?;
+    let resolved = dir
+        .canonicalize()
+        .map_err(|e| SecurityError::IoError(e.to_string()))?;
+    if !resolved.starts_with(&canonical_base) {
+        warn!(
+            "Rejected folder leading outside the download folder: {}",
+            resolved.display()
+        );
+        return Err(SecurityError::OutsideBaseDirectory(
+            resolved.display().to_string(),
+        ));
+    }
+    Ok(resolved)
+}
+
 /// Returns a path that does not exist yet: `file.txt`, `file (1).txt`, `file (2).txt`, …
 ///
 /// Received files therefore never overwrite existing ones.
@@ -192,6 +228,29 @@ mod tests {
         assert_eq!(sanitize_filename(".bashrc").unwrap(), "bashrc");
         assert_eq!(sanitize_filename("a\nb:c.txt ").unwrap(), "a_b_c.txt");
         assert_eq!(sanitize_filename("zdjęcie.jpg").unwrap(), "zdjęcie.jpg");
+    }
+
+    #[test]
+    fn folders_stay_inside_the_base() -> std::io::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let base = dir.path().join("downloads");
+        let ok = resolve_secure_folder(&base, &["Photos".into(), "2024".into()]).unwrap();
+        assert!(ok.ends_with("Photos/2024") && ok.is_dir());
+        for bad in [vec!["..".to_string()], vec!["a/b".into()], vec!["".into()]] {
+            assert!(
+                resolve_secure_folder(&base, &bad).is_err(),
+                "accepted {bad:?}"
+            );
+        }
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(dir.path(), base.join("escape"))?;
+            assert!(matches!(
+                resolve_secure_folder(&base, &["escape".into(), "x".into()]),
+                Err(SecurityError::OutsideBaseDirectory(_))
+            ));
+        }
+        Ok(())
     }
 
     #[test]

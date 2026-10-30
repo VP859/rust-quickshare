@@ -15,29 +15,41 @@ use iroh::EndpointId;
 use iroh::endpoint::Connection;
 use rust_i18n::t;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, LazyLock, Mutex};
+use std::time::{Duration, Instant};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use super::Channel;
 use super::receiver::{read_offer, receive_on_channel, reject};
-use super::sender::{PreparedFile, SendOutcome, prepare_file, push_file, send_on_channel};
+use super::sender::{
+    PreparedFile, SendItem, SendOutcome, expand_paths, prepare_file, push_file, send_on_channel,
+};
 use crate::node::{NodeEngine, NodeTicket};
-use crate::pairing::{PAIR_DECISION_TIMEOUT, PairRequest, clean_device_name, pairing_code};
+use crate::pairing::{PAIR_DECISION_TIMEOUT, PairRequest, answer_pairing, clean_device_name};
 use crate::protocol::codec::{read_msg, write_msg};
 use crate::protocol::messages::{
-    BatchDecision, BatchOffer, Hello, MAX_BATCH_NAMES, MAX_TEXT_LEN, PairResponse, ShareToken,
-    TextDecision, TransferOffer,
+    BatchDecision, BatchOffer, Hello, MAX_BATCH_NAMES, MAX_FILE_NAME_LEN, MAX_TEXT_LEN,
+    PairResponse, ShareToken, TextDecision, TransferOffer,
 };
-use crate::transfer::security::sanitize_filename;
 
 /// Application close code sent when a download asks for an unknown share token.
 const CLOSE_UNKNOWN_SHARE: u32 = 2;
 /// Upper bound for a handler to answer a question (a received text or a batch
 /// of files); no answer counts as a rejection.
 const QUESTION_TIMEOUT: Duration = Duration::from_secs(150);
+/// Questions one device may have waiting for the user at the same time.
+const MAX_OPEN_QUESTIONS_PER_PEER: usize = 2;
+/// Questions all devices together may have waiting for the user. Node IDs are
+/// free to generate, so this is the bound that keeps a flood of requests from
+/// burying the user in dialogs.
+const MAX_OPEN_QUESTIONS: usize = 8;
+/// Pause after a declined or broken pairing request before the same device
+/// may ask again.
+const PAIR_RETRY_DELAY: Duration = Duration::from_secs(30);
 
 /// Direction of a transfer as seen from this device.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -74,6 +86,48 @@ pub enum TransferStatus {
         /// Error description.
         error: String,
     },
+    /// The transfer was cancelled on this device ([`cancel_transfer`]). A
+    /// partly received file is kept and resumed by the next transfer of the
+    /// same file.
+    Cancelled,
+}
+
+impl TransferStatus {
+    /// Whether the transfer has ended (completed, declined, failed or cancelled).
+    pub fn is_final(&self) -> bool {
+        !matches!(
+            self,
+            Self::Preparing | Self::AwaitingDecision | Self::Running
+        )
+    }
+}
+
+/// Error returned by a transfer stopped with [`cancel_transfer`].
+#[derive(Debug)]
+pub struct Cancelled;
+
+impl std::fmt::Display for Cancelled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&t!("transfer.cancelled"))
+    }
+}
+
+impl std::error::Error for Cancelled {}
+
+/// Cancellation tokens of the transfers in progress, keyed by transfer ID.
+static ACTIVE_TRANSFERS: LazyLock<Mutex<HashMap<String, CancellationToken>>> =
+    LazyLock::new(Mutex::default);
+
+/// Stops a running transfer of this process; returns whether it was found.
+///
+/// The transfer ends with [`TransferStatus::Cancelled`]. The other device sees
+/// its streams end and reports the transfer as failed.
+pub fn cancel_transfer(id: &str) -> bool {
+    let token = ACTIVE_TRANSFERS
+        .lock()
+        .ok()
+        .and_then(|active| active.get(id).cloned());
+    token.inspect(CancellationToken::cancel).is_some()
 }
 
 /// Snapshot of one transfer, serialized as-is to the GUI frontend.
@@ -206,12 +260,114 @@ impl BatchApproval {
     }
 }
 
-/// Emits the successive states of a single transfer.
+/// Rate limits for questions that need the user's attention (file offers,
+/// batches, texts, pairing requests), shared by all connections of [`serve`].
+///
+/// Requests over the limit are declined without asking, so another device
+/// cannot flood the screen with dialogs or queue unlimited work.
+#[derive(Debug, Default)]
+struct QuestionGate {
+    /// Mutable state; held only for short, non-async sections.
+    state: Mutex<GateState>,
+}
+
+/// State of [`QuestionGate`].
+#[derive(Debug, Default)]
+struct GateState {
+    /// Open questions per device.
+    open: HashMap<EndpointId, usize>,
+    /// Open questions of all devices.
+    total: usize,
+    /// Devices that may not send a pairing request before the given instant.
+    pair_blocked_until: HashMap<EndpointId, Instant>,
+}
+
+impl QuestionGate {
+    /// Locks the state; a poisoned lock only means another task panicked while
+    /// updating counters, which stay usable.
+    fn lock(&self) -> std::sync::MutexGuard<'_, GateState> {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Reserves a slot for a question from `peer`; `None` when it already has
+    /// too many open questions or all devices together do. The slot is released
+    /// when the permit is dropped.
+    fn enter(self: &Arc<Self>, peer: EndpointId) -> Option<QuestionPermit> {
+        let mut state = self.lock();
+        let open = state.open.get(&peer).copied().unwrap_or(0);
+        if open >= MAX_OPEN_QUESTIONS_PER_PEER || state.total >= MAX_OPEN_QUESTIONS {
+            return None;
+        }
+        state.open.insert(peer, open + 1);
+        state.total += 1;
+        Some(QuestionPermit {
+            gate: self.clone(),
+            peer,
+        })
+    }
+
+    /// Whether `peer` may send a pairing request now.
+    fn pairing_allowed(&self, peer: &EndpointId) -> bool {
+        let mut state = self.lock();
+        let now = Instant::now();
+        state.pair_blocked_until.retain(|_, until| *until > now);
+        !state.pair_blocked_until.contains_key(peer)
+    }
+
+    /// Blocks pairing requests from `peer` for [`PAIR_RETRY_DELAY`].
+    fn block_pairing(&self, peer: EndpointId) {
+        self.lock()
+            .pair_blocked_until
+            .insert(peer, Instant::now() + PAIR_RETRY_DELAY);
+    }
+}
+
+/// Slot of one open question in a [`QuestionGate`], released on drop.
+#[derive(Debug)]
+struct QuestionPermit {
+    /// Gate the slot belongs to.
+    gate: Arc<QuestionGate>,
+    /// Device that asked the question.
+    peer: EndpointId,
+}
+
+impl Drop for QuestionPermit {
+    fn drop(&mut self) {
+        let mut state = self.gate.lock();
+        state.total = state.total.saturating_sub(1);
+        if let Some(open) = state.open.get_mut(&self.peer) {
+            *open = open.saturating_sub(1);
+            if *open == 0 {
+                state.open.remove(&self.peer);
+            }
+        }
+    }
+}
+
+/// Reason sent back when a request is declined by the [`QuestionGate`].
+fn busy_reason() -> String {
+    t!("service.busy").into_owned()
+}
+
+/// Emits the successive states of a single transfer and lets it be cancelled
+/// by its ID while the tracker exists.
 pub struct Tracker<'a> {
     /// Event template with the fixed fields of this transfer.
     base: TransferEvent,
     /// Receiver of the events.
     sink: EventSink<'a>,
+    /// Triggered by [`cancel_transfer`].
+    cancel: CancellationToken,
+}
+
+impl Drop for Tracker<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut active) = ACTIVE_TRANSFERS.lock() {
+            active.remove(&self.base.id);
+        }
+    }
 }
 
 impl<'a> Tracker<'a> {
@@ -223,9 +379,14 @@ impl<'a> Tracker<'a> {
         direction: Direction,
         sink: EventSink<'a>,
     ) -> Self {
+        let id = uuid::Uuid::new_v4().to_string();
+        let cancel = CancellationToken::new();
+        if let Ok(mut active) = ACTIVE_TRANSFERS.lock() {
+            active.insert(id.clone(), cancel.clone());
+        }
         Self {
             base: TransferEvent {
-                id: uuid::Uuid::new_v4().to_string(),
+                id,
                 peer: peer.to_string(),
                 file_name: file_name.to_string(),
                 direction,
@@ -234,6 +395,22 @@ impl<'a> Tracker<'a> {
                 status: TransferStatus::Preparing,
             },
             sink,
+            cancel,
+        }
+    }
+
+    /// Runs `transfer` until it finishes or the transfer is cancelled, in
+    /// which case the future is dropped (closing its streams) and the result
+    /// is a [`Cancelled`] error.
+    ///
+    /// # Errors
+    ///
+    /// Returns the error of `transfer`, or [`Cancelled`].
+    pub async fn cancellable<T>(&self, transfer: impl Future<Output = Result<T>>) -> Result<T> {
+        tokio::select! {
+            biased;
+            () = self.cancel.cancelled() => Err(Cancelled.into()),
+            result = transfer => result,
         }
     }
 
@@ -255,11 +432,13 @@ impl<'a> Tracker<'a> {
         self.emit(done, TransferStatus::Running);
     }
 
-    /// Emits [`TransferStatus::Completed`] or [`TransferStatus::Failed`] for `result`;
-    /// `path` extracts the saved file path from a success.
+    /// Emits [`TransferStatus::Completed`], [`TransferStatus::Cancelled`] or
+    /// [`TransferStatus::Failed`] for `result`; `path` extracts the saved file
+    /// path from a success.
     fn finish<T>(&self, result: &Result<T>, path: impl FnOnce(&T) -> Option<String>) {
         match result {
             Ok(v) => self.emit(self.base.total, TransferStatus::Completed { path: path(v) }),
+            Err(e) if e.is::<Cancelled>() => self.emit(0, TransferStatus::Cancelled),
             Err(e) => self.emit(
                 0,
                 TransferStatus::Failed {
@@ -275,6 +454,7 @@ impl<'a> Tracker<'a> {
 /// Every connection is handled in its own task; it may carry several
 /// consecutive transfers and a failure of one does not affect the others.
 pub async fn serve<H: TransferHandler>(engine: NodeEngine, handler: Arc<H>) {
+    let gate = Arc::new(QuestionGate::default());
     loop {
         let conn = match engine.accept().await {
             Ok(Some(conn)) => conn,
@@ -289,9 +469,10 @@ pub async fn serve<H: TransferHandler>(engine: NodeEngine, handler: Arc<H>) {
         };
         let handler = handler.clone();
         let engine = engine.clone();
+        let gate = gate.clone();
         tokio::spawn(async move {
             let peer = conn.remote_id();
-            if let Err(e) = handle_connection(&engine, conn, handler).await {
+            if let Err(e) = handle_connection(&engine, conn, handler, &gate).await {
                 warn!("Error while handling the connection from {peer}: {e:#}");
             }
         });
@@ -303,19 +484,34 @@ async fn handle_connection<H: TransferHandler>(
     engine: &NodeEngine,
     conn: Connection,
     handler: Arc<H>,
+    gate: &Arc<QuestionGate>,
 ) -> Result<()> {
     let mut approval: Option<BatchApproval> = None;
     while let Some((channel, hello)) = Channel::accept(&conn).await? {
         let result = match hello {
-            Hello::Push => handle_push(&conn, channel, handler.as_ref(), &mut approval).await,
-            Hello::Batch(batch) => handle_batch(&conn, channel, &batch, handler.as_ref())
+            Hello::Push => handle_push(&conn, channel, handler.as_ref(), gate, &mut approval).await,
+            Hello::Batch(batch) => handle_batch(&conn, channel, &batch, handler.as_ref(), gate)
                 .await
                 .map(|granted| approval = granted),
             Hello::Pull { token } => handle_pull(&conn, channel, &token, handler.as_ref()).await,
-            Hello::Pair { name, addr } => {
-                handle_pair(engine, &conn, channel, &name, addr, handler.as_ref()).await
+            Hello::Pair {
+                name,
+                addr,
+                commitment,
+            } => {
+                handle_pair(
+                    engine,
+                    &conn,
+                    channel,
+                    &name,
+                    addr,
+                    &commitment,
+                    handler.as_ref(),
+                    gate,
+                )
+                .await
             }
-            Hello::Text { text } => handle_text(&conn, channel, text, handler.as_ref()).await,
+            Hello::Text { text } => handle_text(&conn, channel, text, handler.as_ref(), gate).await,
         };
         if let Err(e) = result {
             warn!("Transfer from {} failed: {e:#}", conn.remote_id());
@@ -331,6 +527,7 @@ async fn handle_push<H: TransferHandler>(
     conn: &Connection,
     mut channel: Channel,
     handler: &H,
+    gate: &Arc<QuestionGate>,
     approval: &mut Option<BatchApproval>,
 ) -> Result<()> {
     let peer = conn.remote_id();
@@ -338,17 +535,22 @@ async fn handle_push<H: TransferHandler>(
     let sink = |e| handler.on_event(e);
     let tracker = Tracker::new(
         peer,
-        &offer.file_name,
+        &offer.display_name(),
         offer.file_size,
         Direction::Download,
         &sink,
     );
     let decision = match approval.as_mut().and_then(|a| a.take(&offer)) {
         Some(dest_dir) => OfferDecision::Accept { dest_dir },
-        None => {
-            tracker.emit(0, TransferStatus::AwaitingDecision);
-            handler.decide(peer, tracker.id(), &offer).await
-        }
+        None => match gate.enter(peer) {
+            Some(_permit) => {
+                tracker.emit(0, TransferStatus::AwaitingDecision);
+                handler.decide(peer, tracker.id(), &offer).await
+            }
+            None => OfferDecision::Reject {
+                reason: busy_reason(),
+            },
+        },
     };
     match decision {
         OfferDecision::Reject { reason } => {
@@ -356,11 +558,13 @@ async fn handle_push<H: TransferHandler>(
             tracker.emit(0, TransferStatus::Rejected { reason });
         }
         OfferDecision::Accept { dest_dir } => {
-            let result =
-                receive_on_channel(conn, channel, &offer, &dest_dir, &|d| tracker.progress(d))
-                    .await;
+            let result = tracker
+                .cancellable(receive_on_channel(conn, channel, &offer, &dest_dir, &|d| {
+                    tracker.progress(d)
+                }))
+                .await;
             tracker.finish(&result, |p| Some(p.display().to_string()));
-            result?;
+            ignore_cancelled(result)?;
         }
     }
     Ok(())
@@ -386,32 +590,63 @@ async fn handle_pull<H: TransferHandler>(
         Direction::Upload,
         &sink,
     );
-    let result = send_on_channel(conn, &mut channel, &file, &|d| tracker.progress(d)).await;
+    let result = tracker
+        .cancellable(send_on_channel(conn, &mut channel, &file, &|d| {
+            tracker.progress(d)
+        }))
+        .await;
+    if result.as_ref().is_err_and(|e| e.is::<Cancelled>()) {
+        // The download ends for the other side as well.
+        conn.close(0u32.into(), b"cancelled");
+    }
     report_send(&tracker, result)?;
     channel.finish().await;
     Ok(())
 }
 
-/// Pairing request ([`Hello::Pair`]): asks the handler and answers with [`PairResponse`].
+/// Pairing request ([`Hello::Pair`]): exchanges the nonces, asks the handler
+/// and answers with [`PairResponse`].
+// The three fields of `Hello::Pair` are passed separately, like the other handlers.
+#[allow(clippy::too_many_arguments)]
 async fn handle_pair<H: TransferHandler>(
     engine: &NodeEngine,
     conn: &Connection,
     mut channel: Channel,
     name: &str,
     addr: iroh::EndpointAddr,
+    commitment: &[u8; 32],
     handler: &H,
+    gate: &Arc<QuestionGate>,
 ) -> Result<()> {
     let peer = conn.remote_id();
+    // Dropping the stream without an answer ends the request on the other side
+    // with "interrupted"; nothing is shown to the user here.
+    if !gate.pairing_allowed(&peer) {
+        anyhow::bail!("pairing request from {peer} ignored: retry delay after a declined request");
+    }
+    let Some(_permit) = gate.enter(peer) else {
+        anyhow::bail!("pairing request from {peer} ignored: too many open requests");
+    };
+    let code = match answer_pairing(&mut channel, &engine.node_id(), &peer, commitment).await {
+        Ok(code) => code,
+        Err(e) => {
+            gate.block_pairing(peer);
+            return Err(e);
+        }
+    };
     let request = PairRequest {
         peer,
         name: clean_device_name(name),
-        code: pairing_code(&engine.node_id(), &peer),
+        code,
         addr: (addr.id == peer).then_some(addr),
     };
     info!("Pairing request from '{}' ({peer})", request.name);
     let accepted = tokio::time::timeout(PAIR_DECISION_TIMEOUT, handler.confirm_pair(request))
         .await
         .unwrap_or(false);
+    if !accepted {
+        gate.block_pairing(peer);
+    }
     let response = PairResponse {
         accepted,
         name: handler.device_name(),
@@ -429,11 +664,17 @@ async fn handle_text<H: TransferHandler>(
     mut channel: Channel,
     text: String,
     handler: &H,
+    gate: &Arc<QuestionGate>,
 ) -> Result<()> {
     let peer = conn.remote_id();
+    let permit = gate.enter(peer);
     let decision = if text.is_empty() || text.len() > MAX_TEXT_LEN {
         TextDecision::Rejected {
             reason: t!("service.text_too_long", max = MAX_TEXT_LEN).into_owned(),
+        }
+    } else if permit.is_none() {
+        TextDecision::Rejected {
+            reason: busy_reason(),
         }
     } else {
         info!("Text ({} bytes) from {peer}", text.len());
@@ -443,6 +684,7 @@ async fn handle_text<H: TransferHandler>(
                 reason: t!("transfer.user_rejected").into_owned(),
             })
     };
+    drop(permit);
     write_msg(&mut channel.send, &decision).await?;
     channel.finish().await;
     Ok(())
@@ -455,9 +697,18 @@ async fn handle_batch<H: TransferHandler>(
     mut channel: Channel,
     batch: &BatchOffer,
     handler: &H,
+    gate: &Arc<QuestionGate>,
 ) -> Result<Option<BatchApproval>> {
     batch.validate()?;
     let peer = conn.remote_id();
+    let Some(_permit) = gate.enter(peer) else {
+        let answer = BatchDecision::Rejected {
+            reason: busy_reason(),
+        };
+        write_msg(&mut channel.send, &answer).await?;
+        channel.finish().await;
+        return Ok(None);
+    };
     info!(
         "{} files ({} B) announced by {peer}",
         batch.count, batch.total_size
@@ -486,7 +737,16 @@ async fn handle_batch<H: TransferHandler>(
     Ok(approval)
 }
 
-/// Emits the final event of an upload; a rejection is not an error.
+/// Turns a [`Cancelled`] error into success: cancelling is the user's choice,
+/// not a failure.
+fn ignore_cancelled<T>(result: Result<T>) -> Result<()> {
+    match result {
+        Err(e) if !e.is::<Cancelled>() => Err(e),
+        _ => Ok(()),
+    }
+}
+
+/// Emits the final event of an upload; a rejection or cancellation is not an error.
 fn report_send(tracker: &Tracker<'_>, result: Result<SendOutcome>) -> Result<()> {
     match result {
         Ok(SendOutcome::Rejected(reason)) => {
@@ -495,22 +755,44 @@ fn report_send(tracker: &Tracker<'_>, result: Result<SendOutcome>) -> Result<()>
         }
         other => {
             tracker.finish(&other, |_| None);
-            other.map(|_| ())
+            ignore_cancelled(other)
         }
     }
 }
 
 /// Name and size of a file about to be sent, read without hashing it.
-async fn file_summary(path: &Path) -> (String, u64) {
-    let name = path
+async fn file_summary(item: &SendItem) -> (String, u64) {
+    let name = item
+        .path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let size = tokio::fs::metadata(path)
+    let display = item
+        .folder
+        .iter()
+        .chain(std::iter::once(&name))
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join("/");
+    let size = tokio::fs::metadata(&item.path)
         .await
         .map(|m| m.len())
         .unwrap_or(0);
-    (name, size)
+    (display, size)
+}
+
+/// A name for display in a [`BatchOffer`]: without control characters and
+/// cut to [`MAX_FILE_NAME_LEN`] bytes.
+fn batch_name(name: &str) -> String {
+    let mut clean: String = name.chars().filter(|c| !c.is_control()).collect();
+    while clean.len() > MAX_FILE_NAME_LEN {
+        clean.pop();
+    }
+    if clean.is_empty() {
+        "file".to_string()
+    } else {
+        clean
+    }
 }
 
 /// Announces several files with [`Hello::Batch`] and waits for the decision.
@@ -526,24 +808,26 @@ async fn announce_batch(conn: &Connection, files: &[(String, u64)]) -> Result<Ba
         names: files
             .iter()
             .take(MAX_BATCH_NAMES)
-            .map(|(name, _)| sanitize_filename(name).unwrap_or_else(|_| "file".to_string()))
+            .map(|(name, _)| batch_name(name))
             .collect(),
     };
     let mut channel = Channel::open(conn, &Hello::Batch(batch)).await?;
     read_msg(&mut channel.recv).await
 }
 
-/// Sends files to a device over one connection, one control stream per file.
+/// Sends files and folders to a device over one connection, one control
+/// stream per file.
 ///
-/// Several files are first announced together, so the receiver confirms them
-/// once. When the receiver declines the batch nothing is sent and every file
+/// Folders are sent with their structure ([`expand_paths`]). Several files
+/// are first announced together, so the receiver confirms them once. When the receiver declines the batch nothing is sent and every file
 /// is reported as rejected. A receiver that does not support batches gets a
 /// new connection and decides about every file. A failure of one file does
 /// not stop the remaining ones.
 ///
 /// # Errors
 ///
-/// Fails when the device cannot be reached or when at least one file failed.
+/// Fails when a folder cannot be read or exceeds the limits, the device
+/// cannot be reached, or at least one file failed.
 pub async fn send_files(
     engine: &NodeEngine,
     target: iroh::EndpointAddr,
@@ -551,10 +835,14 @@ pub async fn send_files(
     sink: EventSink<'_>,
 ) -> Result<()> {
     let peer = target.id;
+    let owned = paths.to_vec();
+    let items = tokio::task::spawn_blocking(move || expand_paths(&owned))
+        .await
+        .context("folder scan interrupted")??;
     let mut conn = engine.connect(target.clone()).await?;
-    let mut files = Vec::with_capacity(paths.len());
-    for path in paths {
-        files.push(file_summary(path).await);
+    let mut files = Vec::with_capacity(items.len());
+    for item in &items {
+        files.push(file_summary(item).await);
     }
     if files.len() > 1 {
         match announce_batch(&conn, &files).await {
@@ -578,14 +866,16 @@ pub async fn send_files(
         }
     }
     let mut failures = 0usize;
-    for (path, (name, size)) in paths.iter().zip(&files) {
+    for (item, (name, size)) in items.iter().zip(&files) {
         let tracker = Tracker::new(peer, name, *size, Direction::Upload, sink);
         tracker.emit(0, TransferStatus::Preparing);
-        let result = async {
-            let file = prepare_file(path).await?;
-            push_file(&conn, &file, &|d| tracker.progress(d)).await
-        }
-        .await;
+        let result = tracker
+            .cancellable(async {
+                let mut file = prepare_file(&item.path).await?;
+                file.folder.clone_from(&item.folder);
+                push_file(&conn, &file, &|d| tracker.progress(d)).await
+            })
+            .await;
         if report_send(&tracker, result).is_err() {
             failures += 1;
         }
@@ -595,7 +885,7 @@ pub async fn send_files(
         anyhow::bail!(t!(
             "service.send_failed",
             failed = failures,
-            total = paths.len()
+            total = items.len()
         ));
     }
     Ok(())
@@ -627,8 +917,11 @@ pub async fn pull_shared(
         Direction::Download,
         sink,
     );
-    let result =
-        receive_on_channel(&conn, channel, &offer, dest_dir, &|d| tracker.progress(d)).await;
+    let result = tracker
+        .cancellable(receive_on_channel(&conn, channel, &offer, dest_dir, &|d| {
+            tracker.progress(d)
+        }))
+        .await;
     tracker.finish(&result, |p| Some(p.display().to_string()));
     conn.close(0u32.into(), b"done");
     result
@@ -700,7 +993,37 @@ mod tests {
             file_size: size,
             chunk_size: 1024,
             file_hash: [0; 32],
+            folder: Vec::new(),
         }
+    }
+
+    #[test]
+    fn question_gate_limits_open_questions() {
+        let gate = Arc::new(QuestionGate::default());
+        let a = iroh::SecretKey::generate().public();
+        let first = gate.enter(a).unwrap();
+        let _second = gate.enter(a).unwrap();
+        assert!(gate.enter(a).is_none(), "per-device limit");
+        drop(first);
+        assert!(gate.enter(a).is_some(), "slot released on drop");
+
+        let others: Vec<_> = (0..MAX_OPEN_QUESTIONS)
+            .filter_map(|_| gate.enter(iroh::SecretKey::generate().public()))
+            .collect();
+        assert_eq!(others.len(), MAX_OPEN_QUESTIONS - 1, "global limit");
+        drop(others);
+        assert_eq!(gate.lock().total, 1);
+    }
+
+    #[test]
+    fn question_gate_delays_repeated_pairing() {
+        let gate = QuestionGate::default();
+        let a = iroh::SecretKey::generate().public();
+        let b = iroh::SecretKey::generate().public();
+        assert!(gate.pairing_allowed(&a));
+        gate.block_pairing(a);
+        assert!(!gate.pairing_allowed(&a));
+        assert!(gate.pairing_allowed(&b));
     }
 
     #[test]

@@ -89,7 +89,7 @@ async fn check_discovery() {
     match Discovery::start(
         engine.clone(),
         &config.device_name(),
-        DiscoveryOptions::default(),
+        DiscoveryOptions::from_config(&config),
     ) {
         Ok(discovery) => {
             discovery.probe();

@@ -190,10 +190,10 @@ impl TransferHandler for DaemonHandler {
         let alias = peer_info
             .map(|p| p.alias.clone())
             .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
-        if !peer_info.is_some_and(|p| p.auto_accept) {
+        if !config.auto_accepts_texts_from(&peer.to_string()) {
             if !self.interactive {
                 return TextDecision::Rejected {
-                    reason: t!("daemon.no_auto_accept", alias = &alias).into_owned(),
+                    reason: t!("daemon.no_auto_text", alias = &alias).into_owned(),
                 };
             }
             let question = t!(
@@ -277,7 +277,7 @@ pub async fn run_daemon(downloads_dir: Option<PathBuf>) -> Result<()> {
     let _discovery = Discovery::start(
         engine.clone(),
         &config.device_name(),
-        DiscoveryOptions::default(),
+        DiscoveryOptions::from_config(&config),
     )
     .inspect_err(|e| warn!("Local network discovery disabled: {e:#}"))
     .ok();

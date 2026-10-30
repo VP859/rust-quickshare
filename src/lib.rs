@@ -1,9 +1,9 @@
 //! # Ferry
 //!
-//! Secure peer-to-peer file sharing over QUIC for Linux, Windows, macOS and
-//! Android. Files go directly between devices: no storage server, no cloud,
-//! no mDNS or Bluetooth. Connections use [iroh](https://docs.rs/iroh) (TLS 1.3
-//! with Ed25519 identities) and reach devices at the addresses announced on the
+//! Secure peer-to-peer file sharing over QUIC for Linux, Windows and Android.
+//! Files go directly between devices: no storage server, no cloud, no mDNS or
+//! Bluetooth. Connections use [iroh](https://docs.rs/iroh) (TLS 1.3 with
+//! Ed25519 identities) and reach devices at the addresses announced on the
 //! local network or carried by a TICKET. By default no external servers are
 //! contacted; the optional [`node::NetworkMode::Internet`] adds the public iroh
 //! relays for devices in different networks.
@@ -26,8 +26,8 @@
 //! Sending a file to a device whose TICKET is known:
 //!
 //! ```no_run
-//! use rqs_p2p::node::{NodeEngine, NodeTicket};
-//! use rqs_p2p::transfer::service;
+//! use ferry::node::{NodeEngine, NodeTicket};
+//! use ferry::transfer::service;
 //!
 //! # async fn example(ticket: &str) -> anyhow::Result<()> {
 //! let engine = NodeEngine::with_persistent_identity().await?;
@@ -39,12 +39,6 @@
 //! # Ok(())
 //! # }
 //! ```
-
-#![warn(
-    missing_docs,
-    clippy::missing_docs_in_private_items,
-    clippy::missing_errors_doc
-)]
 
 rust_i18n::i18n!("locales", fallback = "en");
 

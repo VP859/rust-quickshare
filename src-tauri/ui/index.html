@@ -73,6 +73,8 @@
   .logo svg.i { width: 18px; height: 18px; stroke-width: 2.4; }
   .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; color: var(--muted); background: var(--surface); max-width: 46vw; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .topbar .actions { display: flex; gap: 4px; }
+  .mode-pill { cursor: pointer; font: inherit; font-size: 12px; }
+  .mode-pill.internet { color: var(--warn); border-color: var(--warn); }
 
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
   .dot.ok { background: var(--ok); }
@@ -129,6 +131,7 @@
   .transfer .progress > div { height: 100%; background: var(--accent); width: 0; transition: width .2s; border-radius: 4px; }
   .transfer.done .progress > div { background: var(--ok); }
   .transfer.failed .progress > div { background: var(--bad); }
+  .transfer.cancelled .progress > div { background: var(--faint); }
   .transfer .detail { color: var(--muted); font-size: 12.5px; word-break: break-all; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .transfer .trailing { align-self: flex-start; }
 
@@ -160,6 +163,9 @@
   .toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
   .toggle .label { font-weight: 500; }
   .toggle .desc { color: var(--muted); font-size: 12.5px; }
+  .data-flow summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
+  .data-flow ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; color: var(--muted); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .switch { position: relative; width: 38px; height: 22px; flex: none; }
   .switch input { opacity: 0; width: 0; height: 0; }
   .switch span { position: absolute; inset: 0; background: var(--border-strong); border-radius: 999px; transition: background .15s; cursor: pointer; }
@@ -236,6 +242,7 @@
   <div class="topbar-inner">
     <div class="brand"><span class="logo"><svg class="i"><use href="#i-logo"/></svg></span>Ferry</div>
     <span class="pill" id="node-pill"><span class="dot wait" id="node-dot"></span><span id="node-status"></span></span>
+    <button class="pill mode-pill" id="mode-pill" hidden></button>
     <span class="spacer"></span>
     <div class="actions">
       <button class="ghost" id="btn-my-ticket"><svg class="i"><use href="#i-qr"/></svg><span class="label-text" data-i18n="my_ticket"></span></button>
@@ -253,6 +260,7 @@
     <p class="mobile-only" data-i18n="drop_hint_mobile"></p>
     <div class="buttons">
       <button class="primary" id="btn-select-file"><svg class="i sm"><use href="#i-file"/></svg><span data-i18n="select_file"></span></button>
+      <button class="desktop-only" id="btn-select-folder"><svg class="i sm"><use href="#i-folder"/></svg><span data-i18n="select_folder"></span></button>
       <button id="btn-send-text"><svg class="i sm"><use href="#i-text"/></svg><span data-i18n="send_text"></span></button>
       <button class="mobile-only" id="btn-scan"><svg class="i sm"><use href="#i-scan"/></svg><span data-i18n="scan_qr"></span></button>
       <button id="btn-receive-ticket"><svg class="i sm"><use href="#i-ticket"/></svg><span data-i18n="receive_ticket"></span></button>
@@ -350,7 +358,7 @@
   <div class="modal">
     <div class="modal-head"><h3 id="receive-title" data-i18n="receive_title"></h3><button class="ghost icon" data-close="modal-receive" data-i18n-aria="close"><svg class="i"><use href="#i-x"/></svg></button></div>
     <div class="modal-body">
-      <div class="field"><label for="receive-input" data-i18n="share_ticket"></label><textarea id="receive-input" placeholder="rqs:…"></textarea></div>
+      <div class="field"><label for="receive-input" data-i18n="share_ticket"></label><textarea id="receive-input" placeholder="ferry:…"></textarea></div>
       <div class="modal-actions"><button id="btn-receive-cancel" data-i18n="cancel"></button><button class="primary" id="btn-receive-go" data-i18n="download"></button></div>
     </div>
   </div>
@@ -445,6 +453,27 @@
           <label class="switch"><input type="checkbox" id="autostart"><span></span></label>
         </div>
       </div>
+      <div class="group-title" data-i18n="section_privacy"></div>
+      <div class="group">
+        <div class="toggle">
+          <div><div class="label" id="privacy-hidden-label" data-i18n="privacy_hidden"></div><div class="desc" data-i18n="privacy_hidden_hint"></div></div>
+          <label class="switch"><input type="checkbox" id="privacy-hidden" aria-labelledby="privacy-hidden-label"><span></span></label>
+        </div>
+        <div class="toggle">
+          <div><div class="label" id="privacy-texts-label" data-i18n="privacy_texts"></div><div class="desc" data-i18n="privacy_texts_hint"></div></div>
+          <label class="switch"><input type="checkbox" id="privacy-texts" aria-labelledby="privacy-texts-label"><span></span></label>
+        </div>
+        <details class="data-flow">
+          <summary data-i18n="data_flow_title"></summary>
+          <ul class="small">
+            <li data-i18n="data_flow_discovery"></li>
+            <li data-i18n="data_flow_transfers"></li>
+            <li data-i18n="data_flow_internet"></li>
+            <li data-i18n="data_flow_storage"></li>
+            <li data-i18n="data_flow_telemetry"></li>
+          </ul>
+        </details>
+      </div>
       <div class="group-title" data-i18n="section_app"></div>
       <div class="group">
         <div class="field"><label for="language" data-i18n="language"></label><select id="language"></select></div>
@@ -469,7 +498,23 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-restart" role="alertdialog" aria-modal="true" aria-labelledby="restart-title">
+  <div class="modal">
+    <div class="modal-head"><h3 id="restart-title" data-i18n="restart_title"></h3></div>
+    <div class="modal-body">
+      <p class="desktop-only" data-i18n="restart_text"></p>
+      <p class="mobile-only" data-i18n="restart_text_mobile"></p>
+      <div class="modal-actions">
+        <button id="btn-restart-later" data-i18n="restart_later"></button>
+        <button class="primary desktop-only" id="btn-restart-ok" data-i18n="ok"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- Announces finished transfers to screen readers without reading every progress update. -->
+<div class="sr-only" id="sr-status" role="status" aria-live="polite"></div>
 
 <script>
 (() => {
@@ -477,7 +522,7 @@
   const invoke = T?.core?.invoke;
   const listen = T?.event?.listen;
   const $ = (id) => document.getElementById(id);
-  const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+  const isMobile = /Android/i.test(navigator.userAgent);
   if (isMobile) document.body.classList.add('mobile');
 
   // ---------- Translations ----------
@@ -485,16 +530,18 @@
   const I18N = {
     en: {
       node_starting: 'Starting…', node_active: 'Online · {id}', node_unavailable: 'Offline',
+      mode_local: 'Local only', mode_internet: 'Local + internet', mode_hidden: 'hidden', mode_pending: 'after restart',
+      mode_hint: 'Network mode and visibility – click to change',
       my_ticket: 'My TICKET', settings: 'Settings',
       drop_here: 'Drop files to send', send_files: 'Send files',
       drop_hint: 'Drop a file on a device to send it right away, or choose files and pick a recipient.',
       drop_hint_mobile: 'Choose files and pick a recipient, or scan a QR code to receive.',
-      select_file: 'Choose files', scan_qr: 'Scan QR code', receive_ticket: 'Receive from TICKET',
+      select_file: 'Choose files', select_folder: 'Choose a folder', folder_label: 'Folder {name}', scan_qr: 'Scan QR code', receive_ticket: 'Receive from TICKET',
       nearby: 'Nearby', search: 'Search',
       nearby_hint: 'Ferry devices on your network. Pair with one click – no codes to type.',
       trusted: 'Devices', add_device: 'Add device',
       transfers: 'Transfers', clear_finished: 'Clear finished', no_transfers: 'Sent and received files will appear here.',
-      ticket_or_id: 'TICKET or Node ID', ticket_or_id_ph: 'rqs:… or a 64-character Node ID',
+      ticket_or_id: 'TICKET or Node ID', ticket_or_id_ph: 'ferry:… or a 64-character Node ID',
       alias: 'Name', alias_ph: 'e.g. Office laptop',
       auto_accept_hint: 'Accept files from this device without asking',
       pair_after_add_hint: 'The other device gets a pairing request with a code. Once accepted, it trusts this device too.',
@@ -506,10 +553,24 @@
       pair_request: 'Pairing request', pair_request_text: 'wants to add this device to its trusted devices.',
       pair_request_hint: 'Pair only if the other device shows the same code:',
       section_device: 'This device', section_receiving: 'Receiving', section_app: 'Application',
+      section_privacy: 'Privacy',
+      privacy_hidden: 'Hidden from unpaired devices',
+      privacy_hidden_hint: 'Do not announce this device on the local network; only paired devices can see it. New devices can still pair using a TICKET or QR code.',
+      privacy_texts: 'Copy texts from Auto-Accept devices without asking',
+      privacy_texts_hint: 'When off, every received text needs confirmation before it replaces the clipboard.',
+      data_flow_title: 'What leaves this device',
+      data_flow_discovery: 'Local network: unless hidden, the device name, operating system, Node ID and local addresses are announced every 5 seconds, signed with this device\'s key.',
+      data_flow_transfers: 'Transfers: files and texts go only to the device you choose, end-to-end encrypted (QUIC with TLS 1.3) and checked with BLAKE3.',
+      data_flow_internet: 'Internet mode only: the public iroh relays and DNS servers see IP addresses and Node IDs, never the content.',
+      data_flow_storage: 'On this device: the key, settings and trusted devices are stored in the app\'s configuration folder.',
+      data_flow_telemetry: 'No telemetry, analytics, accounts or crash reports – Ferry never contacts its authors.',
       network_mode: 'Network', network_local: 'Local network only', network_internet: 'Local network and internet',
       network_local_desc: 'Direct connections only – nothing is sent to external servers. Devices must be on the same network.',
       network_internet_desc: 'Direct when possible, otherwise through the free public iroh relays, so paired devices can connect from different networks. Data stays end-to-end encrypted; the relays see IP addresses and Node IDs.',
       network_restart: 'Applies after restarting Ferry.', restart_now: 'Restart now',
+      restart_title: 'Restart required', ok: 'OK', restart_later: 'Later',
+      restart_text: 'The network mode changes after Ferry restarts. Ferry will close and start again now; transfers in progress will be interrupted.',
+      restart_text_mobile: 'The network mode changes after Ferry is restarted. Close Ferry from the recent apps list and open it again.',
       device_name: 'Device name (visible to nearby devices)', language: 'Language',
       node_id_label: 'Node ID', download_dir: 'Download folder', change_dir: 'Change folder…',
       autostart: 'Start at login', autostart_hint: 'Starts hidden in the tray and receives files in the background',
@@ -529,6 +590,7 @@
       searching_nearby: 'Looking for devices… Open Ferry on another device on the same network.',
       send_file: 'Send', paired_as: 'Paired as "{name}"',
       pairing_with: 'Pair with {name}', waiting_confirmation: 'Waiting for confirmation…',
+      pairing_connecting: 'Connecting…',
       paired_status: 'Paired – "{name}" is now a trusted device.', paired_with: 'Paired with {name}', not_paired: 'Not paired: {error}',
       searching: 'Searching the local network…', queued: '{n} more waiting',
       sending: 'Sending {what} to {name}', n_files: '{n} files', n_files_list: '{n} files: {list}',
@@ -538,6 +600,7 @@
       shared_desc: 'Scan the code or paste the TICKET into "Receive from TICKET" (or run: ferry receive <TICKET>). Keep Ferry open until the transfer finishes.',
       downloading: 'Downloading…',
       st_preparing: 'Computing BLAKE3 hash…', st_awaiting_decision: 'Waiting for the recipient…', st_completed: 'Completed', st_rejected: 'Declined', st_failed: 'Failed',
+      st_cancelled: 'Cancelled – a partly received file is resumed next time', cancel_transfer: 'Cancel transfer',
       tr_failed: 'Failed: {error}', tr_rejected: 'Declined: {reason}', tr_saved: 'Saved to {path}',
       open: 'Open', show_in_folder: 'Show in folder',
       from: '{size} · from {name}', unknown_device: 'unknown device ({id})',
@@ -555,16 +618,18 @@
     },
     pl: {
       node_starting: 'Uruchamianie…', node_active: 'Online · {id}', node_unavailable: 'Offline',
+      mode_local: 'Tylko lokalnie', mode_internet: 'Lokalnie + internet', mode_hidden: 'ukryte', mode_pending: 'po restarcie',
+      mode_hint: 'Tryb sieci i widoczność – kliknij, aby zmienić',
       my_ticket: 'Mój TICKET', settings: 'Ustawienia',
       drop_here: 'Upuść pliki, aby wysłać', send_files: 'Wyślij pliki',
       drop_hint: 'Upuść plik na urządzenie, aby wysłać go od razu, albo wybierz pliki i odbiorcę.',
       drop_hint_mobile: 'Wybierz pliki i odbiorcę albo zeskanuj kod QR, aby odebrać.',
-      select_file: 'Wybierz pliki', scan_qr: 'Skanuj kod QR', receive_ticket: 'Odbierz z TICKETU',
+      select_file: 'Wybierz pliki', select_folder: 'Wybierz folder', folder_label: 'Folder {name}', scan_qr: 'Skanuj kod QR', receive_ticket: 'Odbierz z TICKETU',
       nearby: 'W pobliżu', search: 'Szukaj',
       nearby_hint: 'Urządzenia z Ferry w Twojej sieci. Sparuj jednym kliknięciem – bez przepisywania kodów.',
       trusted: 'Urządzenia', add_device: 'Dodaj urządzenie',
       transfers: 'Transfery', clear_finished: 'Wyczyść zakończone', no_transfers: 'Tutaj pojawią się wysłane i odebrane pliki.',
-      ticket_or_id: 'TICKET lub Node ID', ticket_or_id_ph: 'rqs:… lub 64-znakowy Node ID',
+      ticket_or_id: 'TICKET lub Node ID', ticket_or_id_ph: 'ferry:… lub 64-znakowy Node ID',
       alias: 'Nazwa', alias_ph: 'np. Laptop biurowy',
       auto_accept_hint: 'Przyjmuj pliki od tego urządzenia bez pytania',
       pair_after_add_hint: 'Drugie urządzenie dostanie prośbę o sparowanie z kodem. Po akceptacji również zaufa temu urządzeniu.',
@@ -576,10 +641,24 @@
       pair_request: 'Prośba o sparowanie', pair_request_text: 'chce dodać to urządzenie do zaufanych.',
       pair_request_hint: 'Sparuj tylko wtedy, gdy drugie urządzenie pokazuje ten sam kod:',
       section_device: 'To urządzenie', section_receiving: 'Odbieranie', section_app: 'Aplikacja',
+      section_privacy: 'Prywatność',
+      privacy_hidden: 'Ukryte przed niesparowanymi urządzeniami',
+      privacy_hidden_hint: 'Nie ogłaszaj tego urządzenia w sieci lokalnej; widzą je tylko sparowane urządzenia. Nowe urządzenia nadal mogą się sparować przez TICKET lub kod QR.',
+      privacy_texts: 'Kopiuj teksty od urządzeń z Auto-Accept bez pytania',
+      privacy_texts_hint: 'Gdy wyłączone, każdy odebrany tekst wymaga potwierdzenia, zanim zastąpi schowek.',
+      data_flow_title: 'Co opuszcza to urządzenie',
+      data_flow_discovery: 'Sieć lokalna: jeśli urządzenie nie jest ukryte, co 5 sekund ogłasza nazwę, system, Node ID i adresy lokalne, podpisane kluczem urządzenia.',
+      data_flow_transfers: 'Przesyłanie: pliki i teksty trafiają tylko do wybranego urządzenia, szyfrowane end-to-end (QUIC z TLS 1.3) i sprawdzane BLAKE3.',
+      data_flow_internet: 'Tylko w trybie internetowym: publiczne przekaźniki i serwery DNS iroh widzą adresy IP i Node ID, nigdy treść.',
+      data_flow_storage: 'Na tym urządzeniu: klucz, ustawienia i zaufane urządzenia są zapisane w folderze konfiguracji aplikacji.',
+      data_flow_telemetry: 'Brak telemetrii, analityki, kont i raportów błędów – Ferry nigdy nie łączy się z autorami.',
       network_mode: 'Sieć', network_local: 'Tylko sieć lokalna', network_internet: 'Sieć lokalna i internet',
       network_local_desc: 'Tylko połączenia bezpośrednie – nic nie trafia na zewnętrzne serwery. Urządzenia muszą być w tej samej sieci.',
       network_internet_desc: 'Bezpośrednio, gdy to możliwe, w przeciwnym razie przez darmowe publiczne przekaźniki iroh, więc sparowane urządzenia połączą się z różnych sieci. Dane pozostają szyfrowane end-to-end; przekaźniki widzą adresy IP i Node ID.',
       network_restart: 'Zacznie działać po ponownym uruchomieniu Ferry.', restart_now: 'Uruchom ponownie',
+      restart_title: 'Wymagany restart', ok: 'OK', restart_later: 'Później',
+      restart_text: 'Tryb sieci zmieni się po ponownym uruchomieniu Ferry. Aplikacja zamknie się i uruchomi od nowa; trwające transfery zostaną przerwane.',
+      restart_text_mobile: 'Tryb sieci zmieni się po ponownym uruchomieniu Ferry. Zamknij Ferry na liście ostatnich aplikacji i otwórz ją ponownie.',
       device_name: 'Nazwa urządzenia (widoczna w pobliżu)', language: 'Język',
       node_id_label: 'Node ID', download_dir: 'Folder pobranych plików', change_dir: 'Zmień folder…',
       autostart: 'Uruchamiaj po zalogowaniu', autostart_hint: 'Startuje ukryta w zasobniku i odbiera pliki w tle',
@@ -599,6 +678,7 @@
       searching_nearby: 'Szukanie urządzeń… Otwórz Ferry na innym urządzeniu w tej samej sieci.',
       send_file: 'Wyślij', paired_as: 'Sparowane jako „{name}”',
       pairing_with: 'Parowanie z {name}', waiting_confirmation: 'Oczekiwanie na potwierdzenie…',
+      pairing_connecting: 'Łączenie…',
       paired_status: 'Sparowano – „{name}” jest teraz zaufanym urządzeniem.', paired_with: 'Sparowano z {name}', not_paired: 'Nie sparowano: {error}',
       searching: 'Szukanie w sieci lokalnej…', queued: 'Oczekuje jeszcze: {n}',
       sending: 'Wysyłanie {what} do {name}', n_files: (v) => `${v.n} ${filesPl(v.n)}`, n_files_list: (v) => `${v.n} ${filesPl(v.n)}: ${v.list}`,
@@ -608,6 +688,7 @@
       shared_desc: 'Zeskanuj kod lub wklej TICKET w „Odbierz z TICKETU” (albo: ferry receive <TICKET>). Nie zamykaj Ferry do końca transferu.',
       downloading: 'Pobieranie…',
       st_preparing: 'Liczenie haszu BLAKE3…', st_awaiting_decision: 'Oczekiwanie na odbiorcę…', st_completed: 'Zakończono', st_rejected: 'Odrzucono', st_failed: 'Błąd',
+      st_cancelled: 'Anulowano – częściowo odebrany plik zostanie wznowiony następnym razem', cancel_transfer: 'Anuluj transfer',
       tr_failed: 'Błąd: {error}', tr_rejected: 'Odrzucono: {reason}', tr_saved: 'Zapisano w {path}',
       open: 'Otwórz', show_in_folder: 'Pokaż w folderze',
       from: '{size} · od {name}', unknown_device: 'nieznane urządzenie ({id})',
@@ -670,8 +751,42 @@
   const preview = (text, max = 120) => { const flat = String(text).replace(/\s+/g, ' ').trim(); return flat.length > max ? flat.slice(0, max - 1) + '…' : flat; };
   const isLink = (text) => /^https?:\/\/\S+$/i.test(String(text).trim());
   const dotClass = (state) => 'dot ' + (state === true ? 'ok' : state === false ? 'bad' : 'wait');
-  const open = (id) => $(id).classList.add('active');
-  const close = (id) => $(id).classList.remove('active');
+  // Dialogs keep keyboard focus inside while open and give it back to the
+  // element that opened them when closed (WAI-ARIA dialog pattern).
+  const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+  const focusReturn = new Map();
+  const visibleFocusable = (m) => [...m.querySelectorAll(FOCUSABLE)].filter(e => e.offsetParent !== null);
+  const topModal = () => [...document.querySelectorAll('.modal-overlay.active')].pop();
+  function open(id) {
+    const m = $(id);
+    if (!m.classList.contains('active')) {
+      focusReturn.set(id, document.activeElement);
+      m.classList.add('active');
+    }
+    if (!m.contains(document.activeElement)) {
+      const first = m.querySelector('[autofocus]') ?? visibleFocusable(m).find(e => !e.matches('[data-close]')) ?? visibleFocusable(m)[0];
+      requestAnimationFrame(() => first?.focus());
+    }
+  }
+  function close(id) {
+    const m = $(id);
+    if (!m.classList.contains('active')) return;
+    m.classList.remove('active');
+    const back = focusReturn.get(id);
+    focusReturn.delete(id);
+    if (back?.isConnected && !topModal()) back.focus();
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    const m = topModal();
+    if (!m) return;
+    const items = visibleFocusable(m);
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    if (!m.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
   document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', (e) => { if (e.target === m && m.getAttribute('role') !== 'alertdialog') close(m.id); }));
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => close(b.dataset.close)));
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.active:not([role=alertdialog])').forEach(m => close(m.id)); });
@@ -683,6 +798,14 @@
     } catch { await navigator.clipboard.writeText(text); }
     toast(t('copied'));
   }
+
+  // Folders are sent with their structure; the system picker returns a path.
+  async function pickFolder() {
+    const opts = { multiple: false, directory: true };
+    const res = T?.dialog?.open ? await T.dialog.open(opts) : await invoke('plugin:dialog|open', { options: opts });
+    return res ? [typeof res === 'string' ? res : res.path ?? String(res)] : [];
+  }
+  let pendingIsFolder = false;
 
   async function pickFiles() {
     const opts = { multiple: true, directory: false };
@@ -850,9 +973,9 @@
 
   // ---------- Nearby devices and pairing ----------
   let nearby = [];
-  const PLATFORMS = { linux: 'Linux', windows: 'Windows', macos: 'macOS', android: 'Android', ios: 'iOS' };
+  const PLATFORMS = { linux: 'Linux', windows: 'Windows', macos: 'macOS', android: 'Android' };
   const platformLabel = (p) => PLATFORMS[p] ?? p;
-  const platformIcon = (p) => p === 'android' || p === 'ios' ? 'phone' : 'monitor';
+  const platformIcon = (p) => p === 'android' ? 'phone' : 'monitor';
   const isTrusted = (id) => peers.some(p => p.node_id === id);
 
   function setNearby(list) {
@@ -906,10 +1029,12 @@
     try {
       pairingWith = d.node_id;
       $('pairing-title').textContent = t('pairing_with', { name: d.name });
-      $('pairing-code').textContent = await invoke('pair_code', { nodeId: d.node_id });
-      $('pairing-status').textContent = t('waiting_confirmation');
+      // The code depends on random values exchanged with the other device, so
+      // it arrives with the `pairing-code` event once the connection is up.
+      $('pairing-code').textContent = '––– –––';
+      $('pairing-status').textContent = t('pairing_connecting');
       open('modal-pairing');
-      const alias = await invoke('pair_device', { nodeId: d.node_id });
+      const alias = await invoke('pair_device', { nodeId: d.node_id, name: d.name });
       await refreshPeers();
       renderNearby();
       if (pairingWith === d.node_id) {
@@ -995,11 +1120,13 @@
     if (pendingText !== null) sendText(pendingText, nodeId, label);
     else sendFiles(pendingFiles, nodeId, label);
   }
-  function chooseRecipient(paths, text = null) {
+  function chooseRecipient(paths, text = null, isFolder = false) {
     if (text === null && !paths.length) return;
+    pendingIsFolder = isFolder;
     pendingFiles = paths;
     pendingText = text;
     $('recipient-files').textContent = text !== null ? t('text_to', { preview: preview(text) })
+      : pendingIsFolder ? t('folder_label', { name: baseName(paths[0]) })
       : paths.length === 1 ? baseName(paths[0]) : t('n_files_list', { n: paths.length, list: paths.map(baseName).join(', ') });
     const box = $('recipients');
     box.replaceChildren();
@@ -1014,7 +1141,8 @@
       box.append(recipientRow([icon(platformIcon(d.platform)), el('span', { class: 'dot ok' })], d.name, platformLabel(d.platform),
         () => deliver(d.node_id, d.name)));
     }
-    $('btn-share-ticket').style.display = text !== null ? 'none' : '';
+    // A TICKET shares exactly one file, so it is not offered for texts and folders.
+    $('btn-share-ticket').style.display = text !== null || pendingIsFolder ? 'none' : '';
     $('btn-share-ticket').disabled = paths.length !== 1;
     $('btn-share-ticket').title = paths.length !== 1 ? t('ticket_one_file') : '';
     open('modal-recipient');
@@ -1027,6 +1155,7 @@
     } catch (e) { fail(e); }
   };
   $('btn-select-file').onclick = async () => { try { chooseRecipient(await pickFiles()); } catch (e) { fail(e); } };
+  $('btn-select-folder').onclick = async () => { try { chooseRecipient(await pickFolder(), null, true); } catch (e) { fail(e); } };
 
   // ---------- Text and links ----------
   const MAX_TEXT_BYTES = 32 * 1024;
@@ -1187,14 +1316,18 @@
       list.querySelector('.empty')?.remove();
       list.prepend(row.el);
     }
+    const previous = row.ev?.status.kind;
     row.ev = ev;
     const kind = ev.status.kind;
+    if (kind !== previous && ['completed', 'failed', 'rejected', 'cancelled'].includes(kind)) {
+      $('sr-status').textContent = `${ev.file_name}: ${t('st_' + kind)}`;
+    }
     const pct = ev.total ? Math.min(100, Math.round(ev.done / ev.total * 100)) : (kind === 'completed' ? 100 : 0);
     const peer = peers.find(p => p.node_id === ev.peer)?.alias ?? shortId(ev.peer);
     const detail = kind === 'running' ? (ev.total ? `${pct}% · ${fmtSize(ev.done)} / ${fmtSize(ev.total)}` : fmtSize(ev.done))
       : kind === 'failed' ? t('tr_failed', { error: ev.status.error }) : kind === 'rejected' ? t('tr_rejected', { reason: ev.status.reason })
       : kind === 'completed' && ev.status.path ? t('tr_saved', { path: ev.status.path }) : t('st_' + kind);
-    row.el.className = 'row transfer' + (kind === 'completed' ? ' done' : kind === 'failed' || kind === 'rejected' ? ' failed' : '');
+    row.el.className = 'row transfer' + (kind === 'completed' ? ' done' : kind === 'failed' || kind === 'rejected' ? ' failed' : kind === 'cancelled' ? ' cancelled' : '');
     const bar = el('div', { class: 'progress' }, el('div'));
     bar.firstChild.style.width = pct + '%';
     const parts = [
@@ -1203,6 +1336,11 @@
         el('div', { class: 'meta' }, el('span', { class: 'title' }, ev.file_name), el('span', { class: 'muted small' }, peer)),
         bar,
         el('div', { class: 'detail' }, detail))];
+    if (kind === 'preparing' || kind === 'running') {
+      parts.push(el('div', { class: 'trailing' },
+        el('button', { class: 'ghost icon', title: t('cancel_transfer'), 'aria-label': t('cancel_transfer'),
+          onclick: () => invoke('cancel_transfer', { id: ev.id }).catch(fail) }, icon('x', 'sm'))));
+    }
     if (kind === 'completed' && ev.direction === 'download' && ev.status.path && !isMobile) {
       const openFile = (reveal) => invoke('open_received', { path: ev.status.path, reveal }).catch(fail);
       parts.push(el('div', { class: 'trailing' },
@@ -1218,7 +1356,7 @@
   }
   $('btn-clear').onclick = () => {
     for (const [id, row] of transfers) {
-      const finished = row.text ? row.text.state !== 'sending' : ['completed', 'failed', 'rejected'].includes(row.ev.status.kind);
+      const finished = row.text ? row.text.state !== 'sending' : ['completed', 'failed', 'rejected', 'cancelled'].includes(row.ev.status.kind);
       if (finished) { row.el.remove(); transfers.delete(id); }
     }
     renderNoTransfers();
@@ -1261,7 +1399,20 @@
     renderNetwork();
   }
   let network = { active: 'local', saved: 'local' };
+  // Always visible in the top bar: whether anything may go through external
+  // servers (the mode the node actually runs in) and whether the device is hidden.
+  function renderModePill() {
+    const pill = $('mode-pill');
+    const parts = [t(network.saved === 'internet' ? 'mode_internet' : 'mode_local')];
+    if (network.saved !== network.active) parts.push(t('mode_pending'));
+    if (privacy.hidden) parts.push(t('mode_hidden'));
+    pill.textContent = parts.join(' · ');
+    pill.title = t('mode_hint');
+    pill.classList.toggle('internet', network.saved === 'internet');
+    pill.hidden = false;
+  }
   function renderNetwork() {
+    renderModePill();
     $('network-mode').value = network.saved;
     $('network-desc').textContent = t(network.saved === 'internet' ? 'network_internet_desc' : 'network_local_desc');
     $('network-pending').hidden = network.saved === network.active;
@@ -1276,8 +1427,32 @@
       network.saved = e.target.value;
     } catch (err) { fail(err); }
     renderNetwork();
+    if (network.saved !== network.active) open('modal-restart');
   };
+  $('btn-restart-later').onclick = () => close('modal-restart');
+  $('btn-restart-ok').onclick = () => invoke('restart_app').catch(fail);
   $('btn-restart').onclick = () => invoke('restart_app').catch(fail);
+
+  let privacy = { hidden: false, auto_accept_texts: false };
+  async function loadPrivacy() {
+    try { privacy = await invoke('get_privacy'); } catch (e) { console.warn('Privacy:', e); }
+    $('privacy-hidden').checked = privacy.hidden;
+    $('privacy-texts').checked = privacy.auto_accept_texts;
+    renderModePill();
+  }
+  async function savePrivacy(change) {
+    const next = { ...privacy, ...change };
+    try {
+      await invoke('set_privacy', { settings: next });
+      privacy = next;
+      updateDiscoveryHint();
+    } catch (e) { fail(e); }
+    renderModePill();
+    $('privacy-hidden').checked = privacy.hidden;
+    $('privacy-texts').checked = privacy.auto_accept_texts;
+  }
+  $('privacy-hidden').onchange = (e) => savePrivacy({ hidden: e.target.checked });
+  $('privacy-texts').onchange = (e) => savePrivacy({ auto_accept_texts: e.target.checked });
 
   async function loadLanguage() {
     try {
@@ -1312,9 +1487,11 @@
     $('settings-dir').textContent = nodeInfo?.download_dir ?? '—';
     $('language').value = lang;
     await loadNetwork();
+    await loadPrivacy();
     if (!isMobile) { try { $('autostart').checked = await invoke('plugin:autostart|is_enabled'); } catch {} }
     open('modal-settings');
   };
+  $('mode-pill').onclick = () => $('btn-settings').click();
   $('btn-device-name-save').onclick = async () => {
     try { $('device-name').value = await invoke('set_device_name', { name: $('device-name').value }); toast(t('name_saved')); }
     catch (e) { fail(e); }
@@ -1343,8 +1520,8 @@
       if (text) composeText(null, null, text);
     } catch (e) { fail(e); }
   }
-  window.addEventListener('rqs-share', checkSharedFiles);
-  window.addEventListener('rqs-lan-permission', async () => {
+  window.addEventListener('ferry-share', checkSharedFiles);
+  window.addEventListener('ferry-lan-permission', async () => {
     try { await invoke('refresh_nearby'); toast(t('lan_granted')); }
     catch (e) { fail(e); }
   });
@@ -1378,7 +1555,22 @@
     });
     await listen('nearby', ({ payload }) => setNearby(payload));
     await listen('peers-changed', async () => { await refreshPeers(); renderNearby(); });
+    // Also emitted by the background pairing after adding a device by TICKET,
+    // which has no dialog open yet.
+    await listen('pairing-code', ({ payload }) => {
+      if (pairingWith !== payload.node_id) {
+        pairingWith = payload.node_id;
+        $('pairing-title').textContent = t('pairing_with', { name: payload.name });
+        open('modal-pairing');
+      }
+      $('pairing-code').textContent = payload.code;
+      $('pairing-status').textContent = t('waiting_confirmation');
+    });
     await listen('pair-result', async ({ payload }) => {
+      if (pairingWith === payload.node_id) {
+        $('pairing-status').textContent = payload.message;
+        if (payload.ok) setTimeout(() => close('modal-pairing'), 1500);
+      }
       toast(payload.message, !payload.ok);
       await refreshPeers();
       renderNearby();
@@ -1389,6 +1581,8 @@
     await ensureDeviceName();
     try { setNearby(await invoke('list_nearby')); } catch {}
     await loadNodeInfo();
+    await loadNetwork();
+    await loadPrivacy();
     checkOnline();
     setInterval(checkOnline, 60000);
     setInterval(updateDiscoveryHint, 5000);

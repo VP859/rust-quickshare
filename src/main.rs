@@ -3,15 +3,16 @@
 use anyhow::Result;
 use clap::Parser;
 
-use rqs_p2p::cli::args::{Cli, Commands};
-use rqs_p2p::cli::nearby_cmd::{run_discover, run_pair};
-use rqs_p2p::cli::peer_cmd::handle_peer_cmd;
-use rqs_p2p::cli::settings_cmd::{run_language, run_name, run_network};
-use rqs_p2p::cli::transfer_cmd::{run_receive, run_send, run_send_text, run_show_ticket};
-use rqs_p2p::config::Config;
-use rqs_p2p::daemon::run_daemon;
-use rqs_p2p::telemetry::doctor::run_doctor;
-use rqs_p2p::tui::run_tui;
+use ferry::cli::args::{Cli, Commands};
+use ferry::cli::identity_cmd::run_identity;
+use ferry::cli::nearby_cmd::{run_discover, run_pair};
+use ferry::cli::peer_cmd::handle_peer_cmd;
+use ferry::cli::settings_cmd::{run_config, run_language, run_name, run_network};
+use ferry::cli::transfer_cmd::{run_receive, run_send, run_send_text, run_show_ticket};
+use ferry::config::Config;
+use ferry::daemon::run_daemon;
+use ferry::telemetry::doctor::run_doctor;
+use ferry::tui::run_tui;
 
 /// Parses arguments, sets the language and logging, and runs the command.
 #[tokio::main]
@@ -19,7 +20,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let saved_language = Config::load().ok().and_then(|c| c.language);
-    rqs_p2p::i18n::init(cli.lang.as_deref(), saved_language.as_deref());
+    ferry::i18n::init(cli.lang.as_deref(), saved_language.as_deref());
 
     let default_filter = if matches!(cli.command, Commands::Tui) {
         "off"
@@ -51,6 +52,8 @@ async fn main() -> Result<()> {
         Commands::Language { code } => run_language(code.as_deref())?,
         Commands::Network { mode } => run_network(mode.as_deref())?,
         Commands::Peer { command } => handle_peer_cmd(command).await?,
+        Commands::Config { command } => run_config(command)?,
+        Commands::Identity { command } => run_identity(command)?,
         Commands::Doctor => {
             run_doctor().await?;
         }

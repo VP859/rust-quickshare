@@ -1,4 +1,4 @@
-//! Wire messages of the RQS transfer protocol.
+//! Wire messages of the Ferry transfer protocol.
 //!
 //! Every message is a [`postcard`]-encoded frame written with
 //! [`write_msg`](super::codec::write_msg). A transfer runs on one bidirectional
@@ -13,8 +13,17 @@
 //! receiver ◀─ TransferResult::Verified | Failed { reason } ───────────────────
 //! ```
 //!
-//! [`Hello::Pair`] is answered with a single [`PairResponse`], [`Hello::Text`]
-//! with a single [`TextDecision`] and [`Hello::Batch`] with a single
+//! Pairing exchanges four messages on the control stream:
+//!
+//! ```text
+//! requester ── Hello::Pair { name, addr, commitment } ─▶
+//! responder ◀─ PairChallenge { nonce } ─────────────────
+//! requester ── PairReveal { nonce } ───────────────────▶
+//! responder ◀─ PairResponse { accepted, name, addr } ───  (after the user decided)
+//! ```
+//!
+//! [`Hello::Text`] is answered with a single [`TextDecision`] and
+//! [`Hello::Batch`] with a single
 //! [`BatchDecision`] instead. A batch announces several files that follow as
 //! [`Hello::Push`] streams on the same connection, so the receiver decides
 //! once for all of them.
@@ -37,6 +46,8 @@ pub const MAX_DEVICE_NAME_LEN: usize = 64;
 pub const MAX_TEXT_LEN: usize = 32 * 1024;
 /// Largest number of file names carried by a [`BatchOffer`] for display.
 pub const MAX_BATCH_NAMES: usize = 20;
+/// Deepest folder structure accepted in [`TransferOffer::folder`].
+pub const MAX_FOLDER_DEPTH: usize = 16;
 /// Number of chunk streams in flight at the same time.
 pub const CHUNK_WINDOW: usize = 8;
 
@@ -59,6 +70,9 @@ pub enum Hello {
         name: String,
         /// Current address of the requesting peer, stored by the other side.
         addr: EndpointAddr,
+        /// Commitment to the requester's secret nonce, revealed later in
+        /// [`PairReveal`] (see [`crate::pairing`]).
+        commitment: [u8; 32],
     },
     /// The dialing peer sends a short text (e.g. a link) for the clipboard.
     ///
@@ -133,7 +147,22 @@ pub enum TextDecision {
     },
 }
 
-/// Answer to [`Hello::Pair`], sent after the user made a decision.
+/// Random nonce of the responding peer, sent right after [`Hello::Pair`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PairChallenge {
+    /// 32 random bytes, chosen after the requester committed to its own nonce.
+    pub nonce: [u8; 32],
+}
+
+/// The requester's nonce, sent after [`PairChallenge`]; it must match the
+/// commitment from [`Hello::Pair`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PairReveal {
+    /// The nonce the requester committed to.
+    pub nonce: [u8; 32],
+}
+
+/// Final answer to [`Hello::Pair`], sent after the user made a decision.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PairResponse {
     /// Whether the user accepted the pairing request.
@@ -155,21 +184,41 @@ pub struct TransferOffer {
     pub chunk_size: u32,
     /// BLAKE3 hash of the whole file.
     pub file_hash: [u8; 32],
+    /// Folders the file belongs in, relative to the download folder (e.g.
+    /// `["Photos", "2024"]` when a folder is sent); empty for a single file.
+    /// Every component is sanitized by the receiver like a file name.
+    pub folder: Vec<String>,
 }
 
 impl TransferOffer {
+    /// File name with its folders (`Photos/2024/a.jpg`), for display only.
+    pub fn display_name(&self) -> String {
+        self.folder
+            .iter()
+            .chain(std::iter::once(&self.file_name))
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join("/")
+    }
+
     /// Rejects offers that could cause a panic or an excessive allocation.
     ///
     /// # Errors
     ///
     /// Returns an error when the chunk size is zero or above [`MAX_CHUNK_SIZE`],
-    /// or when the file name is empty or longer than [`MAX_FILE_NAME_LEN`].
+    /// when the file name or a folder name is empty or longer than
+    /// [`MAX_FILE_NAME_LEN`], or when there are more than [`MAX_FOLDER_DEPTH`]
+    /// folders.
     pub fn validate(&self) -> anyhow::Result<()> {
         if self.chunk_size == 0 || self.chunk_size > MAX_CHUNK_SIZE {
             anyhow::bail!(t!("protocol.bad_chunk_size", size = self.chunk_size));
         }
-        if self.file_name.is_empty() || self.file_name.len() > MAX_FILE_NAME_LEN {
+        let bad_name = |name: &String| name.is_empty() || name.len() > MAX_FILE_NAME_LEN;
+        if bad_name(&self.file_name) || self.folder.iter().any(bad_name) {
             anyhow::bail!(t!("protocol.bad_file_name_len"));
+        }
+        if self.folder.len() > MAX_FOLDER_DEPTH {
+            anyhow::bail!(t!("protocol.too_deep", max = MAX_FOLDER_DEPTH));
         }
         Ok(())
     }
@@ -239,6 +288,7 @@ mod tests {
             file_size: size,
             chunk_size: chunk,
             file_hash: [0; 32],
+            folder: Vec::new(),
         }
     }
 

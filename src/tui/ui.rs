@@ -85,6 +85,9 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
     if app.config.network_mode != running {
         network.push_str(&t!("tui.network_pending", mode = app.config.network_mode));
     }
+    if app.config.hidden {
+        network.push_str(&t!("tui.header_hidden"));
+    }
     let lines = vec![
         Line::from(vec![
             Span::styled(
@@ -324,6 +327,7 @@ fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
                 TransferStatus::Failed { error } => {
                     (t!("tui.st_failed", error = error).into_owned(), Color::Red)
                 }
+                TransferStatus::Cancelled => (t!("tui.st_cancelled").into_owned(), Color::DarkGray),
             };
             let line1 = Line::from(vec![
                 Span::raw(format!("{arrow} {}  ", ev.file_name)),
@@ -631,11 +635,13 @@ fn render_help(f: &mut Frame) {
         ("i / +", t!("tui.help_add")),
         ("e / a / x", t!("tui.help_manage")),
         ("o / f", t!("tui.help_open")),
+        ("x", t!("tui.help_cancel")),
         ("C", t!("tui.help_clear")),
         ("t / c", t!("tui.help_ticket")),
         ("g / N", t!("tui.help_settings")),
         ("L", t!("tui.help_language")),
         ("M", t!("tui.help_network")),
+        ("H", t!("tui.help_hidden")),
         ("r", t!("tui.help_search")),
         ("y / n", t!("tui.help_answer")),
         ("q / Esc", t!("tui.help_quit")),

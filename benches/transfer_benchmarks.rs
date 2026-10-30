@@ -1,12 +1,14 @@
 //! Criterion benchmarks: hashing, protocol framing and a complete file transfer
 //! between two nodes over QUIC on the loopback interface.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use ferry::node::{NodeEngine, load_or_generate_secret_key};
+use ferry::protocol::codec::{read_msg, write_msg};
+use ferry::protocol::messages::{ChunkHeader, DEFAULT_CHUNK_SIZE, TransferOffer};
+use ferry::transfer::service::{self, OfferDecision, TransferEvent, TransferHandler};
 use iroh::EndpointId;
-use rqs_p2p::node::{NodeEngine, load_or_generate_secret_key};
-use rqs_p2p::protocol::codec::{read_msg, write_msg};
-use rqs_p2p::protocol::messages::{ChunkHeader, DEFAULT_CHUNK_SIZE, TransferOffer};
-use rqs_p2p::transfer::service::{self, OfferDecision, TransferEvent, TransferHandler};
 use std::hint::black_box;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -63,6 +65,7 @@ fn bench_protocol_codec(c: &mut Criterion) {
         file_size: 10_000_000_000,
         chunk_size: DEFAULT_CHUNK_SIZE,
         file_hash: [0xAB; 32],
+        folder: Vec::new(),
     };
 
     group.bench_function("encode_decode_transfer_offer", |b| {

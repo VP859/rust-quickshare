@@ -1851,6 +1851,67 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferry"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "base64 0.23.1",
+ "blake3",
+ "bytes",
+ "chrono",
+ "clap",
+ "criterion",
+ "crossterm",
+ "dirs 7.0.0",
+ "gethostname",
+ "getrandom 0.4.3",
+ "indicatif",
+ "iroh",
+ "libc",
+ "network-interface",
+ "postcard",
+ "qrcode",
+ "ratatui",
+ "rust-i18n",
+ "serde",
+ "socket2",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "toml 1.1.8+spec-1.1.0",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "ferry-gui"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "ferry",
+ "iroh",
+ "jni 0.21.1",
+ "ndk-context",
+ "qrcode",
+ "rust-i18n",
+ "serde",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-barcode-scanner",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-notification",
+ "tokio",
+ "tracing",
+ "tracing-android",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fiat-crypto"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5542,65 +5603,6 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "rqs-gui"
-version = "0.1.9"
-dependencies = [
- "anyhow",
- "iroh",
- "jni 0.21.1",
- "ndk-context",
- "qrcode",
- "rqs_p2p",
- "rust-i18n",
- "serde",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-barcode-scanner",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-notification",
- "tokio",
- "tracing",
- "tracing-android",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "rqs_p2p"
-version = "0.1.9"
-dependencies = [
- "anyhow",
- "arboard",
- "base64 0.23.1",
- "blake3",
- "bytes",
- "chrono",
- "clap",
- "criterion",
- "crossterm",
- "dirs 7.0.0",
- "gethostname",
- "indicatif",
- "iroh",
- "libc",
- "network-interface",
- "postcard",
- "qrcode",
- "ratatui",
- "rust-i18n",
- "serde",
- "socket2",
- "tempfile",
- "tokio",
- "toml 1.1.8+spec-1.1.0",
- "tracing",
- "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]

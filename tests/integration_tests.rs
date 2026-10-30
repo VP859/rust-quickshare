@@ -1,22 +1,24 @@
-//! End-to-end tests of the RQS protocol on two real iroh nodes (QUIC).
+//! End-to-end tests of the Ferry protocol on two real iroh nodes (QUIC).
+
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use anyhow::{Context, Result};
-use iroh::EndpointId;
-use rqs_p2p::discovery::{Discovery, DiscoveryHealth, DiscoveryOptions};
-use rqs_p2p::node::{NetworkMode, NodeEngine, NodeTicket, load_or_generate_secret_key};
-use rqs_p2p::pairing::{PairOutcome, PairRequest, pairing_code, request_pairing};
-use rqs_p2p::protocol::codec::{read_msg, write_msg};
-use rqs_p2p::protocol::messages::{
-    BatchOffer, DEFAULT_CHUNK_SIZE, Hello, MAX_TEXT_LEN, ShareToken, TextDecision,
-    TransferDecision, TransferOffer,
+use ferry::discovery::{Discovery, DiscoveryHealth, DiscoveryOptions, Visibility};
+use ferry::node::{NetworkMode, NodeEngine, NodeTicket, load_or_generate_secret_key};
+use ferry::pairing::{PairOutcome, PairRequest, request_pairing};
+use ferry::protocol::codec::{read_msg, write_msg};
+use ferry::protocol::messages::{
+    BatchOffer, DEFAULT_CHUNK_SIZE, Hello, MAX_TEXT_LEN, PairChallenge, PairResponse, PairReveal,
+    ShareToken, TextDecision, TransferDecision, TransferOffer,
 };
-use rqs_p2p::transfer::Channel;
-use rqs_p2p::transfer::receiver::part_path_for;
-use rqs_p2p::transfer::security::resolve_secure_target_path;
-use rqs_p2p::transfer::sender::{PreparedFile, prepare_file};
-use rqs_p2p::transfer::service::{
+use ferry::transfer::Channel;
+use ferry::transfer::receiver::part_path_for;
+use ferry::transfer::security::resolve_secure_target_path;
+use ferry::transfer::sender::{PreparedFile, prepare_file};
+use ferry::transfer::service::{
     self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
+use iroh::EndpointId;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -173,6 +175,79 @@ async fn push_multi_chunk_file_to_accepting_peer() -> Result<()> {
     .await
 }
 
+/// A folder arrives with its structure inside the download folder.
+#[tokio::test(flavor = "multi_thread")]
+async fn folder_is_sent_with_its_structure() -> Result<()> {
+    with_timeout(async {
+        let src = tempdir()?;
+        let dst = tempdir()?;
+        let root = src.path().join("Holiday");
+        tokio::fs::create_dir_all(root.join("day 1")).await?;
+        tokio::fs::write(root.join("notes.txt"), b"notes").await?;
+        tokio::fs::write(root.join("day 1/photo.jpg"), pattern(3000)).await?;
+
+        let handler = Arc::new(TestHandler::new(true, dst.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        let sent = Mutex::new(Vec::new());
+        service::send_files(&sender, addr, &[root], &|e| sent.lock().unwrap().push(e)).await?;
+
+        let out = dst.path().join("Holiday");
+        assert_eq!(tokio::fs::read(out.join("notes.txt")).await?, b"notes");
+        assert_eq!(
+            tokio::fs::read(out.join("day 1/photo.jpg")).await?,
+            pattern(3000)
+        );
+        let names: Vec<_> = sent
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|e| e.file_name.clone())
+            .collect();
+        assert!(
+            names.contains(&"Holiday/day 1/photo.jpg".to_string()),
+            "{names:?}"
+        );
+        Ok(())
+    })
+    .await
+}
+
+/// Cancelling an upload in progress stops it without an error, reports it as
+/// cancelled and leaves no finished file on the receiver.
+#[tokio::test(flavor = "multi_thread")]
+async fn upload_can_be_cancelled_while_running() -> Result<()> {
+    with_timeout(async {
+        let src = tempdir()?;
+        let dst = tempdir()?;
+        let path = src.path().join("large.bin");
+        tokio::fs::write(&path, pattern(40 * DEFAULT_CHUNK_SIZE as usize)).await?;
+
+        let handler = Arc::new(TestHandler::new(true, dst.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        let sent = Mutex::new(Vec::new());
+        service::send_files(&sender, addr, &[path], &|e| {
+            if e.status == TransferStatus::Running {
+                service::cancel_transfer(&e.id);
+            }
+            sent.lock().unwrap().push(e);
+        })
+        .await?;
+
+        let sent = sent.lock().unwrap();
+        let last = sent.last().context("no events")?;
+        assert_eq!(last.status, TransferStatus::Cancelled);
+        assert!(
+            !service::cancel_transfer(&last.id),
+            "a finished transfer cannot be cancelled"
+        );
+        assert!(!dst.path().join("large.bin").exists());
+        Ok(())
+    })
+    .await
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn resumes_from_existing_part_file() -> Result<()> {
     with_timeout(async {
@@ -188,6 +263,7 @@ async fn resumes_from_existing_part_file() -> Result<()> {
             file_size: prepared.size,
             chunk_size: DEFAULT_CHUNK_SIZE,
             file_hash: prepared.hash,
+            folder: Vec::new(),
         };
         let part = part_path_for(dst.path(), &offer)?;
         let resume_at = 2 * DEFAULT_CHUNK_SIZE as usize;
@@ -230,6 +306,7 @@ async fn corrupted_part_file_is_detected_and_discarded() -> Result<()> {
             file_size: prepared.size,
             chunk_size: DEFAULT_CHUNK_SIZE,
             file_hash: prepared.hash,
+            folder: Vec::new(),
         };
         let part = part_path_for(dst.path(), &offer)?;
         tokio::fs::write(&part, vec![0xEE; DEFAULT_CHUNK_SIZE as usize]).await?;
@@ -326,13 +403,18 @@ async fn malicious_offers_are_refused() -> Result<()> {
         let (_rx, addr) = start_receiver(handler.clone()).await?;
         let attacker = engine().await?;
 
+        let folder = |parts: &[&str]| parts.iter().map(|p| p.to_string()).collect::<Vec<_>>();
         let bad_offers = [
-            ("../../.bashrc", DEFAULT_CHUNK_SIZE),
-            ("/etc/passwd", DEFAULT_CHUNK_SIZE),
-            ("ok.txt", 0),
-            ("ok.txt", u32::MAX),
+            ("../../.bashrc", DEFAULT_CHUNK_SIZE, vec![]),
+            ("/etc/passwd", DEFAULT_CHUNK_SIZE, vec![]),
+            ("ok.txt", 0, vec![]),
+            ("ok.txt", u32::MAX, vec![]),
+            ("ok.txt", DEFAULT_CHUNK_SIZE, folder(&[".."])),
+            ("ok.txt", DEFAULT_CHUNK_SIZE, folder(&["a", "../../x"])),
+            ("ok.txt", DEFAULT_CHUNK_SIZE, folder(&["/etc"])),
+            ("ok.txt", DEFAULT_CHUNK_SIZE, folder(&["d"; 17])),
         ];
-        for (name, chunk_size) in bad_offers {
+        for (name, chunk_size, folder) in bad_offers {
             let conn = attacker.connect(addr.clone()).await?;
             let mut ch = Channel::open(&conn, &Hello::Push).await?;
             let offer = TransferOffer {
@@ -340,12 +422,13 @@ async fn malicious_offers_are_refused() -> Result<()> {
                 file_size: 10,
                 chunk_size,
                 file_hash: [0; 32],
+                folder: folder.clone(),
             };
             write_msg(&mut ch.send, &offer).await?;
             let reply: Result<TransferDecision> = read_msg(&mut ch.recv).await;
             assert!(
                 reply.is_err(),
-                "offer {name:?}/{chunk_size} must be refused"
+                "offer {name:?}/{chunk_size}/{folder:?} must be refused"
             );
         }
         assert!(!dst.path().join(".bashrc").exists());
@@ -364,6 +447,7 @@ async fn discovery_finds_peer_on_local_network() -> Result<()> {
         let opts = |listen: u16, to: u16| DiscoveryOptions {
             port: listen,
             targets: Some(vec![([127, 0, 0, 1], to).into()]),
+            ..DiscoveryOptions::default()
         };
         let da = Discovery::start(a.clone(), "Laptop A", opts(pa, pb))?;
         let db = Discovery::start(b.clone(), "Phone B", opts(pb, pa))?;
@@ -412,6 +496,59 @@ async fn discovery_finds_peer_on_local_network() -> Result<()> {
     .await
 }
 
+/// A hidden device does not announce itself and answers only its paired
+/// devices: the paired device sees it, a stranger on the same network does not.
+#[tokio::test(flavor = "multi_thread")]
+async fn hidden_device_is_seen_only_by_paired_devices() -> Result<()> {
+    with_timeout(async {
+        let (hidden, friend, stranger) = (engine().await?, engine().await?, engine().await?);
+        let (ph, pf, ps) = (free_udp_port()?, free_udp_port()?, free_udp_port()?);
+        let opts = |listen: u16, to: u16, visibility: Visibility| DiscoveryOptions {
+            port: listen,
+            targets: Some(vec![([127, 0, 0, 1], to).into()]),
+            visibility,
+        };
+        let _dh = Discovery::start(
+            hidden.clone(),
+            "Hidden",
+            opts(
+                ph,
+                pf,
+                Visibility {
+                    hidden: true,
+                    trusted: [friend.node_id()].into(),
+                },
+            ),
+        )?;
+        let df = Discovery::start(
+            friend.clone(),
+            "Friend",
+            opts(pf, ph, Visibility::default()),
+        )?;
+        let ds = Discovery::start(
+            stranger.clone(),
+            "Stranger",
+            opts(ps, ph, Visibility::default()),
+        )?;
+
+        let hidden_id = hidden.node_id().to_string();
+        assert!(
+            df.wait_for(&hidden_id, Duration::from_secs(10))
+                .await
+                .is_some(),
+            "the paired device sees the hidden one"
+        );
+        assert!(
+            ds.wait_for(&hidden_id, Duration::from_secs(6))
+                .await
+                .is_none(),
+            "a stranger does not"
+        );
+        Ok(())
+    })
+    .await
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn pairing_with_one_button_accept_and_reject() -> Result<()> {
     with_timeout(async {
@@ -421,14 +558,22 @@ async fn pairing_with_one_button_accept_and_reject() -> Result<()> {
             let (rx, addr) = start_receiver(handler.clone()).await?;
             let initiator = engine().await?;
 
-            let outcome = request_pairing(&initiator, addr, "Laptop\nA").await?;
+            let shown = Mutex::new(None);
+            let outcome = request_pairing(&initiator, addr, "Laptop\nA", |code| {
+                *shown.lock().unwrap() = Some(code.to_string());
+            })
+            .await?;
             let requests = handler.pair_requests.lock().unwrap().clone();
             assert_eq!(requests.len(), 1);
             let req = &requests[0];
             assert_eq!(req.peer, initiator.node_id());
             assert_eq!(req.name, "Laptop A");
             assert_eq!(req.addr.as_ref().map(|a| a.id), Some(initiator.node_id()));
-            assert_eq!(req.code, pairing_code(&initiator.node_id(), &rx.node_id()));
+            let shown = shown
+                .into_inner()
+                .unwrap()
+                .expect("code shown to the initiator");
+            assert_eq!(req.code, shown, "both screens show the same code");
 
             match outcome {
                 PairOutcome::Accepted { name, addr } => {
@@ -439,6 +584,33 @@ async fn pairing_with_one_button_accept_and_reject() -> Result<()> {
                 PairOutcome::Rejected => assert!(!accept),
             }
         }
+        Ok(())
+    })
+    .await
+}
+
+/// A requester whose revealed nonce does not match its commitment (e.g. an
+/// attacker trying to choose the code) never reaches the user.
+#[tokio::test(flavor = "multi_thread")]
+async fn pairing_with_a_broken_commitment_is_dropped() -> Result<()> {
+    with_timeout(async {
+        let dir = tempdir()?;
+        let handler = Arc::new(TestHandler::new(true, dir.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let attacker = engine().await?;
+
+        let conn = attacker.connect(addr).await?;
+        let hello = Hello::Pair {
+            name: "Attacker".into(),
+            addr: attacker.endpoint().addr(),
+            commitment: [0; 32],
+        };
+        let mut channel = Channel::open(&conn, &hello).await?;
+        let _challenge: PairChallenge = read_msg(&mut channel.recv).await?;
+        write_msg(&mut channel.send, &PairReveal { nonce: [1; 32] }).await?;
+        let response: Result<PairResponse> = read_msg(&mut channel.recv).await;
+        assert!(response.is_err(), "no answer after a broken commitment");
+        assert!(handler.pair_requests.lock().unwrap().is_empty());
         Ok(())
     })
     .await

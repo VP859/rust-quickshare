@@ -1,4 +1,4 @@
-package com.rqs.quickshare
+package io.github.vp859.ferry
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -24,17 +24,17 @@ import androidx.core.content.ContextCompat
  * Wi-Fi [WifiManager.MulticastLock], without which the Wi-Fi driver drops the
  * broadcast/multicast packets used for local device discovery.
  */
-class RqsTransferService : Service() {
+class FerryService : Service() {
   companion object {
-    private const val TAG = "RqsService"
-    private const val CHANNEL_ID = "rqs_node"
+    private const val TAG = "FerryService"
+    private const val CHANNEL_ID = "ferry_node"
     private const val NOTIFICATION_ID = 1001
-    private const val ACTION_STOP = "com.rqs.quickshare.STOP"
+    private const val ACTION_STOP = "io.github.vp859.ferry.STOP"
 
     /** Starts the service; failures (e.g. starting from the background) are logged. */
     fun start(context: Context) {
       try {
-        ContextCompat.startForegroundService(context, Intent(context, RqsTransferService::class.java))
+        ContextCompat.startForegroundService(context, Intent(context, FerryService::class.java))
       } catch (e: Exception) {
         Log.w(TAG, "Could not start the foreground service", e)
       }
@@ -49,7 +49,7 @@ class RqsTransferService : Service() {
     if (multicastLock?.isHeld == true) return
     try {
       val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-      multicastLock = wifi.createMulticastLock("rqs-discovery").apply {
+      multicastLock = wifi.createMulticastLock("ferry-discovery").apply {
         setReferenceCounted(false)
         acquire()
       }
@@ -98,7 +98,7 @@ class RqsTransferService : Service() {
   }
 
   private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
-    .setSmallIcon(R.drawable.ic_stat_rqs)
+    .setSmallIcon(R.drawable.ic_stat_ferry)
     .setContentTitle(getString(R.string.notif_node_title))
     .setContentText(getString(R.string.notif_node_text))
     .setOngoing(true)
@@ -115,7 +115,7 @@ class RqsTransferService : Service() {
       0, getString(R.string.notif_action_stop),
       PendingIntent.getService(
         this, 1,
-        Intent(this, RqsTransferService::class.java).setAction(ACTION_STOP),
+        Intent(this, FerryService::class.java).setAction(ACTION_STOP),
         PendingIntent.FLAG_IMMUTABLE
       )
     )

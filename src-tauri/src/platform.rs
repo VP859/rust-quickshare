@@ -10,13 +10,13 @@
 //! Files are received into `Download/Ferry`; completed photos and videos are
 //! then moved to `Pictures/Ferry`, which galleries show as an album.
 
-use rqs_p2p::transfer::service::TransferEvent;
+use ferry::transfer::service::TransferEvent;
 use tauri::AppHandle;
 
 /// Android: public folders, gallery integration and the "Share" menu.
 #[cfg(target_os = "android")]
 mod imp {
-    use rqs_p2p::transfer::service::{Direction, TransferEvent, TransferStatus};
+    use ferry::transfer::service::{Direction, TransferEvent, TransferStatus};
     use rust_i18n::t;
     use std::path::{Path, PathBuf};
     use std::time::{Duration, SystemTime};
@@ -55,7 +55,7 @@ mod imp {
     /// the gallery folder `Pictures/Ferry`, and removes stale shared files.
     pub fn init(app: &AppHandle) {
         if let Ok(data) = app.path().app_data_dir() {
-            rqs_p2p::config::paths::set_config_dir(data.join("rqs"));
+            ferry::config::paths::set_config_dir(data.join(ferry::config::paths::APP_DIR));
         }
 
         let state = app.state::<AppState>();
@@ -92,7 +92,7 @@ mod imp {
     /// Moves `src` into `dir`, copying when a rename is not possible.
     fn move_into(src: &Path, dir: &Path) -> std::io::Result<PathBuf> {
         let name = src.file_name().ok_or(std::io::ErrorKind::InvalidInput)?;
-        let dest = rqs_p2p::transfer::security::unique_destination(&dir.join(name));
+        let dest = ferry::transfer::security::unique_destination(&dir.join(name));
         if std::fs::rename(src, &dest).is_err() {
             std::fs::copy(src, &dest)?;
             std::fs::remove_file(src)?;
@@ -130,6 +130,9 @@ mod imp {
     /// Calls `MediaScannerConnection.scanFile`, so the file shows up in the
     /// gallery and file managers right away (Android 10 and older do not index
     /// files written through paths by themselves).
+    ///
+    /// The other place that needs `unsafe` (JNI); every block is justified.
+    #[allow(unsafe_code)]
     fn media_scan(path: &Path) -> jni::errors::Result<()> {
         use jni::objects::{JObject, JValue};
 
@@ -181,9 +184,9 @@ mod imp {
         let name = app
             .path()
             .file_name(input)
-            .and_then(|n| rqs_p2p::transfer::security::sanitize_filename(&n).ok())
+            .and_then(|n| ferry::transfer::security::sanitize_filename(&n).ok())
             .unwrap_or_else(|| "file".to_string());
-        let dest = rqs_p2p::transfer::security::unique_destination(&dir.join(name));
+        let dest = ferry::transfer::security::unique_destination(&dir.join(name));
 
         let mut opts = OpenOptions::new();
         opts.read(true);
@@ -229,7 +232,7 @@ mod imp {
 /// "Share" menu.
 #[cfg(not(target_os = "android"))]
 mod imp {
-    use rqs_p2p::transfer::service::TransferEvent;
+    use ferry::transfer::service::TransferEvent;
     use std::path::PathBuf;
     use tauri::AppHandle;
 

@@ -1,4 +1,4 @@
-package com.rqs.quickshare
+package io.github.vp859.ferry
 
 import android.Manifest
 import android.content.Intent
@@ -13,7 +13,7 @@ import androidx.core.content.ContextCompat
 /**
  * Entry activity hosting the Tauri WebView.
  *
- * Requests runtime permissions, keeps the P2P node alive through [RqsTransferService]
+ * Requests runtime permissions, keeps the P2P node alive through [FerryService]
  * and forwards files and texts from the system "Share" menu to the frontend.
  *
  * Tauri runs one WebView window per process: once its activity is closed for good
@@ -22,9 +22,9 @@ import androidx.core.content.ContextCompat
  * it restarts the process instead (see [restartProcess]).
  *
  * Events dispatched to the WebView (`window`):
- * - `rqs-share` – shared files or a shared text are ready to be fetched with
+ * - `ferry-share` – shared files or a shared text are ready to be fetched with
  *   `take_shared_files` / `take_shared_text`;
- * - `rqs-lan-permission` – local network access was granted (Android 17+).
+ * - `ferry-lan-permission` – local network access was granted (Android 17+).
  */
 class MainActivity : TauriActivity() {
   companion object {
@@ -53,7 +53,7 @@ class MainActivity : TauriActivity() {
     started = true
     recreating = false
     requestRuntimePermissions()
-    RqsTransferService.start(this)
+    FerryService.start(this)
     if (savedInstanceState == null) handleShareIntent(intent)
   }
 
@@ -113,7 +113,7 @@ class MainActivity : TauriActivity() {
   }
 
   private fun notifyShare() {
-    webView?.evaluateJavascript("window.dispatchEvent(new Event('rqs-share'))", null)
+    webView?.evaluateJavascript("window.dispatchEvent(new Event('ferry-share'))", null)
   }
 
   private fun requestRuntimePermissions() {
@@ -132,7 +132,7 @@ class MainActivity : TauriActivity() {
       permissions[it] == ACCESS_LOCAL_NETWORK && grantResults.getOrNull(it) == PackageManager.PERMISSION_GRANTED
     }
     if (lanGranted) {
-      webView?.evaluateJavascript("window.dispatchEvent(new Event('rqs-lan-permission'))", null)
+      webView?.evaluateJavascript("window.dispatchEvent(new Event('ferry-lan-permission'))", null)
     }
   }
 }

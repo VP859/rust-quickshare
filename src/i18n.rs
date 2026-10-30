@@ -5,7 +5,7 @@
 //!
 //! The language is resolved in this order (see [`resolve`]):
 //! 1. an explicit choice, e.g. the `--lang` CLI flag,
-//! 2. the `RQS_LANG` environment variable,
+//! 2. the `FERRY_LANG` environment variable,
 //! 3. the `language` field of [`Config`](crate::config::Config),
 //! 4. [`Language::English`].
 
@@ -105,11 +105,11 @@ pub fn current() -> Language {
     rust_i18n::locale().parse().unwrap_or_default()
 }
 
-/// Resolves the language from an explicit choice, `RQS_LANG` and the saved setting.
+/// Resolves the language from an explicit choice, `FERRY_LANG` and the saved setting.
 ///
 /// Unsupported values are skipped, so a typo never prevents the app from starting.
 pub fn resolve(explicit: Option<&str>, configured: Option<&str>) -> Language {
-    let from_env = std::env::var("RQS_LANG").ok();
+    let from_env = std::env::var("FERRY_LANG").ok();
     [explicit, from_env.as_deref(), configured]
         .into_iter()
         .flatten()

@@ -2,213 +2,172 @@
 
 <h1 align="center">Ferry</h1>
 
-<p align="center"><b>Secure, peer-to-peer file sharing for Linux, Windows, macOS and Android.</b></p>
+<p align="center"><b>Private, peer-to-peer file sharing for Linux, Windows and Android.</b></p>
 
-Ferry transfers files directly between devices over QUIC, end-to-end encrypted. There is no storage
-server and no cloud. By default nothing is sent to external servers: devices find each other
-automatically on the local network, or by **TICKET** (text or QR code). Optionally, paired devices
-can also connect from different networks through the free public iroh relays – see
+<p align="center">
+  <a href="LICENSE-MIT"><img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue"></a>
+  <img alt="Rust 1.91+" src="https://img.shields.io/badge/rust-1.91%2B-orange">
+</p>
+
+Ferry sends files, folders and text directly from one device to another over QUIC, end-to-end
+encrypted. There is no account, no cloud and no server in between. Devices on the same network
+find each other automatically; others connect with a **TICKET** (text or QR code). Optionally,
+paired devices can also reach each other from different networks through free public relays – see
 [Network modes](#network-modes).
 
-The command line tool is called `ferry`, and the crates keep their `rqs_p2p` / `rqs-gui` names.
+**No telemetry.** Ferry has no analytics, no crash reporting, no update checks and never contacts
+its authors. In the default mode it does not contact any server at all.
 
 ## Features
 
-* **End-to-end encryption** – QUIC + TLS 1.3 with a persistent Ed25519 identity per device (`NodeID`).
-* **No external servers by default** – [`iroh`](https://github.com/n0-computer/iroh) runs with
-  relays and DNS/pkarr address lookup disabled. The optional internet mode enables them for
-  transfers between different networks without hosting anything yourself.
-* **Integrity** – BLAKE3 hash of every 1 MiB chunk and of the whole file.
-* **Resume** – downloads go to a `.part` file; after a dropped connection (IP/VPN change) the
-  transfer resumes from the last complete chunk.
-* **Trusted devices** – alias + Auto-Accept per device; untrusted offers require confirmation.
-  Several files sent at once are confirmed once for the whole batch (never more files or bytes
-  than announced).
-* **Nearby devices + one-button pairing** – Ferry apps on the same network show up
-  automatically; **Pair** adds a device without retyping a TICKET or scanning a QR code.
-* **Text and links** – send copied text or a link; after the receiver accepts it (or right away
-  for Auto-Accept devices) it lands in their clipboard. On Android, links can be shared to Ferry
-  from any app.
-* **Interfaces** – desktop/Android GUI (Tauri v2), TUI (ratatui), CLI (clap), background daemon.
-* **Languages** – English (default) and Polish in every interface (see [Language](#language)).
+- **End-to-end encryption** – QUIC + TLS 1.3 with a persistent Ed25519 key per device (the Node ID).
+- **Integrity and resume** – every 1 MiB chunk and the whole file are checked with BLAKE3;
+  interrupted transfers resume where they stopped.
+- **Files, folders and text** – send several files or whole folders (their structure is kept), or
+  a link that lands in the other device's clipboard after confirmation.
+- **Nearby devices and one-button pairing** – Ferry devices on the same network appear on their
+  own; pairing shows the same six-digit code on both screens.
+- **Trusted devices** – an alias and optional Auto-Accept per device; everything else asks first.
+- **Privacy controls** – hide the device from everyone except paired devices, and see exactly what
+  leaves the device (*Settings → Privacy*).
+- **Cancel any transfer** – a partly received file is resumed next time.
+- **Every interface** – desktop and Android app (Tauri), terminal UI, command line and a
+  background daemon; English and Polish.
 
-## Usage (CLI)
+## Install
+
+Ferry is not published yet. Build it from source as described in
+[docs/BUILDING.md](docs/BUILDING.md):
 
 ```bash
-ferry discover                                 # devices on the local network
-ferry pair "Laptop"                            # pairing: the other side confirms, both show the same code
-ferry name "My laptop"                         # this device's name visible to others
-ferry language pl                              # interface language (en, pl); no argument = show
-ferry network internet                         # network mode: local (default) or internet
-
-ferry ticket                                   # this device's TICKET + QR code (pairing outside the LAN)
-ferry peer add <TICKET> --alias "Laptop" --auto-accept   # + pairing request (--no-pair: only on this side)
-ferry peer list | ferry peer edit Laptop --auto-accept false | ferry peer remove Laptop
-
-ferry daemon                                   # receive in the background (Auto-Accept for trusted)
-ferry send film.mkv notes.pdf --to Laptop      # send by alias, nearby name, NodeID or TICKET
-
-ferry text "https://example.org" --to Laptop # text/link → the receiver's clipboard (stdin when omitted)
-
-ferry send film.mkv                            # share via a one-time TICKET (prints QR)
-ferry receive <TICKET> ~/Downloads             # download a shared file
-
-ferry tui                                      # terminal UI (see below)
-ferry doctor                                   # network, local network discovery and config diagnostics
+cargo install --path . --locked     # the `ferry` command line tool
+cd src-tauri && npx @tauri-apps/cli@2 build   # desktop app (.deb/.rpm/.AppImage, .msi/.exe)
 ```
 
-Set `RQS_CONFIG_DIR` to run several independent identities on one machine (e.g. for testing).
-Configuration lives in `~/.config/rqs/` (`config.toml`, `secret.key`).
+## Quick start
 
-### TUI (`ferry tui`)
+```bash
+ferry discover                          # devices on the local network
+ferry pair "Laptop"                     # the other device confirms; both show the same code
+ferry send photo.jpg Holiday/ --to Laptop   # files and folders
+ferry text "https://example.org" --to Laptop
+ferry daemon                            # receive in the background
+ferry tui                               # terminal user interface
+```
 
-Panels: **[1] Trusted devices**, **[2] Nearby**, **[3] Transfers** (`Tab` / `1 2 3` switches, `↑↓` selects).
+More commands:
+
+```bash
+ferry ticket                            # this device's TICKET and QR code
+ferry peer add <TICKET> --alias Laptop --auto-accept
+ferry peer list | ferry peer edit Laptop --auto-accept false | ferry peer remove Laptop
+ferry send film.mkv                     # share one file through a one-time TICKET
+ferry receive <TICKET> ~/Downloads      # download a shared file
+ferry config                            # all settings (also: get, set, unset, path)
+ferry config set hidden true            # hide this device from unpaired devices
+ferry identity export ~/ferry-key.txt   # back up the device key (keep it secret)
+ferry doctor                            # network and discovery diagnostics
+```
+
+### Settings
+
+| Setting | `ferry config set …` | Default |
+|---------|----------------------|---------|
+| Device name | `device-name "My laptop"` | host name |
+| Language | `language pl` | English |
+| Network mode | `network-mode internet` | `local` |
+| Download folder | `download-dir ~/Inbox` | system Downloads folder |
+| Hidden from unpaired devices | `hidden true` | `false` |
+| Copy texts from Auto-Accept devices without asking | `auto-accept-texts true` | `false` |
+
+Settings are stored in `~/.config/ferry/config.toml` (Linux), `%APPDATA%\ferry\config.toml`
+(Windows) or the app's private storage (Android). Environment variables:
+
+- `FERRY_CONFIG_DIR` – use another configuration folder (e.g. two devices on one computer),
+- `FERRY_LANG` – interface language for this run (`en`, `pl`),
+- `RUST_LOG` – log detail (`ferry=debug`).
+
+### Terminal UI (`ferry tui`)
+
+Panels: **[1] Trusted**, **[2] Nearby**, **[3] Transfers** (`Tab` or `1 2 3` to switch, `↑↓` to select).
 
 | Key | Action |
 |-----|--------|
-| `Enter` / `s` | send a file to the selected device (`Tab` completes the path; you can drag a file into the terminal) |
-| `T` | send text or a link to the selected device |
+| `Enter` / `s` | send a file or folder to the selected device (`Tab` completes paths; drag files into the terminal) |
+| `T` | send text or a link |
 | `p` | pair with a nearby device |
-| `i` / `+` | add a device by TICKET or Node ID (+ pairing request) |
-| `e` / `a` / `x` | rename / toggle Auto-Accept / remove device |
-| `o` / `f` | open the received file / its folder |
-| `t` / `c` | this device's TICKET with QR code / copy TICKET |
-| `g` / `N` | download folder / device name |
-| `L` | switch the interface language |
-| `M` | switch the network mode (applies after restarting the TUI) |
-| `y` / `n` | answer a file offer or pairing request |
+| `i` / `+` | add a device by TICKET or Node ID |
+| `e` / `a` / `x` | rename / toggle Auto-Accept / remove a device |
+| `x` (transfers panel) | cancel the selected transfer |
+| `o` / `f` / `C` | open the received file / its folder / clear finished transfers |
+| `t` / `c` | show / copy this device's TICKET |
+| `g` / `N` / `L` | download folder / device name / language |
+| `M` / `H` | network mode / hidden mode |
+| `y` / `n` | answer an offer or pairing request |
 | `?` | help |
 
-### Running as a service
+### Running in the background
 
-| System  | File | Installation |
-|---------|------|--------------|
-| Linux   | `dist/systemd/ferry-daemon.service` | `systemctl --user enable --now ferry-daemon` (instructions in the file) |
-| macOS   | `dist/launchd/com.ferry.daemon.plist` | `launchctl bootstrap gui/$(id -u) …` (instructions in the file) |
+| System | File | Setup |
+|--------|------|-------|
+| Linux | `dist/systemd/ferry-daemon.service` | `systemctl --user enable --now ferry-daemon` (see the file) |
 | Windows | `dist/windows/install-autostart.ps1` | Task Scheduler task at logon |
 
-A daemon without a terminal accepts files **only** from devices with Auto-Accept.
-The GUI has its own "Start at login" toggle and keeps
-running in the system tray.
-
-## Language
-
-English is the default. The language is chosen in this order:
-
-1. `--lang <code>` on the command line (`ferry --lang pl tui`),
-2. the `RQS_LANG` environment variable,
-3. `language` in `config.toml`, saved by `ferry language <code>`, the `L` key in the TUI or
-   **Settings → Language** in the GUI (the tray menu follows it too),
-4. English.
-
-The Android parts outside the web view (notification, foreground service) use the phone's system
-or per-app language (Settings → Apps → Ferry → Language). Log messages are always
-in English. Translations live in `locales/app.yml` (backend) and in `src-tauri/ui/index.html`
-(GUI); a unit test checks that every key has both languages.
+A daemon without a terminal accepts files **only** from devices with Auto-Accept. The desktop app
+has its own *Start at login* switch and keeps running in the system tray.
 
 ## Network modes
 
 | | `local` (default) | `internet` |
 |---|---|---|
-| Servers contacted | none | public iroh relays and DNS (`iroh.link`) of n0, free of charge |
-| Transfers between | devices on the same network (or connected by a VPN) | also devices in different networks (mobile data, another home, …) |
-| Encryption | QUIC + TLS 1.3, end-to-end | the same; relays forward only encrypted packets |
-| Speed | direct | direct whenever possible; through a relay only when no direct path exists (slower) |
-| Visible to the servers | nothing | IP addresses, Node IDs and connection times, never file contents |
+| Servers contacted | none | public iroh relays and DNS run by n0, free of charge |
+| Devices reachable | on the same network (or VPN) | also on other networks (mobile data, another home) |
+| Encryption | end-to-end | end-to-end; relays forward only encrypted packets |
+| Visible to servers | nothing | IP addresses, Node IDs and timing – never content |
 
-Set it with `ferry network local|internet`, the `M` key in the TUI or **Settings → Network** in the
-GUI; it applies after a restart. Both devices should use the internet mode to connect through a
-relay. TICKETs created in internet mode contain the relay address, so they work from anywhere.
+Change it with `ferry config set network-mode internet`, `M` in the TUI or *Settings → Network*;
+it applies after a restart. The desktop app always shows the active mode in the top bar.
 
-## Discovery and pairing
+## Local network and pairing
 
-* **No mDNS or Bluetooth.** Every node announces itself every 5 s with a small UDP packet (`RQSd`,
-  port **47823**) to the broadcast addresses of its networks and to the multicast group
-  `239.255.71.83` (TTL 1, also over loopback, so several instances on one machine can see each other).
-  A new device gets an immediate unicast reply, so it's enough for the announcement to get
-  through in one direction.
-* **Pairing** (`Hello::Pair`): the other side asks the user for consent; both screens show the same
-  6-digit code derived from both NodeIDs (BLAKE3). After acceptance both devices save each
-  other as trusted, along with their current LAN address.
-* The announcement only helps locate a device – identity is still authenticated by the NodeID in
-  TLS. A daemon without a terminal rejects pairing.
-* **When it doesn't work:** the firewall must let UDP 47823 (discovery) and 47824 (QUIC transfers)
-  through on the LAN. firewalld (default on Fedora and openSUSE) is detected and the app shows the
-  exact command: `sudo firewall-cmd --permanent --add-port=47823-47824/udp && sudo firewall-cmd --reload`.
-  A VPN with a kill switch can block the local network (e.g. NordVPN: `nordvpn set lan-discovery on`).
-* Android holds a `MulticastLock` in the foreground service; its device name is the phone's model.
-* **Android 17+** (targetSdk 37) blocks all local network traffic (broadcast, multicast, direct
-  LAN connections) without the **ACCESS_LOCAL_NETWORK** permission ("Nearby devices" group).
-  The app requests it at startup; if it was denied: Settings → Apps → Ferry →
-  Permissions → Nearby devices. Without it Ferry cannot reach other devices.
-* Android logs (Rust + Kotlin): `adb logcat -s RqsCore RqsService RqsShare`.
-* When the list stays empty, every interface (GUI, TUI, `ferry discover`, `ferry doctor`) shows the
-  reason: LAN sending blocked (VPN/firewall), no local network, or no announcements received.
-* Adding a device manually (TICKET/Node ID) in any interface also sends a pairing request – once
-  the other side accepts, both devices trust each other.
-* A TICKET pasted with line breaks or spaces (wrapped in a terminal) is accepted; a truncated
-  TICKET produces a clear error.
+- Every device announces itself every 5 s on UDP port **47823** (broadcast and multicast
+  `239.255.71.83`, no mDNS); transfers use UDP **47824**. Announcements are signed with the
+  device key.
+- **Firewall:** allow UDP 47823–47824 on the local network. With firewalld (Fedora, openSUSE)
+  Ferry shows the command:
+  `sudo firewall-cmd --permanent --add-port=47823-47824/udp && sudo firewall-cmd --reload`.
+  VPNs with a kill switch may block the local network (NordVPN: `nordvpn set lan-discovery on`).
+- **Android 17+** needs the *Nearby devices* permission for any local network traffic; Ferry asks
+  at startup (Settings → Apps → Ferry → Permissions if it was denied).
+- **Pairing** shows a six-digit code on both devices – pair only when they match. The code depends
+  on random values from both devices, so an impostor cannot predict it.
+- When the device list stays empty, every interface explains why (blocked sending, no network,
+  nothing received).
 
-## Protocol (ALPN `rqs/0.2`)
+## Android
 
-```
-dialer ─ bi stream ─▶ Hello::Push | Hello::Pull{token} | Hello::Pair{name, addr} | Hello::Text{text}
-                     | Hello::Batch{count, total_size, names}
-                     (Pair → PairResponse{accepted, name, addr}; Text → TextDecision;
-                      Batch → BatchDecision; otherwise one stream per file)
-sender ────────────▶ TransferOffer {name, size, chunk_size=1MiB, blake3}
-receiver ──────────▶ TransferDecision::Accept{start_chunk_index} | Reject{reason}
-sender ─ uni stream per chunk (≤8 in flight) ─▶ ChunkHeader{index, len, blake3} + payload
-receiver ──────────▶ TransferResult::Verified | Failed{reason}
-```
+Share any file or link from another app to **Ferry** and pick a recipient. A foreground service
+with a notification keeps Ferry reachable in the background. Received files are saved to
+`Download/Ferry`; photos and videos go to `Pictures/Ferry` so they appear in the gallery.
+Ferry's data is excluded from Android backups – a new phone pairs again.
 
-* Frames: `postcard` with a 4-byte length prefix, max 64 KiB; offers with `chunk_size` 0 or
-  > 16 MiB are rejected.
-* File names are sanitized (path traversal, absolute paths, Windows reserved names); a received
-  file never overwrites an existing one (`file (1).ext`).
-* The `.part` name includes a hash fragment (`name.<hash>.part`), so a resume never appends
-  data from a different file.
+## Security
 
-## Architecture
+Read [docs/SECURITY-MODEL.md](docs/SECURITY-MODEL.md) for what Ferry protects against and its known
+limits, and [SECURITY.md](SECURITY.md) to report a vulnerability privately. Ferry has not been
+audited.
 
-```
-src/protocol/   messages and codec (no I/O)
-src/node/       iroh endpoint, persistent identity, TICKET
-src/transfer/   sender, receiver, security, service (shared accept loop + events)
-src/discovery/  local network discovery (UDP broadcast + multicast, no mDNS)
-src/pairing.rs  one-button pairing, verification code
-src/config/     trusted devices, paths, saved language
-src/i18n.rs     interface language selection (locales/app.yml)
-src/cli/ src/tui/ src/daemon/   terminal interfaces
-src-tauri/      GUI (desktop + Android), src-tauri/ui/index.html – frontend
-src-tauri/gen/android/          Android project (Share Target, foreground service)
-```
+## Documentation
 
-## Building
+- [Architecture](docs/ARCHITECTURE.md) – how the crates and interfaces fit together
+- [Protocol](docs/PROTOCOL.md) – wire format, pairing and discovery
+- [Building](docs/BUILDING.md) – desktop, Android, checks and releases
+- [Translating](docs/TRANSLATING.md) – improving or adding a language
+- [Contributing](CONTRIBUTING.md) and the [changelog](CHANGELOG.md)
 
-```bash
-cargo build --release -p rqs_p2p            # CLI `ferry`
-cargo test                                   # unit + end-to-end tests (two iroh nodes)
-cargo bench --bench transfer_benchmarks      # hashing, framing and a 64 MiB transfer over QUIC
-cargo doc --no-deps -p rqs_p2p -p rqs-gui --open   # API documentation
+## License
 
-# GUI (Linux needs: libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev)
-cd src-tauri && npx @tauri-apps/cli@2 dev
-npx @tauri-apps/cli@2 build                  # .deb/.AppImage/.rpm | .msi/.exe | .dmg
-
-# Android (ANDROID_HOME, NDK_HOME, JDK 17+)
-cargo install tauri-cli --version "^2" --locked   # BuildTask.kt calls `cargo tauri`
-cargo tauri android build --apk --aab
-```
-
-On Android: share any file from Gallery/Files → **Ferry** → pick a recipient. The node stays
-alive in the background thanks to a foreground service with a persistent notification. Received
-files land in `Download/Ferry`; photos and videos are moved to `Pictures/Ferry`, so they show up
-in the gallery as a "Ferry" album. Sharing a link or text to Ferry opens the "Send text" dialog.
-
-## Releases
-
-Pushing a `v*` tag runs `.github/workflows/release.yml`: CLI (cargo-dist), GUI installers
-(Tauri) and APK/AAB are collected into a draft GitHub release with `SHA256SUMS.txt`.
-Android signing: the `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`
-and `ANDROID_KEY_PASSWORD` secrets.
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT) at your option. Unless you explicitly state otherwise, any contribution
+intentionally submitted for inclusion in Ferry by you, as defined in the Apache-2.0 license, shall
+be dual licensed as above, without any additional terms or conditions.

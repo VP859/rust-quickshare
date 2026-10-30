@@ -11,10 +11,10 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::config::{Config, PeerInfo};
-use crate::discovery::{Discovery, DiscoveryOptions, NearbyDevice};
+use crate::discovery::{Discovery, DiscoveryOptions, NearbyDevice, Visibility};
 use crate::i18n;
 use crate::node::NodeEngine;
-use crate::pairing::{PairOutcome, PairRequest, clean_device_name, pairing_code, request_pairing};
+use crate::pairing::{PairOutcome, PairRequest, clean_device_name, request_pairing};
 use crate::protocol::messages::{BatchOffer, MAX_TEXT_LEN, TextDecision, TransferOffer};
 use crate::transfer::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
@@ -204,7 +204,7 @@ impl TransferHandler for TuiHandler {
         let peer_label = peer_info
             .map(|p| p.alias.clone())
             .unwrap_or_else(|| t!("tui.unknown_device", id = peer.fmt_short()).into_owned());
-        if !peer_info.is_some_and(|p| p.auto_accept) {
+        if !config.auto_accepts_texts_from(&peer.to_string()) {
             let kind = PendingKind::Text {
                 peer_label: peer_label.clone(),
                 preview: service::text_preview(&text, 300),
@@ -379,7 +379,7 @@ impl App {
         let discovery = Discovery::start(
             engine.clone(),
             &config.device_name(),
-            DiscoveryOptions::default(),
+            DiscoveryOptions::from_config(&config),
         )
         .ok();
 
@@ -474,9 +474,8 @@ impl App {
             }
             UiMessage::Status(status) => self.status_msg = status,
             UiMessage::PeersChanged(status) => {
-                self.config = Config::load().unwrap_or_default();
+                self.reload_config();
                 self.status_msg = status;
-                self.clamp_selection();
             }
             UiMessage::TextReceived { peer_label, text } => {
                 let preview = service::text_preview(&text, 80);
@@ -687,6 +686,22 @@ impl App {
         self.after_config_change(result);
     }
 
+    /// Hides this device from unpaired devices on the local network, or shows
+    /// it again; applies immediately.
+    pub fn toggle_hidden(&mut self) {
+        let result = Config::load().and_then(|mut c| {
+            c.hidden = !c.hidden;
+            c.save()?;
+            Ok(if c.hidden {
+                t!("tui.hidden_on")
+            } else {
+                t!("tui.hidden_off")
+            }
+            .into_owned())
+        });
+        self.after_config_change(result);
+    }
+
     /// Toggles Auto-Accept of the selected trusted device.
     pub fn toggle_auto_accept(&mut self) {
         if self.focus != Focus::Trusted {
@@ -736,13 +751,22 @@ impl App {
         self.after_config_change(result);
     }
 
+    /// Reloads the configuration and applies the paired devices and visibility
+    /// to discovery.
+    fn reload_config(&mut self) {
+        self.config = Config::load().unwrap_or_default();
+        if let Some(discovery) = &self.discovery {
+            discovery.set_visibility(Visibility::from_config(&self.config));
+        }
+        self.clamp_selection();
+    }
+
     /// Reloads the configuration after a change and shows the result in the status line.
     fn after_config_change(&mut self, result: Result<String>) {
         match result {
             Ok(msg) => {
-                self.config = Config::load().unwrap_or_default();
+                self.reload_config();
                 self.status_msg = msg;
-                self.clamp_selection();
             }
             Err(e) => self.status_msg = t!("tui.error", error = format!("{e:#}")).into_owned(),
         }
@@ -761,16 +785,23 @@ impl App {
 
     /// Removes finished, failed and rejected transfers from the list.
     pub fn clear_finished(&mut self) {
-        self.transfers.retain(|t| {
-            matches!(
-                t.ev.status,
-                TransferStatus::Preparing
-                    | TransferStatus::AwaitingDecision
-                    | TransferStatus::Running
-            )
-        });
+        self.transfers.retain(|t| !t.ev.status.is_final());
         self.clamp_selection();
         self.status_msg = t!("tui.cleared").into_owned();
+    }
+
+    /// Cancels the selected transfer if it is still running.
+    pub fn cancel_selected_transfer(&mut self) {
+        let Some(row) = self.selected_transfer() else {
+            self.status_msg = t!("tui.no_transfers").into_owned();
+            return;
+        };
+        self.status_msg = if !row.ev.status.is_final() && service::cancel_transfer(&row.ev.id) {
+            t!("tui.cancelling", name = &row.ev.file_name)
+        } else {
+            t!("tui.cannot_cancel")
+        }
+        .into_owned();
     }
 
     /// Opens the selected received file, or its folder when `reveal` is set.
@@ -819,13 +850,16 @@ impl App {
         label: String,
         keep_alias: Option<String>,
     ) {
-        let code = pairing_code(&self.engine.node_id(), &id);
-        self.status_msg = t!("tui.pairing", name = &label, code = code).into_owned();
+        self.status_msg = t!("tui.pairing_connecting", name = &label).into_owned();
         let engine = self.engine.clone();
         let my_name = self.config.device_name();
         let tx = self.tx.clone();
         tokio::spawn(async move {
-            let status = match request_pairing(&engine, addr.clone(), &my_name).await {
+            let show_code = |code: &str| {
+                let status = t!("tui.pairing", name = &label, code = code).into_owned();
+                let _ = tx.send(UiMessage::Status(status));
+            };
+            let status = match request_pairing(&engine, addr.clone(), &my_name, show_code).await {
                 Ok(PairOutcome::Accepted { name, addr: remote }) => {
                     let alias = keep_alias.unwrap_or(name);
                     let saved = Config::load().and_then(|mut c| {
@@ -962,7 +996,7 @@ impl App {
         if paths.is_empty() {
             return Err(t!("tui.path_required").into_owned());
         }
-        if let Some(bad) = paths.iter().find(|p| !p.is_file()) {
+        if let Some(bad) = paths.iter().find(|p| !p.is_file() && !p.is_dir()) {
             return Err(t!("tui.not_a_file", path = bad.display()).into_owned());
         }
         let addr = self.target_addr(node_id)?;

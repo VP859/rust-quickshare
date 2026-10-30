@@ -51,7 +51,7 @@ async fn resolve_receiver(engine: &NodeEngine, target: &str) -> Result<iroh::End
     let nearby = match Discovery::start(
         engine.clone(),
         &config.device_name(),
-        DiscoveryOptions::default(),
+        DiscoveryOptions::from_config(&config),
     ) {
         Ok(d) => d.wait_for(&query, NEARBY_LOOKUP).await,
         Err(_) => None,

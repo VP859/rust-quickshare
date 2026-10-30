@@ -3,18 +3,18 @@
 //! Argument names are camelCase on the JavaScript side (`nodeId` for `node_id`).
 //! Errors are returned as localized strings. Long operations (sending,
 //! downloading, pairing after adding a device) run in the background and report
-//! through events: `transfer`, `transfer-error` and `pair-result`.
+//! through events: `transfer`, `transfer-error`, `pairing-code` and `pair-result`.
 
+use ferry::config::Config;
+use ferry::discovery::NearbyDevice;
+use ferry::i18n::{self, Language};
+use ferry::node::NodeTicket;
+use ferry::pairing::{PairOutcome, clean_device_name, request_pairing};
+use ferry::protocol::messages::TextDecision;
+use ferry::transfer::sender::prepare_file;
+use ferry::transfer::service;
 use qrcode::QrCode;
 use qrcode::render::svg;
-use rqs_p2p::config::Config;
-use rqs_p2p::discovery::NearbyDevice;
-use rqs_p2p::i18n::{self, Language};
-use rqs_p2p::node::NodeTicket;
-use rqs_p2p::pairing::{PairOutcome, clean_device_name, pairing_code, request_pairing};
-use rqs_p2p::protocol::messages::TextDecision;
-use rqs_p2p::transfer::sender::prepare_file;
-use rqs_p2p::transfer::service;
 use rust_i18n::t;
 use serde::Serialize;
 use std::path::PathBuf;
@@ -113,6 +113,30 @@ struct TransferError {
     message: String,
 }
 
+/// Payload of the `pairing-code` event, emitted by an outgoing pairing as soon
+/// as the verification code is known.
+#[derive(Clone, Serialize)]
+struct PairingCode {
+    /// Node ID of the device being paired.
+    node_id: String,
+    /// Its name or alias, for display.
+    name: String,
+    /// Six-digit code to compare with the other screen.
+    code: String,
+}
+
+/// Emits the `pairing-code` event for an outgoing pairing with `node_id`.
+fn emit_pairing_code(app: &AppHandle, node_id: &str, name: &str, code: &str) {
+    let _ = app.emit(
+        "pairing-code",
+        PairingCode {
+            node_id: node_id.to_string(),
+            name: name.to_string(),
+            code: code.to_string(),
+        },
+    );
+}
+
 /// Payload of the `pair-result` event.
 #[derive(Clone, Serialize)]
 struct PairResult {
@@ -137,8 +161,12 @@ fn qr_svg(text: &str) -> CmdResult<String> {
         .build())
 }
 
-/// Reports a failed background transfer with a `transfer-error` event.
+/// Reports a failed background transfer with a `transfer-error` event; a
+/// cancellation is already shown on the transfer itself.
 fn emit_error(app: &AppHandle, e: anyhow::Error) {
+    if e.is::<service::Cancelled>() {
+        return;
+    }
     let _ = app.emit(
         "transfer-error",
         TransferError {
@@ -219,6 +247,7 @@ pub async fn add_peer(
         return Err(t!("tui.own_ticket").into_owned());
     }
     config.save().map_err(err)?;
+    state.sync_visibility(&config);
     let saved_alias = config
         .find_peer(&node_id)
         .map(|p| p.alias.clone())
@@ -238,7 +267,8 @@ fn start_pairing_after_add(app: AppHandle, node_id: String, alias: String, auto_
             let addr = resolve_with_nearby(&state, &node_id).await?;
             let engine = state.engine().await?;
             let my_name = state.config.lock().await.device_name();
-            let result = request_pairing(engine, addr.clone(), &my_name)
+            let show_code = |code: &str| emit_pairing_code(&app, &node_id, &alias, code);
+            let result = request_pairing(engine, addr.clone(), &my_name, show_code)
                 .await
                 .map_err(|e| format!("{e:#}"))?;
             Ok::<_, String>((addr, result))
@@ -299,9 +329,9 @@ pub fn open_received(path: String, reveal: bool, state: State<'_, AppState>) -> 
         return Err(t!("gui.open_only_received").into_owned());
     }
     let result = if reveal {
-        rqs_p2p::system::reveal_path(&path)
+        ferry::system::reveal_path(&path)
     } else {
-        rqs_p2p::system::open_path(&path)
+        ferry::system::open_path(&path)
     };
     result.map_err(err)
 }
@@ -353,7 +383,9 @@ pub async fn update_peer(
 pub async fn remove_peer(node_id: String, state: State<'_, AppState>) -> CmdResult<()> {
     let mut config = state.config.lock().await;
     config.peers.remove(&node_id);
-    config.save().map_err(err)
+    config.save().map_err(err)?;
+    state.sync_visibility(&config);
+    Ok(())
 }
 
 /// Whether a trusted device responds within a few seconds.
@@ -545,10 +577,10 @@ pub async fn set_download_dir(path: String, state: State<'_, AppState>) -> CmdRe
 }
 
 /// Address of a device given by Node ID, alias, nearby device name or TICKET;
-/// see [`rqs_p2p::discovery::resolve_target`].
+/// see [`ferry::discovery::resolve_target`].
 async fn resolve_with_nearby(state: &AppState, target: &str) -> CmdResult<iroh::EndpointAddr> {
     let config = state.config.lock().await;
-    rqs_p2p::discovery::resolve_target(&config, state.discovery.get(), target)
+    ferry::discovery::resolve_target(&config, state.discovery.get(), target)
         .map_err(|e| format!("{e:#}"))
 }
 
@@ -577,29 +609,27 @@ pub fn refresh_nearby(state: State<'_, AppState>) -> CmdResult<()> {
     Ok(())
 }
 
-/// Verification code shown before a pairing request is sent.
-///
-/// # Errors
-///
-/// When `node_id` is not a valid Node ID or the node cannot start.
-#[tauri::command]
-pub async fn pair_code(node_id: String, state: State<'_, AppState>) -> CmdResult<String> {
-    let peer = iroh::EndpointId::from_str(&node_id).map_err(err)?;
-    Ok(pairing_code(&state.engine().await?.node_id(), &peer))
-}
-
 /// One-button pairing; waits for the other device and returns the saved alias.
+///
+/// The verification code is reported with the `pairing-code` event once both
+/// devices exchanged their nonces.
 ///
 /// # Errors
 ///
 /// When the device cannot be reached, declines, does not answer in time, or the
 /// configuration cannot be saved.
 #[tauri::command]
-pub async fn pair_device(node_id: String, state: State<'_, AppState>) -> CmdResult<String> {
+pub async fn pair_device(
+    node_id: String,
+    name: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<String> {
     let addr = resolve_with_nearby(&state, &node_id).await?;
     let engine = state.engine().await?;
     let my_name = state.config.lock().await.device_name();
-    match request_pairing(engine, addr.clone(), &my_name)
+    let show_code = |code: &str| emit_pairing_code(&app, &node_id, &name, code);
+    match request_pairing(engine, addr.clone(), &my_name, show_code)
         .await
         .map_err(|e| format!("{e:#}"))?
     {
@@ -609,6 +639,7 @@ pub async fn pair_device(node_id: String, state: State<'_, AppState>) -> CmdResu
                 .add_paired(addr.id, &name, remote.or(Some(addr.clone())), false)
                 .map_err(err)?;
             config.save().map_err(err)?;
+            state.sync_visibility(&config);
             Ok(config
                 .find_peer(&addr.id.to_string())
                 .map(|p| p.alias.clone())
@@ -680,10 +711,54 @@ pub async fn get_network_mode(state: State<'_, AppState>) -> CmdResult<NetworkMo
 /// When the mode is unknown or the configuration cannot be saved.
 #[tauri::command]
 pub async fn set_network_mode(mode: String, state: State<'_, AppState>) -> CmdResult<()> {
-    let mode: rqs_p2p::node::NetworkMode = mode.parse().map_err(|e| format!("{e:#}"))?;
+    let mode: ferry::node::NetworkMode = mode.parse().map_err(|e| format!("{e:#}"))?;
     let mut config = state.config.lock().await;
     config.network_mode = mode;
     config.save().map_err(err)
+}
+
+/// Cancels a running transfer by its ID; `false` when it has already ended.
+#[tauri::command]
+pub fn cancel_transfer(id: String) -> bool {
+    service::cancel_transfer(&id)
+}
+
+/// Privacy settings shown in the settings dialog.
+#[derive(Serialize, serde::Deserialize)]
+pub struct PrivacySettings {
+    /// Hidden on the local network from everyone except paired devices.
+    hidden: bool,
+    /// Texts from Auto-Accept devices are copied without asking.
+    auto_accept_texts: bool,
+}
+
+/// Current privacy settings.
+///
+/// # Errors
+///
+/// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
+#[tauri::command]
+pub async fn get_privacy(state: State<'_, AppState>) -> CmdResult<PrivacySettings> {
+    let config = state.config.lock().await;
+    Ok(PrivacySettings {
+        hidden: config.hidden,
+        auto_accept_texts: config.auto_accept_texts,
+    })
+}
+
+/// Saves the privacy settings; visibility applies immediately.
+///
+/// # Errors
+///
+/// When the configuration cannot be saved.
+#[tauri::command]
+pub async fn set_privacy(settings: PrivacySettings, state: State<'_, AppState>) -> CmdResult<()> {
+    let mut config = state.config.lock().await;
+    config.hidden = settings.hidden;
+    config.auto_accept_texts = settings.auto_accept_texts;
+    config.save().map_err(err)?;
+    state.sync_visibility(&config);
+    Ok(())
 }
 
 /// Restarts the application, e.g. to apply a new network mode (desktop only;
@@ -763,7 +838,7 @@ pub fn app_info() -> AppInfo {
 /// When no browser can be started (e.g. on Android).
 #[tauri::command]
 pub fn open_repository() -> CmdResult<()> {
-    rqs_p2p::system::open_url(env!("CARGO_PKG_REPOSITORY")).map_err(err)
+    ferry::system::open_url(env!("CARGO_PKG_REPOSITORY")).map_err(err)
 }
 
 /// Paths of files shared from the Android "Share" menu (empty on desktop).
@@ -786,7 +861,7 @@ pub fn open_link(url: String) -> CmdResult<()> {
     if !is_link {
         return Err(t!("gui.not_a_link").into_owned());
     }
-    rqs_p2p::system::open_url(url).map_err(err)
+    ferry::system::open_url(url).map_err(err)
 }
 
 /// A text or link shared from the Android "Share" menu (none on desktop).

@@ -4,6 +4,9 @@ _version: 2
 protocol.bad_chunk_size:
   en: "Invalid chunk size: %{size}"
   pl: "Nieprawidłowy rozmiar chunka: %{size}"
+protocol.too_deep:
+  en: "The offered folder structure is deeper than %{max} levels"
+  pl: "Oferowana struktura folderów ma więcej niż %{max} poziomów"
 protocol.bad_file_name_len:
   en: "Invalid file name length"
   pl: "Nieprawidłowa długość nazwy pliku"
@@ -71,6 +74,27 @@ identity.write:
 identity.bad_size:
   en: "The key file has an invalid size (32 bytes required)"
   pl: "Plik klucza ma nieprawidłowy rozmiar (wymagane 32 bajty)"
+identity.bad_export:
+  en: "Not a Ferry identity backup (expected a line starting with ferry-identity-v1:)"
+  pl: "To nie jest kopia tożsamości Ferry (oczekiwano wiersza zaczynającego się od ferry-identity-v1:)"
+identity.show:
+  en: "Node ID:  %{id}\nKey file: %{path}"
+  pl: "Node ID:     %{id}\nPlik klucza: %{path}"
+identity.exported:
+  en: "Identity saved to %{path}. Keep this file secret: anyone who has it can pose as this device to its paired devices."
+  pl: "Tożsamość zapisana do %{path}. Chroń ten plik: każdy, kto go ma, może podszyć się pod to urządzenie wobec sparowanych urządzeń."
+identity.import_same:
+  en: "This identity is already in use (Node ID %{id})."
+  pl: "Ta tożsamość jest już używana (Node ID %{id})."
+identity.import_needs_force:
+  en: "Importing replaces this device's identity (Node ID %{old} → %{new}); devices paired with the current identity will no longer recognize it. Run again with --force to continue."
+  pl: "Import zastąpi tożsamość tego urządzenia (Node ID %{old} → %{new}); urządzenia sparowane z obecną tożsamością przestaną je rozpoznawać. Uruchom ponownie z --force, aby kontynuować."
+identity.imported:
+  en: "Identity imported: Node ID %{id}."
+  pl: "Zaimportowano tożsamość: Node ID %{id}."
+identity.backup:
+  en: "The previous key was kept in %{path}."
+  pl: "Poprzedni klucz zachowano w %{path}."
 ticket.broken:
   en: "The TICKET is incomplete or corrupted (%{len} characters) – copy it in full (e.g. with the Copy button) or use the Node ID"
   pl: "TICKET jest niepełny lub uszkodzony (%{len} znaków) – skopiuj go w całości (np. przyciskiem „Kopiuj”) albo użyj Node ID"
@@ -118,6 +142,12 @@ transfer.chunk_len:
 transfer.task_aborted:
   en: "A chunk transfer task was aborted"
   pl: "Zadanie przesyłania chunka zostało przerwane"
+sender.too_deep:
+  en: "The folder %{path} is nested deeper than %{max} levels"
+  pl: "Folder %{path} jest zagnieżdżony głębiej niż %{max} poziomów"
+sender.too_many_files:
+  en: "The chosen folders hold more than %{max} files – send fewer at once"
+  pl: "Wybrane foldery zawierają ponad %{max} plików – wyślij mniej naraz"
 sender.read:
   en: "Cannot read the file %{path}"
   pl: "Nie można odczytać pliku %{path}"
@@ -169,6 +199,9 @@ service.send_failed:
 service.pairing_ticket:
   en: "This TICKET does not contain a shared file – it is a device pairing TICKET"
   pl: "TICKET nie zawiera udostępnionego pliku – to TICKET parowania urządzenia"
+service.busy:
+  en: "Too many requests are waiting for an answer – try again later"
+  pl: "Zbyt wiele próśb czeka na odpowiedź – spróbuj ponownie później"
 service.share_gone:
   en: "The sender no longer shares this file"
   pl: "Nadawca nie udostępnia już tego pliku"
@@ -180,6 +213,9 @@ pairing.no_answer:
 pairing.interrupted:
   en: "The other device interrupted the pairing"
   pl: "Drugie urządzenie przerwało parowanie"
+pairing.bad_commitment:
+  en: "Pairing request rejected: the device broke the verification protocol"
+  pl: "Odrzucono prośbę o parowanie: urządzenie naruszyło protokół weryfikacji"
 system.not_found:
   en: "Does not exist: %{path}"
   pl: "Nie istnieje: %{path}"
@@ -191,6 +227,9 @@ system.unsupported:
 discovery.socket:
   en: "Could not open the UDP discovery socket"
   pl: "Nie udało się otworzyć gniazda wykrywania UDP"
+discovery.hidden:
+  en: "This device is hidden: only paired devices see it on the local network"
+  pl: "To urządzenie jest ukryte: w sieci lokalnej widzą je tylko sparowane urządzenia"
 discovery.port_busy:
   en: "UDP port %{port} is used by another program – this device does not receive announcements."
   pl: "Port UDP %{port} jest zajęty przez inny program – to urządzenie nie odbiera ogłoszeń."
@@ -270,6 +309,9 @@ cli.delivered:
 cli.rejected:
   en: "[REJECTED] %{name}: %{reason}"
   pl: "[ODRZUCONO] %{name}: %{reason}"
+cli.cancelled:
+  en: "[CANCELLED] %{name}"
+  pl: "[ANULOWANO] %{name}"
 cli.failed:
   en: "[ERROR] %{name}: %{error}"
   pl: "[BŁĄD] %{name}: %{error}"
@@ -369,6 +411,15 @@ pair.one_sided_rejected:
 pair.one_sided_failed:
   en: "[INFO] Pairing failed (%{error}) – trusted only on this side."
   pl: "[INFO] Nie udało się sparować (%{error}) – dodano tylko po tej stronie."
+settings.bad_bool:
+  en: "'%{value}' is not a yes/no value (use true or false)"
+  pl: "'%{value}' nie jest wartością tak/nie (użyj true lub false)"
+settings.dir_missing:
+  en: "The folder does not exist: %{path}"
+  pl: "Folder nie istnieje: %{path}"
+settings.restart_running:
+  en: "Running Ferry programs (GUI, TUI, daemon) use the change after a restart."
+  pl: "Uruchomione programy Ferry (GUI, TUI, demon) uwzględnią zmianę po ponownym uruchomieniu."
 settings.name_empty:
   en: "The name cannot be empty"
   pl: "Nazwa nie może być pusta"
@@ -380,12 +431,18 @@ settings.language:
   pl: "Język: %{language} (dostępne: %{available})"
 
 # ---------------------------------------------------------------- daemon
+transfer.cancelled:
+  en: "Cancelled"
+  pl: "Anulowano"
 transfer.user_rejected:
   en: "The user declined the transfer"
   pl: "Użytkownik odrzucił transfer"
 daemon.unknown_device:
   en: "Unknown device"
   pl: "Nieznane urządzenie"
+daemon.no_auto_text:
+  en: "Texts from '%{alias}' need confirmation, but the daemon runs without a terminal (set auto_accept_texts to copy texts from Auto-Accept devices automatically)"
+  pl: "Teksty od '%{alias}' wymagają potwierdzenia, a demon działa bez terminala (ustaw auto_accept_texts, aby automatycznie kopiować teksty od urządzeń z Auto-Accept)"
 daemon.no_auto_accept:
   en: "Device %{alias} does not have Auto-Accept enabled"
   pl: "Urządzenie %{alias} nie ma włączonego Auto-Accept"
@@ -502,6 +559,9 @@ tui.opened:
 tui.open_failed:
   en: "Could not open: %{error}"
   pl: "Nie udało się otworzyć: %{error}"
+tui.pairing_connecting:
+  en: "Connecting to '%{name}' to pair..."
+  pl: "Łączenie z '%{name}' w celu sparowania..."
 tui.pairing:
   en: "Pairing with '%{name}' – code %{code}. Confirm on the other device..."
   pl: "Parowanie z '%{name}' – kod %{code}. Potwierdź na drugim urządzeniu..."
@@ -530,8 +590,8 @@ tui.path_required:
   en: "Enter a file path"
   pl: "Podaj ścieżkę pliku"
 tui.not_a_file:
-  en: "Not a file: %{path}"
-  pl: "To nie jest plik: %{path}"
+  en: "Not a file or folder: %{path}"
+  pl: "To nie jest plik ani folder: %{path}"
 tui.sending:
   en: "Sending %{count} file(s) to '%{name}'..."
   pl: "Wysyłanie %{count} plik(ów) do '%{name}'..."
@@ -616,8 +676,8 @@ tui.footer_nearby:
   en: "p pair · Enter send file · T send text · r search · i add by TICKET · Tab panel"
   pl: "p sparuj · Enter wyślij plik · T wyślij tekst · r szukaj · i dodaj przez TICKET · Tab panel"
 tui.footer_transfers:
-  en: "Enter/o open file · f open folder · C clear finished · Tab panel"
-  pl: "Enter/o otwórz plik · f otwórz folder · C wyczyść zakończone · Tab panel"
+  en: "Enter/o open file · f open folder · x cancel · C clear finished · Tab panel"
+  pl: "Enter/o otwórz plik · f otwórz folder · x anuluj · C wyczyść zakończone · Tab panel"
 tui.queued:
   en: "queued: %{count}"
   pl: "w kolejce: %{count}"
@@ -687,6 +747,18 @@ tui.help_manage:
 tui.help_open:
   en: "open the received file / its folder"
   pl: "otwórz odebrany plik / jego folder"
+tui.help_cancel:
+  en: "cancel the selected transfer (in the transfers panel)"
+  pl: "anuluj wybrany transfer (w panelu transferów)"
+tui.cancelling:
+  en: "Cancelling '%{name}'..."
+  pl: "Anulowanie '%{name}'..."
+tui.cannot_cancel:
+  en: "This transfer has already ended"
+  pl: "Ten transfer już się zakończył"
+tui.st_cancelled:
+  en: "Cancelled – a partly received file is resumed next time"
+  pl: "Anulowano – częściowo odebrany plik zostanie wznowiony następnym razem"
 tui.help_clear:
   en: "remove finished transfers from the list"
   pl: "usuń zakończone transfery z listy"
@@ -896,6 +968,18 @@ tui.header_network:
 tui.network_pending:
   en: " (after restart: %{mode})"
   pl: " (po restarcie: %{mode})"
+tui.header_hidden:
+  en: " · hidden"
+  pl: " · ukryte"
+tui.help_hidden:
+  en: "hide this device from unpaired devices on the local network / show it"
+  pl: "ukryj to urządzenie przed niesparowanymi w sieci lokalnej / pokaż je"
+tui.hidden_on:
+  en: "Hidden: only paired devices see this device on the local network"
+  pl: "Ukryte: w sieci lokalnej widzą je tylko sparowane urządzenia"
+tui.hidden_off:
+  en: "Visible to all devices on the local network"
+  pl: "Widoczne dla wszystkich urządzeń w sieci lokalnej"
 tui.help_network:
   en: "network mode: local (no servers) / internet (public iroh relays)"
   pl: "tryb sieci: lokalny (bez serwerów) / internet (publiczne przekaźniki iroh)"

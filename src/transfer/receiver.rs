@@ -17,7 +17,7 @@ use crate::protocol::messages::{
 };
 use crate::transfer::hash::hash_prefix;
 use crate::transfer::security::{
-    resolve_secure_target_path, sanitize_filename, unique_destination,
+    resolve_secure_folder, resolve_secure_target_path, sanitize_filename, unique_destination,
 };
 
 /// Reads the [`TransferOffer`] from `channel` and validates it.
@@ -29,6 +29,9 @@ pub async fn read_offer(channel: &mut Channel) -> Result<TransferOffer> {
     let offer: TransferOffer = read_msg(&mut channel.recv).await?;
     offer.validate()?;
     sanitize_filename(&offer.file_name)?;
+    for component in &offer.folder {
+        sanitize_filename(component)?;
+    }
     Ok(offer)
 }
 
@@ -46,18 +49,29 @@ pub async fn reject(mut channel: Channel, reason: &str) -> Result<()> {
     Ok(())
 }
 
-/// Path of the partial download for `offer` inside `dest_dir`.
+/// Folder inside `dest_dir` where `offer` is saved ([`TransferOffer::folder`]),
+/// created when missing.
+///
+/// # Errors
+///
+/// Fails when a folder name is unsafe or the folder cannot be created.
+pub fn target_dir_for(dest_dir: &Path, offer: &TransferOffer) -> Result<PathBuf> {
+    Ok(resolve_secure_folder(dest_dir, &offer.folder)?)
+}
+
+/// Path of the partial download for `offer` inside its folder in `dest_dir`.
 ///
 /// The name contains a fragment of the file hash, so resuming never appends
 /// data of a different file that happens to have the same name.
 ///
 /// # Errors
 ///
-/// Fails when the offered file name is unsafe or `dest_dir` cannot be prepared.
+/// Fails when the offered file or folder name is unsafe or the folder cannot
+/// be prepared.
 pub fn part_path_for(dest_dir: &Path, offer: &TransferOffer) -> Result<PathBuf> {
     let safe = sanitize_filename(&offer.file_name)?;
     Ok(resolve_secure_target_path(
-        dest_dir,
+        &target_dir_for(dest_dir, offer)?,
         &format!("{safe}.{}.part", short_hex(&offer.file_hash[..6])),
     )?)
 }
@@ -84,7 +98,8 @@ pub async fn receive_on_channel(
     tokio::fs::create_dir_all(dest_dir)
         .await
         .with_context(|| t!("receiver.create_dir", path = dest_dir.display()))?;
-    let final_target = resolve_secure_target_path(dest_dir, &safe_name)?;
+    let target_dir = target_dir_for(dest_dir, offer)?;
+    let final_target = resolve_secure_target_path(&target_dir, &safe_name)?;
     let part_path = part_path_for(dest_dir, offer)?;
 
     let total_chunks = offer.total_chunks();

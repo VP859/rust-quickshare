@@ -201,12 +201,16 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         }
         KeyCode::Char('e') => app.open_rename(),
         KeyCode::Char('a') => app.toggle_auto_accept(),
+        KeyCode::Delete | KeyCode::Char('x') if app.focus == Focus::Transfers => {
+            app.cancel_selected_transfer();
+        }
         KeyCode::Delete | KeyCode::Char('x') => app.ask_remove(),
         KeyCode::Char('i') | KeyCode::Char('+') => app.open_add_device(),
         KeyCode::Char('g') => app.open_download_dir(),
         KeyCode::Char('N') => app.open_device_name(),
         KeyCode::Char('L') => app.cycle_language(),
         KeyCode::Char('M') => app.toggle_network_mode(),
+        KeyCode::Char('H') => app.toggle_hidden(),
         KeyCode::Char('r') => app.refresh_nearby(),
         KeyCode::Char('t') => app.popup = Some(Popup::Ticket),
         KeyCode::Char('c') => app.copy_ticket_to_clipboard(),

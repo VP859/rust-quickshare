@@ -23,9 +23,9 @@ use tracing::{debug, info};
 
 use super::NodeTicket;
 
-/// ALPN of the RQS protocol; must change whenever the encoding of an existing
+/// ALPN of the Ferry protocol; must change whenever the encoding of an existing
 /// message changes (new trailing enum variants keep it).
-pub const ALPN_RQS: &[u8] = b"rqs/0.2";
+pub const ALPN: &[u8] = b"ferry/1";
 
 /// Preferred UDP port of QUIC connections, next to the discovery port, so one
 /// firewall rule (`47823-47824/udp`) covers discovery and direct LAN transfers.
@@ -128,7 +128,7 @@ impl NodeEngine {
                 }
                 NetworkMode::Internet => Endpoint::builder(presets::N0),
             };
-            builder.secret_key(key).alpns(vec![ALPN_RQS.to_vec()])
+            builder.secret_key(key).alpns(vec![ALPN.to_vec()])
         };
         let preferred = match builder(secret_key.clone())
             .bind_addr(SocketAddr::from((Ipv4Addr::UNSPECIFIED, QUIC_PORT)))
@@ -225,7 +225,7 @@ impl NodeEngine {
         Ok(Some(conn))
     }
 
-    /// Connects to `target` using the RQS ALPN.
+    /// Connects to `target` using the Ferry [`ALPN`].
     ///
     /// # Errors
     ///
@@ -236,7 +236,7 @@ impl NodeEngine {
         debug!("Connecting to {}", target.id);
         let conn = self
             .endpoint
-            .connect(target, ALPN_RQS)
+            .connect(target, ALPN)
             .await
             .with_context(|| t!("engine.connect"))?;
         info!("Connected to {}", conn.remote_id());

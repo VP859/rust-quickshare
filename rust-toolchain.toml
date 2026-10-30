@@ -1,0 +1,5 @@
+# Contributors and CI use the current stable Rust; the minimum supported
+# version (MSRV) is `rust-version` in Cargo.toml and is checked by CI.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

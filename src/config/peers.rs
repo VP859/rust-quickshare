@@ -43,6 +43,14 @@ pub struct Config {
     /// Applies when the node starts.
     #[serde(default, skip_serializing_if = "NetworkMode::is_local")]
     pub network_mode: NetworkMode,
+    /// Hide this device on the local network from everyone except paired devices.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hidden: bool,
+    /// Copy texts from Auto-Accept devices to the clipboard without asking.
+    /// Off by default: a text silently replacing the clipboard is easy to miss
+    /// and could be pasted unknowingly (e.g. a changed account number).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub auto_accept_texts: bool,
 }
 
 impl Config {
@@ -207,6 +215,20 @@ impl Config {
             Some(key) => self.peers.remove(&key).is_some(),
             None => false,
         }
+    }
+
+    /// Whether a text from `node_id` is copied to the clipboard without asking:
+    /// only when [`Config::auto_accept_texts`] is on and the device is trusted
+    /// with Auto-Accept.
+    pub fn auto_accepts_texts_from(&self, node_id: &str) -> bool {
+        self.auto_accept_texts && self.find_peer(node_id).is_some_and(|p| p.auto_accept)
+    }
+
+    /// Node IDs of all trusted devices; malformed entries are skipped.
+    pub fn trusted_ids(&self) -> impl Iterator<Item = EndpointId> + '_ {
+        self.peers
+            .keys()
+            .filter_map(|key| EndpointId::from_str(key).ok())
     }
 
     /// Looks up a device by its exact Node ID.

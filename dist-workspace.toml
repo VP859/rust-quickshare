@@ -1,5 +1,5 @@
 # cargo-dist configuration for the `ferry` CLI (archives + shell/PowerShell installers).
-# The GUI (Tauri: .deb/.AppImage/.msi/.exe/.dmg) and Android (.apk/.aab) are built by
+# The GUI (Tauri: .deb/.AppImage/.rpm/.msi/.exe) and Android (.apk/.aab) are built by
 # separate jobs in .github/workflows/release.yml, so that workflow is edited by hand.
 [workspace]
 members = ["cargo:."]
@@ -8,15 +8,14 @@ members = ["cargo:."]
 cargo-dist-version = "0.28.0"
 ci = "github"
 installers = ["shell", "powershell"]
+# Linux and Windows only: macOS and iOS are not supported.
 targets = [
   "x86_64-unknown-linux-gnu",
   "aarch64-unknown-linux-gnu",
   "x86_64-pc-windows-msvc",
-  "aarch64-apple-darwin",
-  "x86_64-apple-darwin",
 ]
 install-path = "CARGO_HOME"
 # release.yml has extra Tauri and Android jobs – do not regenerate it with `dist init`.
 allow-dirty = ["ci"]
 # System service files bundled with the CLI archives.
-include = ["dist/systemd/ferry-daemon.service", "dist/launchd/com.ferry.daemon.plist", "dist/windows/install-autostart.ps1"]
+include = ["dist/systemd/ferry-daemon.service", "dist/windows/install-autostart.ps1"]

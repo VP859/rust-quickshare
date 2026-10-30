@@ -7,16 +7,16 @@
 //! `respond_to_offer`), `request-cancelled` (a question expired), `text-received`,
 //! `peers-changed` and `transfer`.
 
-use iroh::EndpointId;
-use rqs_p2p::config::Config;
-use rqs_p2p::discovery::{Discovery, DiscoveryOptions};
-use rqs_p2p::node::NodeEngine;
-use rqs_p2p::pairing::PairRequest;
-use rqs_p2p::protocol::messages::{BatchOffer, ShareToken, TextDecision, TransferOffer};
-use rqs_p2p::transfer::sender::PreparedFile;
-use rqs_p2p::transfer::service::{
+use ferry::config::Config;
+use ferry::discovery::{Discovery, DiscoveryOptions, Visibility};
+use ferry::node::NodeEngine;
+use ferry::pairing::PairRequest;
+use ferry::protocol::messages::{BatchOffer, ShareToken, TextDecision, TransferOffer};
+use ferry::transfer::sender::PreparedFile;
+use ferry::transfer::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
+use iroh::EndpointId;
 use rust_i18n::t;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -67,6 +67,14 @@ impl AppState {
             platform_media_dir: OnceLock::new(),
             discovery: OnceLock::new(),
             received: std::sync::Mutex::new(HashSet::new()),
+        }
+    }
+
+    /// Applies the saved visibility and the current list of paired devices to
+    /// discovery; called after every change of either.
+    pub fn sync_visibility(&self, config: &Config) {
+        if let Some(discovery) = self.discovery.get() {
+            discovery.set_visibility(Visibility::from_config(config));
         }
     }
 
@@ -324,7 +332,7 @@ impl TransferHandler for GuiHandler {
             .config
             .try_lock()
             .map(|c| c.device_name())
-            .unwrap_or_else(|_| rqs_p2p::config::paths::default_device_name())
+            .unwrap_or_else(|_| ferry::config::paths::default_device_name())
     }
 
     async fn confirm_pair(&self, req: PairRequest) -> bool {
@@ -350,6 +358,7 @@ impl TransferHandler for GuiHandler {
         let saved = config
             .add_paired(req.peer, &req.name, req.addr, false)
             .and_then(|()| config.save());
+        state.sync_visibility(&config);
         drop(config);
         match saved {
             Ok(()) => {
@@ -364,7 +373,13 @@ impl TransferHandler for GuiHandler {
     }
 
     async fn receive_text(&self, peer: EndpointId, text: String) -> TextDecision {
-        let (alias, auto_accept) = self.sender_info(&peer).await;
+        let (alias, _) = self.sender_info(&peer).await;
+        let auto_accept = self
+            .state()
+            .config
+            .lock()
+            .await
+            .auto_accepts_texts_from(&peer.to_string());
         let sender = alias
             .clone()
             .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
@@ -439,8 +454,9 @@ fn request_id(kind: &str, peer: &EndpointId) -> String {
 }
 
 /// Starts local network discovery and forwards list changes as `nearby` events.
-fn start_discovery(app: &AppHandle, engine: &NodeEngine, name: &str) {
-    let discovery = match Discovery::start(engine.clone(), name, DiscoveryOptions::default()) {
+fn start_discovery(app: &AppHandle, engine: &NodeEngine, config: &Config) {
+    let opts = DiscoveryOptions::from_config(config);
+    let discovery = match Discovery::start(engine.clone(), &config.device_name(), opts) {
         Ok(d) => d,
         Err(e) => {
             warn!("Local network discovery unavailable: {e:#}");
@@ -468,8 +484,8 @@ pub fn start(app: AppHandle) {
         match state.engine().await {
             Ok(engine) => {
                 let _ = app.emit("node-ready", engine.node_id().to_string());
-                let name = state.config.lock().await.device_name();
-                start_discovery(&app, engine, &name);
+                let config = state.config.lock().await.clone();
+                start_discovery(&app, engine, &config);
                 let handler = Arc::new(GuiHandler { app: app.clone() });
                 service::serve(engine.clone(), handler).await;
             }

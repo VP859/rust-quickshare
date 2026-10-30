@@ -7,7 +7,7 @@ use std::time::Duration;
 use crate::config::Config;
 use crate::discovery::{Discovery, DiscoveryHealth, DiscoveryOptions, NearbyDevice};
 use crate::node::{NodeEngine, NodeTicket};
-use crate::pairing::{PairOutcome, pairing_code, request_pairing};
+use crate::pairing::{PairOutcome, request_pairing};
 
 /// How long `ferry pair` looks for the named device on the local network.
 const PAIR_LOOKUP_TIMEOUT: Duration = Duration::from_secs(8);
@@ -58,7 +58,7 @@ pub async fn run_discover(timeout: u64) -> Result<()> {
     let discovery = Discovery::start(
         engine.clone(),
         &config.device_name(),
-        DiscoveryOptions::default(),
+        DiscoveryOptions::from_config(&config),
     )?;
     println!(
         "{}",
@@ -87,7 +87,11 @@ pub async fn run_pair(target: &str, auto_accept: bool) -> Result<()> {
     let mut config = Config::load()?;
     let my_name = config.device_name();
     let engine = NodeEngine::with_persistent_identity().await?;
-    let discovery = Discovery::start(engine.clone(), &my_name, DiscoveryOptions::default())?;
+    let discovery = Discovery::start(
+        engine.clone(),
+        &my_name,
+        DiscoveryOptions::from_config(&config),
+    )?;
 
     println!("{}", t!("nearby.looking_for", target = target));
     let (addr, label) = match discovery.wait_for(target, PAIR_LOOKUP_TIMEOUT).await {
@@ -99,16 +103,11 @@ pub async fn run_pair(target: &str, auto_accept: bool) -> Result<()> {
         ),
     };
     println!("\n{}", t!("pair.pairing_with", name = &label));
-    println!(
-        "{}",
-        t!(
-            "pair.code",
-            code = pairing_code(&engine.node_id(), &addr.id)
-        )
-    );
-    println!("{}\n", t!("pair.confirm_other"));
-
-    let result = request_pairing(&engine, addr.clone(), &my_name).await;
+    let result = request_pairing(&engine, addr.clone(), &my_name, |code| {
+        println!("{}", t!("pair.code", code = code));
+        println!("{}\n", t!("pair.confirm_other"));
+    })
+    .await;
     drop(discovery);
     engine.close().await;
 
@@ -166,19 +165,18 @@ pub async fn run_peer_add(
     let my_name = config.device_name();
     let engine = NodeEngine::with_persistent_identity().await?;
     let mut addr = config.resolve_target(&node_id)?;
-    if let Ok(discovery) = Discovery::start(engine.clone(), &my_name, DiscoveryOptions::default())
-        && let Some(nearby) = discovery.wait_for(&node_id, NEARBY_LOOKUP).await
+    if let Ok(discovery) = Discovery::start(
+        engine.clone(),
+        &my_name,
+        DiscoveryOptions::from_config(&config),
+    ) && let Some(nearby) = discovery.wait_for(&node_id, NEARBY_LOOKUP).await
     {
         addr = nearby.addr;
     }
-    println!(
-        "{}",
-        t!(
-            "pair.request_sent",
-            code = pairing_code(&engine.node_id(), &addr.id)
-        )
-    );
-    let result = request_pairing(&engine, addr.clone(), &my_name).await;
+    let result = request_pairing(&engine, addr.clone(), &my_name, |code| {
+        println!("{}", t!("pair.request_sent", code = code));
+    })
+    .await;
     engine.close().await;
     match result {
         Ok(PairOutcome::Accepted { addr: remote, .. }) => {

@@ -1,6 +1,6 @@
 //! Command line arguments of the `ferry` binary.
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 /// Ferry – secure P2P file sharing over QUIC, without a cloud or mDNS.
@@ -19,9 +19,10 @@ pub struct Cli {
 /// Top-level subcommands.
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Send file(s) to a trusted or nearby device (`--to`), or share one file by a one-time TICKET.
+    /// Send files and folders to a trusted or nearby device (`--to`), or share one file by a
+    /// one-time TICKET.
     Send {
-        /// Files to send.
+        /// Files and folders to send (folders keep their structure).
         #[arg(required = true, num_args = 1..)]
         files: Vec<PathBuf>,
         /// Alias, nearby device name, Node ID or TICKET of the receiver
@@ -92,8 +93,83 @@ pub enum Commands {
         #[command(subcommand)]
         command: PeerCommands,
     },
+    /// Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`).
+    Config {
+        /// Config subcommand (default: `list`).
+        #[command(subcommand)]
+        command: Option<ConfigCommands>,
+    },
+    /// Show, back up or restore this device's identity (its Node ID key).
+    Identity {
+        /// Identity subcommand (default: `show`).
+        #[command(subcommand)]
+        command: Option<IdentityCommands>,
+    },
     /// Network and configuration diagnostics.
     Doctor,
+}
+
+/// Settings that `ferry config` can read and change.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettingKey {
+    /// Name of this device visible to others.
+    DeviceName,
+    /// Interface language code.
+    Language,
+    /// `local` or `internet`.
+    NetworkMode,
+    /// Folder for received files.
+    DownloadDir,
+    /// Hidden on the local network from unpaired devices (`true`/`false`).
+    Hidden,
+    /// Copy texts from Auto-Accept devices without asking (`true`/`false`).
+    AutoAcceptTexts,
+}
+
+/// Subcommands of `ferry config`.
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommands {
+    /// Show every setting.
+    List,
+    /// Show one setting.
+    Get {
+        /// Setting name.
+        key: SettingKey,
+    },
+    /// Change one setting.
+    Set {
+        /// Setting name.
+        key: SettingKey,
+        /// New value.
+        value: String,
+    },
+    /// Reset one setting to its default.
+    Unset {
+        /// Setting name.
+        key: SettingKey,
+    },
+    /// Print the path of the configuration file.
+    Path,
+}
+
+/// Subcommands of `ferry identity`.
+#[derive(Subcommand, Debug)]
+pub enum IdentityCommands {
+    /// Show the Node ID and where the key is stored.
+    Show,
+    /// Write a backup of the key to a new file (keep it secret).
+    Export {
+        /// File to create; an existing file is never overwritten.
+        file: PathBuf,
+    },
+    /// Replace this device's key with one from a backup.
+    Import {
+        /// Backup created by `ferry identity export`.
+        file: PathBuf,
+        /// Replace an existing, different key (it is kept as a `.bak` file).
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 /// Subcommands of `ferry peer`.

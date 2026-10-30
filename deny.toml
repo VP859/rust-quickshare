@@ -1,0 +1,42 @@
+# cargo-deny: licenses, security advisories, banned crates and sources.
+# Run locally with `cargo deny check`; CI runs it on every push.
+
+[graph]
+all-features = true
+
+[advisories]
+# Known vulnerabilities fail the check; unmaintained crates are reported only
+# when they are direct dependencies.
+unmaintained = "workspace"
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Permissive licenses compatible with distributing Ferry under MIT OR Apache-2.0.
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "CC0-1.0",
+  "BSL-1.0",
+  "CDLA-Permissive-2.0",
+  "MPL-2.0",
+  "Unlicense",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

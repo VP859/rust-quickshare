@@ -1,4 +1,4 @@
-package com.rqs.quickshare
+package io.github.vp859.ferry
 
 import android.content.Context
 import android.content.Intent
@@ -17,7 +17,7 @@ import java.io.File
  * text is stored in `pending-text.txt` and read with `take_shared_text`.
  */
 object ShareIntake {
-  private const val TAG = "RqsShare"
+  private const val TAG = "FerryShare"
   private const val FALLBACK_NAME = "file"
   private val lock = Any()
 

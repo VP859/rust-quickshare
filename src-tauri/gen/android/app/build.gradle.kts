@@ -24,10 +24,10 @@ val keystoreProperties = Properties().apply {
 
 android {
     compileSdk = 37
-    namespace = "com.rqs.quickshare"
+    namespace = "io.github.vp859.ferry"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "com.rqs.quickshare"
+        applicationId = "io.github.vp859.ferry"
         minSdk = 24
         targetSdk = 37
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()

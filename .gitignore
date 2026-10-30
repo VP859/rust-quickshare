@@ -1,5 +1,5 @@
 # =============================================================================
-# RQS P2P Quick Share – what does NOT go into the repository.
+# Ferry – what does NOT go into the repository.
 # Tracked: source code, configuration, documentation and files needed to build.
 # =============================================================================
 
@@ -35,7 +35,7 @@ target/distrib/
 /src-tauri/gen/android/buildSrc/build/
 /src-tauri/gen/android/app/src/main/jniLibs/
 /src-tauri/gen/android/app/src/main/assets/
-/src-tauri/gen/android/app/src/main/java/com/rqs/quickshare/generated/
+/src-tauri/gen/android/app/src/main/java/io/github/vp859/ferry/generated/
 /src-tauri/gen/android/app/tauri.properties
 /src-tauri/gen/android/app/tauri.build.gradle.kts
 /src-tauri/gen/android/app/proguard-tauri.pro
@@ -70,7 +70,7 @@ config.toml
 *.rej
 /tmp/
 /scratch/
-/rqs-test/
+/ferry-test/
 *.bin
 !src-tauri/icons/**
 
@@ -83,7 +83,6 @@ desktop.ini
 .idea/
 *.iml
 .vscode/*
-!.vscode/settings.json
 
 # ---- Node (Tauri frontend / npm tooling) ------------------------------------
 node_modules/

@@ -1,17 +1,25 @@
 [package]
-name = "rqs-gui"
-version = "0.1.9"
-edition = "2024"
-description = "Ferry – P2P file sharing app for desktop and Android"
-repository = "https://github.com/VP859/rust-quickshare"
+name = "ferry-gui"
+description = "Ferry desktop and Android app (Tauri v2)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[lints]
+workspace = true
 
 [lib]
-name = "rqs_gui_lib"
+name = "ferry_gui_lib"
 path = "src/lib.rs"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [[bin]]
-name = "rqs-gui"
+name = "ferry-gui"
 path = "src/main.rs"
 
 # GUI installers are built by `tauri build` (see .github/workflows/release.yml), not cargo-dist.
@@ -22,7 +30,7 @@ dist = false
 tauri-build = { version = "2.7.4", features = [] }
 
 [dependencies]
-rqs_p2p = { path = ".." }
+ferry = { path = ".." }
 tauri = { version = "2.12.5", features = [] }
 tauri-plugin-dialog = "2.8.3"
 tauri-plugin-notification = "2"
@@ -36,17 +44,15 @@ iroh = { workspace = true }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 rust-i18n = "4.2.4"
 
-# System tray and autostart only make sense on Linux/Windows/macOS.
-[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+# System tray and autostart only make sense on the desktop (Linux, Windows).
+[target.'cfg(not(target_os = "android"))'.dependencies]
 tauri = { version = "2.12.5", features = ["tray-icon", "image-png"] }
 tauri-plugin-autostart = "2"
 
-[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+[target.'cfg(target_os = "android")'.dependencies]
 tauri-plugin-barcode-scanner = "2"
 # Reading `content://` URIs returned by the Android file picker.
 tauri-plugin-fs = "2.4.0"
-
-[target.'cfg(target_os = "android")'.dependencies]
 # Rust logs in `adb logcat` (stdout of an Android app is discarded).
 tracing-android = "0.2.0"
 # Calling MediaScannerConnection so received photos appear in the gallery.

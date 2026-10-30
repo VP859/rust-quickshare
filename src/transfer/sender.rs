@@ -12,8 +12,8 @@ use tracing::info;
 use super::{Channel, ProgressFn};
 use crate::protocol::codec::{read_msg, write_msg};
 use crate::protocol::messages::{
-    CHUNK_WINDOW, ChunkHeader, DEFAULT_CHUNK_SIZE, Hello, TransferDecision, TransferOffer,
-    TransferResult,
+    CHUNK_WINDOW, ChunkHeader, DEFAULT_CHUNK_SIZE, Hello, MAX_FOLDER_DEPTH, TransferDecision,
+    TransferOffer, TransferResult,
 };
 use crate::transfer::hash::compute_file_hash;
 use crate::transfer::security::sanitize_filename;
@@ -29,6 +29,86 @@ pub struct PreparedFile {
     pub size: u64,
     /// BLAKE3 hash of the whole file.
     pub hash: [u8; 32],
+    /// Folders the receiver saves the file in ([`TransferOffer::folder`]).
+    pub folder: Vec<String>,
+}
+
+/// Largest number of files sent from the folders of one `send` request.
+pub const MAX_FOLDER_FILES: usize = 10_000;
+
+/// A file to send and the folders it belongs in on the receiver.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SendItem {
+    /// Local path of the file.
+    pub path: PathBuf,
+    /// Relative folder, starting with the name of the folder that was chosen.
+    pub folder: Vec<String>,
+}
+
+/// Turns the chosen paths into files to send: files stay as they are, folders
+/// are walked recursively (sorted, without following symbolic links) and keep
+/// their structure, starting with the folder's own name.
+///
+/// # Errors
+///
+/// Fails when a path cannot be read, a folder is deeper than
+/// [`MAX_FOLDER_DEPTH`] or holds more than [`MAX_FOLDER_FILES`] files.
+pub fn expand_paths(paths: &[PathBuf]) -> Result<Vec<SendItem>> {
+    let mut items = Vec::new();
+    for path in paths {
+        let metadata =
+            std::fs::metadata(path).with_context(|| t!("sender.read", path = path.display()))?;
+        if metadata.is_dir() {
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "folder".to_string());
+            walk_folder(path, vec![name], &mut items)?;
+        } else {
+            items.push(SendItem {
+                path: path.clone(),
+                folder: Vec::new(),
+            });
+        }
+    }
+    Ok(items)
+}
+
+/// Adds the files of `dir` (saved under `folder`) and its subfolders to `items`.
+fn walk_folder(dir: &Path, folder: Vec<String>, items: &mut Vec<SendItem>) -> Result<()> {
+    if folder.len() > MAX_FOLDER_DEPTH {
+        anyhow::bail!(t!(
+            "sender.too_deep",
+            path = dir.display(),
+            max = MAX_FOLDER_DEPTH
+        ));
+    }
+    let mut entries: Vec<_> = std::fs::read_dir(dir)
+        .with_context(|| t!("sender.read", path = dir.display()))?
+        .filter_map(|e| e.ok())
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+    for entry in entries {
+        // `file_type` does not follow links: linked files and folders are skipped,
+        // so a link cannot pull in data from outside the chosen folder.
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if kind.is_dir() {
+            let mut sub = folder.clone();
+            sub.push(entry.file_name().to_string_lossy().into_owned());
+            walk_folder(&entry.path(), sub, items)?;
+        } else if kind.is_file() {
+            if items.len() >= MAX_FOLDER_FILES {
+                anyhow::bail!(t!("sender.too_many_files", max = MAX_FOLDER_FILES));
+            }
+            items.push(SendItem {
+                path: entry.path(),
+                folder: folder.clone(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Reads metadata of the file at `path` and computes its hash.
@@ -54,6 +134,7 @@ pub async fn prepare_file(path: &Path) -> Result<PreparedFile> {
         name,
         size: metadata.len(),
         hash,
+        folder: Vec::new(),
     })
 }
 
@@ -104,6 +185,11 @@ pub async fn send_on_channel(
         file_size: file.size,
         chunk_size: DEFAULT_CHUNK_SIZE,
         file_hash: file.hash,
+        folder: file
+            .folder
+            .iter()
+            .map(|c| sanitize_filename(c).unwrap_or_else(|_| "folder".to_string()))
+            .collect(),
     };
     write_msg(&mut channel.send, &offer).await?;
 
@@ -177,4 +263,44 @@ async fn join_next(set: &mut JoinSet<Result<u32>>) -> Result<u32> {
         .await
         .with_context(|| t!("transfer.task_aborted"))?
         .with_context(|| t!("transfer.task_aborted"))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn folders_are_expanded_with_their_structure() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path().join("Photos");
+        std::fs::create_dir_all(root.join("2024/summer"))?;
+        std::fs::write(root.join("b.jpg"), b"b")?;
+        std::fs::write(root.join("2024/summer/a.jpg"), b"a")?;
+        let single = dir.path().join("single.txt");
+        std::fs::write(&single, b"s")?;
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("/etc", root.join("link"))?;
+
+        let items = expand_paths(&[root.clone(), single.clone()])?;
+        let folder = |parts: &[&str]| parts.iter().map(|p| p.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            items,
+            vec![
+                SendItem {
+                    path: root.join("2024/summer/a.jpg"),
+                    folder: folder(&["Photos", "2024", "summer"]),
+                },
+                SendItem {
+                    path: root.join("b.jpg"),
+                    folder: folder(&["Photos"]),
+                },
+                SendItem {
+                    path: single,
+                    folder: Vec::new(),
+                },
+            ],
+            "sorted, links skipped"
+        );
+        Ok(())
+    }
 }

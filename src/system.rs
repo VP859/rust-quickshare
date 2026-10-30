@@ -5,7 +5,7 @@ use std::io;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
-/// Opens a file or folder with the default application (Linux, macOS, Windows).
+/// Opens a file or folder with the default application (Linux, Windows).
 ///
 /// # Errors
 ///
@@ -16,7 +16,7 @@ pub fn open_path(path: &Path) -> io::Result<()> {
     spawn_detached(opener(path, false)?)
 }
 
-/// Opens a web address in the default browser (Linux, macOS, Windows).
+/// Opens a web address in the default browser (Linux, Windows).
 ///
 /// # Errors
 ///
@@ -25,7 +25,7 @@ pub fn open_url(url: &str) -> io::Result<()> {
     spawn_detached(opener(Path::new(url), false)?)
 }
 
-/// Opens the folder containing `path`, selecting the file on Windows and macOS.
+/// Opens the folder containing `path`, selecting the file on Windows.
 ///
 /// # Errors
 ///
@@ -63,17 +63,6 @@ fn opener(path: &Path, reveal: bool) -> io::Result<Command> {
     Ok(cmd)
 }
 
-/// `open` for the file, or `open -R` to select it in Finder.
-#[cfg(target_os = "macos")]
-fn opener(path: &Path, reveal: bool) -> io::Result<Command> {
-    let mut cmd = Command::new("open");
-    if reveal {
-        cmd.arg("-R");
-    }
-    cmd.arg(path);
-    Ok(cmd)
-}
-
 /// `explorer` for the file, or `explorer /select,` to select it in its folder.
 #[cfg(windows)]
 fn opener(path: &Path, reveal: bool) -> io::Result<Command> {
@@ -88,8 +77,8 @@ fn opener(path: &Path, reveal: bool) -> io::Result<Command> {
     Ok(cmd)
 }
 
-/// Other platforms (e.g. Android) have no opener program.
-#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+/// Other platforms (Android) have no opener program.
+#[cfg(not(any(target_os = "linux", windows)))]
 fn opener(_path: &Path, _reveal: bool) -> io::Result<Command> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,

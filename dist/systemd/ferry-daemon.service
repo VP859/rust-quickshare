@@ -20,7 +20,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 # The directories must exist before ReadWritePaths is applied ("+" = outside the sandbox).
-ExecStartPre=+/usr/bin/mkdir -p %h/.config/rqs %h/Downloads
+ExecStartPre=+/usr/bin/mkdir -p %h/.config/ferry %h/Downloads
 # Default cargo-dist install path; change to /usr/bin/ferry when installed from a package.
 ExecStart=%h/.cargo/bin/ferry daemon
 Restart=on-failure
@@ -31,7 +31,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 # Add your download folder here if it differs (default_download_dir in config.toml).
-ReadWritePaths=%h/Downloads %h/.config/rqs
+ReadWritePaths=%h/Downloads %h/.config/ferry
 LockPersonality=true
 RestrictRealtime=true
 

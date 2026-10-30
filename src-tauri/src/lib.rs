@@ -1,14 +1,8 @@
 //! Tauri v2 desktop and Android application of Ferry.
 //!
-//! The Rust side runs the P2P node ([`rqs_p2p`]) and exposes [`commands`] to the
+//! The Rust side runs the P2P node ([`ferry`]) and exposes [`commands`] to the
 //! web frontend in `ui/index.html`. On desktop the app keeps running in the
 //! system tray when its window is closed.
-
-#![warn(
-    missing_docs,
-    clippy::missing_docs_in_private_items,
-    clippy::missing_errors_doc
-)]
 
 rust_i18n::i18n!("../locales", fallback = "en");
 
@@ -26,7 +20,7 @@ use tauri::Manager;
 #[cfg(desktop)]
 const MINIMIZED_ARG: &str = "--minimized";
 
-/// Logs go to stdout on desktop and to logcat on Android (`adb logcat -s RqsCore`),
+/// Logs go to stdout on desktop and to logcat on Android (`adb logcat -s FerryCore`),
 /// where stdout is discarded.
 fn init_logging() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
@@ -36,7 +30,7 @@ fn init_logging() {
     {
         use tracing_subscriber::layer::SubscriberExt;
         use tracing_subscriber::util::SubscriberInitExt;
-        if let Ok(layer) = tracing_android::layer("RqsCore") {
+        if let Ok(layer) = tracing_android::layer("FerryCore") {
             let _ = tracing_subscriber::registry()
                 .with(filter)
                 .with(layer)
@@ -112,8 +106,10 @@ pub fn run() {
             respond_to_offer,
             list_nearby,
             refresh_nearby,
-            pair_code,
             pair_device,
+            cancel_transfer,
+            get_privacy,
+            set_privacy,
             get_device_name,
             set_device_name,
             get_language,
@@ -147,7 +143,7 @@ pub(crate) mod tray {
     use tauri::{App, AppHandle, Manager, Runtime};
 
     /// ID of the tray icon, used to find it again in [`refresh`].
-    const TRAY_ID: &str = "rqs-tray";
+    const TRAY_ID: &str = "ferry-tray";
 
     /// Shows, restores and focuses the main window.
     fn show_main(app: &AppHandle) {

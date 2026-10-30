@@ -1,13 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Ferry",
-  "version": "0.1.9",
-  "identifier": "com.rqs.quickshare",
+  "version": "0.2.1",
+  "identifier": "io.github.vp859.ferry",
   "build": {
     "frontendDist": "./ui",
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
-    "beforeBundleCommand": "cargo build --release -p rqs_p2p --bin ferry"
+    "beforeBundleCommand": "cargo build --release -p ferry --bin ferry"
   },
   "app": {
     "withGlobalTauri": true,
@@ -36,7 +36,6 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.png",
-      "icons/icon.icns",
       "icons/icon.ico"
     ],
     "android": {

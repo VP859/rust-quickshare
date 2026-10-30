@@ -10,12 +10,12 @@ use std::str::FromStr;
 use crate::protocol::messages::ShareToken;
 
 /// Prefix of the textual form of a TICKET (also used as QR code content).
-pub const TICKET_PREFIX: &str = "rqs:";
+pub const TICKET_PREFIX: &str = "ferry:";
 
 /// Address of a node (Node ID and direct IP addresses) and an optional
 /// token of a file shared for download.
 ///
-/// The text form is `rqs:` followed by URL-safe base64 of the [`postcard`]
+/// The text form is `ferry:` followed by URL-safe base64 of the [`postcard`]
 /// encoding of this struct.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeTicket {
@@ -39,7 +39,7 @@ impl NodeTicket {
         }
     }
 
-    /// Encodes the ticket as `rqs:<base64>`.
+    /// Encodes the ticket as `ferry:<base64>`.
     ///
     /// # Errors
     ///
@@ -50,8 +50,8 @@ impl NodeTicket {
     }
 
     /// Decodes a ticket, tolerating damage typical of copy and paste: spaces and
-    /// line breaks (text wrapped by a terminal), quotes and an optional `rqs:` or
-    /// `rqs://` prefix.
+    /// line breaks (text wrapped by a terminal), quotes and an optional `ferry:` or
+    /// `ferry://` prefix.
     ///
     /// # Errors
     ///
@@ -62,7 +62,7 @@ impl NodeTicket {
             .filter(|c| !c.is_whitespace() && *c != '"' && *c != '\'')
             .collect();
         let body = compact
-            .strip_prefix("rqs://")
+            .strip_prefix("ferry://")
             .or_else(|| compact.strip_prefix(TICKET_PREFIX))
             .unwrap_or(&compact);
         let broken = || anyhow!(t!("ticket.broken", len = body.len()));
@@ -75,7 +75,7 @@ impl NodeTicket {
     /// Used to pick the more helpful error message.
     pub fn looks_like_ticket(s: &str) -> bool {
         let s = s.trim();
-        s.starts_with(TICKET_PREFIX) || s.starts_with("rqs://") || s.len() > 64
+        s.starts_with(TICKET_PREFIX) || s.starts_with("ferry://") || s.len() > 64
     }
 
     /// Accepts a TICKET or a raw Node ID.

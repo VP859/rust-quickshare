@@ -1,0 +1,3 @@
+# Tests may unwrap: a panic is the right way to fail a test.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

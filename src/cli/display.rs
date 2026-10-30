@@ -13,7 +13,7 @@ use crate::transfer::service::{Direction, TransferEvent, TransferStatus};
 /// # Examples
 ///
 /// ```
-/// use rqs_p2p::cli::display::human_size;
+/// use ferry::cli::display::human_size;
 ///
 /// assert_eq!(human_size(18), "18 B");
 /// assert_eq!(human_size(5 * 1024 * 1024), "5.0 MB");
@@ -119,6 +119,9 @@ impl TerminalProgress {
                 pb,
                 t!("cli.failed", name = &ev.file_name, error = error).into_owned(),
             ),
+            TransferStatus::Cancelled => {
+                finish(pb, t!("cli.cancelled", name = &ev.file_name).into_owned())
+            }
         }
     }
 }
