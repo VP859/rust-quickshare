@@ -119,6 +119,10 @@ compromise of the libraries Ferry depends on (see [Trusted components](#trusted-
   for Auto-Accept devices. A silently replaced clipboard is easy to miss and could be pasted
   unknowingly (e.g. a changed bank account number).
 * A daemon without a terminal declines everything that would need a question.
+* **Resuming after a broken connection** does not ask again: when the user accepted a file (or a
+  batch) and its connection broke, the same device – identified by its key – may continue that
+  exact file (same BLAKE3 hash) into the same folder, and the rest of the batch, within 10 minutes.
+  Nothing else is accepted on that basis, and at most 256 such answers are remembered.
 * **Rate limits:** at most 2 open questions per device and 8 in total; requests above the limit
   are declined without a dialog. After a declined or broken pairing request the same device must
   wait 30 s before asking again. Node IDs are free to create, so the global limit is what keeps a

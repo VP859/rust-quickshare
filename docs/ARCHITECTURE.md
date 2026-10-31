@@ -69,10 +69,27 @@ The GUI talks to the frontend through Tauri commands (`src-tauri/src/commands.rs
 * `MainActivity.kt` – share target (`ACTION_SEND` / `SEND_MULTIPLE`), runtime permissions,
 * `ShareIntake.kt` – copies shared `content://` files into the app cache,
 * `FerryService.kt` – foreground service with a notification and a multicast lock, so the node
-  keeps running in the background,
-* `src-tauri/src/platform.rs` – Android-specific Rust: storage folders, media scanning via JNI.
+  keeps running in the background; wake and Wi-Fi locks while transfers run,
+* `PowerHelper.kt` – what limits the app in the background (battery optimization, battery
+  saver, background restriction, data saver) and the way to the system app settings,
+* `src-tauri/src/platform.rs` – Android-specific Rust: storage folders, media scanning and the
+  calls into the Kotlin classes above via JNI.
 
-Logs: `adb logcat -s FerryCore FerryService FerryShare`.
+### Background limits
+
+* The service is of type `connectedDevice` (exchanging data with other devices over the network),
+  which has no daily time limit; `dataSync` is a fallback for phones that refuse it. Android 15+
+  stops `dataSync` after 6 hours a day: Ferry then stops the service cleanly and posts a
+  notification that opens the app, instead of being killed.
+* While at least one transfer runs (`AppState::track_transfer`), a partial wake lock and a
+  Wi-Fi lock keep the phone from sleeping or slowing Wi-Fi down with the screen off.
+* Doze and battery optimization can still pause the network for minutes. A sender then
+  reconnects up to three times (2 s, 5 s, 15 s) and the receiver resumes the partial file without
+  asking again; *Settings → Background* in the app shows the limits and opens the system settings
+  where battery use can be set to unrestricted.
+* Manual checks (Doze, standby buckets, battery saver) are listed in [TESTING.md](TESTING.md).
+
+Logs: `adb logcat -s FerryCore FerryService FerryShare FerryPower`.
 
 ## Data flow of a file
 

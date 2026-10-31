@@ -50,6 +50,18 @@ const MAX_OPEN_QUESTIONS: usize = 8;
 /// Pause after a declined or broken pairing request before the same device
 /// may ask again.
 const PAIR_RETRY_DELAY: Duration = Duration::from_secs(30);
+/// How long an accepted file or batch stays accepted after its connection
+/// broke, so the sender can resume without the user being asked again.
+const RESUME_WINDOW: Duration = Duration::from_secs(10 * 60);
+/// Upper bound of remembered accepted files and batches.
+const MAX_RESUMABLE: usize = 256;
+/// Pauses before the sender tries again after the connection broke: enough for
+/// a phone waking up or a network coming back, short enough to wait for.
+const RETRY_DELAYS: [Duration; 3] = [
+    Duration::from_secs(2),
+    Duration::from_secs(5),
+    Duration::from_secs(15),
+];
 
 /// Direction of a transfer as seen from this device.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -90,6 +102,14 @@ pub enum TransferStatus {
     /// partly received file is kept and resumed by the next transfer of the
     /// same file.
     Cancelled,
+    /// The connection broke; the sender reconnects and resumes (attempt
+    /// `attempt` of `of`).
+    Retrying {
+        /// Number of this attempt, starting at 1.
+        attempt: u32,
+        /// Number of attempts in total.
+        of: u32,
+    },
 }
 
 impl TransferStatus {
@@ -97,7 +117,7 @@ impl TransferStatus {
     pub fn is_final(&self) -> bool {
         !matches!(
             self,
-            Self::Preparing | Self::AwaitingDecision | Self::Running
+            Self::Preparing | Self::AwaitingDecision | Self::Running | Self::Retrying { .. }
         )
     }
 }
@@ -299,7 +319,10 @@ impl BatchApproval {
 /// batches, texts, pairing requests), shared by all connections of [`serve`].
 ///
 /// Requests over the limit are declined without asking, so another device
-/// cannot flood the screen with dialogs or queue unlimited work.
+/// cannot flood the screen with dialogs or queue unlimited work. The gate also
+/// remembers answers the user already gave for files and batches whose
+/// connection broke, for [`RESUME_WINDOW`], so a resumed transfer does not ask
+/// again.
 #[derive(Debug, Default)]
 struct QuestionGate {
     /// Mutable state; held only for short, non-async sections.
@@ -315,6 +338,10 @@ struct GateState {
     total: usize,
     /// Devices that may not send a pairing request before the given instant.
     pair_blocked_until: HashMap<EndpointId, Instant>,
+    /// Accepted files whose transfer broke: device and file hash → folder.
+    resumable_files: HashMap<(EndpointId, [u8; 32]), (PathBuf, Instant)>,
+    /// What was left of an accepted batch when its connection ended.
+    resumable_batches: HashMap<EndpointId, (BatchApproval, Instant)>,
 }
 
 impl QuestionGate {
@@ -357,6 +384,58 @@ impl QuestionGate {
             .pair_blocked_until
             .insert(peer, Instant::now() + PAIR_RETRY_DELAY);
     }
+
+    /// Remembers that the user accepted the file `hash` from `peer` into
+    /// `dest_dir`; its transfer broke and may be resumed.
+    fn keep_file(&self, peer: EndpointId, hash: [u8; 32], dest_dir: PathBuf) {
+        let mut state = self.lock();
+        state.forget_expired();
+        if state.resumable_files.len() < MAX_RESUMABLE {
+            let until = Instant::now() + RESUME_WINDOW;
+            state
+                .resumable_files
+                .insert((peer, hash), (dest_dir, until));
+        }
+    }
+
+    /// Folder of an accepted file being resumed, if the user accepted it.
+    fn take_file(&self, peer: EndpointId, hash: &[u8; 32]) -> Option<PathBuf> {
+        let mut state = self.lock();
+        state.forget_expired();
+        state
+            .resumable_files
+            .remove(&(peer, *hash))
+            .map(|(dir, _)| dir)
+    }
+
+    /// Keeps the rest of an accepted batch when its connection ends.
+    fn keep_batch(&self, peer: EndpointId, approval: BatchApproval) {
+        let mut state = self.lock();
+        state.forget_expired();
+        if approval.remaining_files > 0 && state.resumable_batches.len() < MAX_RESUMABLE {
+            let until = Instant::now() + RESUME_WINDOW;
+            state.resumable_batches.insert(peer, (approval, until));
+        }
+    }
+
+    /// The rest of a batch `peer` started on an earlier connection.
+    fn take_batch(&self, peer: &EndpointId) -> Option<BatchApproval> {
+        let mut state = self.lock();
+        state.forget_expired();
+        state
+            .resumable_batches
+            .remove(peer)
+            .map(|(approval, _)| approval)
+    }
+}
+
+impl GateState {
+    /// Drops remembered answers older than [`RESUME_WINDOW`].
+    fn forget_expired(&mut self) {
+        let now = Instant::now();
+        self.resumable_files.retain(|_, (_, until)| *until > now);
+        self.resumable_batches.retain(|_, (_, until)| *until > now);
+    }
 }
 
 /// Slot of one open question in a [`QuestionGate`], released on drop.
@@ -395,8 +474,11 @@ pub struct Tracker<'a> {
     sink: EventSink<'a>,
     /// Triggered by [`cancel_transfer`].
     cancel: CancellationToken,
-    /// Connection whose path is reported in every event, once known.
-    conn: Option<Connection>,
+    /// Connection whose path is reported in every event, once known;
+    /// replaced when the sender reconnects.
+    conn: Mutex<Option<Connection>>,
+    /// Bytes reported by the last progress event, shown while reconnecting.
+    last_done: std::sync::atomic::AtomicU64,
 }
 
 impl Drop for Tracker<'_> {
@@ -434,14 +516,22 @@ impl<'a> Tracker<'a> {
             },
             sink,
             cancel,
-            conn: None,
+            conn: Mutex::new(None),
+            last_done: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
     /// Reports the path of `conn` ([`Route`]) in the following events.
-    pub fn with_connection(mut self, conn: &Connection) -> Self {
-        self.conn = Some(conn.clone());
+    pub fn with_connection(self, conn: &Connection) -> Self {
+        self.reconnected(conn);
         self
+    }
+
+    /// Reports the path of a new connection after a reconnection.
+    fn reconnected(&self, conn: &Connection) {
+        if let Ok(mut current) = self.conn.lock() {
+            *current = Some(conn.clone());
+        }
     }
 
     /// Runs `transfer` until it finishes or the transfer is cancelled, in
@@ -469,12 +559,18 @@ impl<'a> Tracker<'a> {
         let mut ev = self.base.clone();
         ev.done = done;
         ev.status = status;
-        ev.route = self.conn.as_ref().and_then(Route::of);
+        ev.route = self
+            .conn
+            .lock()
+            .ok()
+            .and_then(|c| c.as_ref().and_then(Route::of));
         (self.sink)(ev);
     }
 
     /// Emits a [`TransferStatus::Running`] event.
     pub fn progress(&self, done: u64) {
+        self.last_done
+            .store(done, std::sync::atomic::Ordering::Relaxed);
         self.emit(done, TransferStatus::Running);
     }
 
@@ -532,14 +628,31 @@ async fn handle_connection<H: TransferHandler>(
     handler: Arc<H>,
     gate: &Arc<QuestionGate>,
 ) -> Result<()> {
-    let mut approval: Option<BatchApproval> = None;
-    while let Some((channel, hello)) = Channel::accept(&conn).await? {
+    let peer = conn.remote_id();
+    let mut approval = gate.take_batch(&peer);
+    let result = serve_streams(engine, &conn, handler, gate, &mut approval).await;
+    // A batch that was not finished stays accepted for a reconnection.
+    if let Some(rest) = approval {
+        gate.keep_batch(peer, rest);
+    }
+    result
+}
+
+/// Serves the control streams of `conn` until it closes.
+async fn serve_streams<H: TransferHandler>(
+    engine: &NodeEngine,
+    conn: &Connection,
+    handler: Arc<H>,
+    gate: &Arc<QuestionGate>,
+    approval: &mut Option<BatchApproval>,
+) -> Result<()> {
+    while let Some((channel, hello)) = Channel::accept(conn).await? {
         let result = match hello {
-            Hello::Push => handle_push(&conn, channel, handler.as_ref(), gate, &mut approval).await,
-            Hello::Batch(batch) => handle_batch(&conn, channel, &batch, handler.as_ref(), gate)
+            Hello::Push => handle_push(conn, channel, handler.as_ref(), gate, approval).await,
+            Hello::Batch(batch) => handle_batch(conn, channel, &batch, handler.as_ref(), gate)
                 .await
-                .map(|granted| approval = granted),
-            Hello::Pull { token } => handle_pull(&conn, channel, &token, handler.as_ref()).await,
+                .map(|granted| *approval = granted),
+            Hello::Pull { token } => handle_pull(conn, channel, &token, handler.as_ref()).await,
             Hello::Pair {
                 name,
                 addr,
@@ -547,7 +660,7 @@ async fn handle_connection<H: TransferHandler>(
             } => {
                 handle_pair(
                     engine,
-                    &conn,
+                    conn,
                     channel,
                     &name,
                     addr,
@@ -557,7 +670,7 @@ async fn handle_connection<H: TransferHandler>(
                 )
                 .await
             }
-            Hello::Text { text } => handle_text(&conn, channel, text, handler.as_ref(), gate).await,
+            Hello::Text { text } => handle_text(conn, channel, text, handler.as_ref(), gate).await,
         };
         if let Err(e) = result {
             warn!("Transfer from {} failed: {e:#}", conn.remote_id());
@@ -587,7 +700,10 @@ async fn handle_push<H: TransferHandler>(
         &sink,
     )
     .with_connection(conn);
-    let decision = match approval.as_mut().and_then(|a| a.take(&offer)) {
+    let accepted_before = gate
+        .take_file(peer, &offer.file_hash)
+        .or_else(|| approval.as_mut().and_then(|a| a.take(&offer)));
+    let decision = match accepted_before {
         Some(dest_dir) => OfferDecision::Accept { dest_dir },
         None => match gate.enter(peer) {
             Some(_permit) => {
@@ -610,6 +726,12 @@ async fn handle_push<H: TransferHandler>(
                     tracker.progress(d)
                 }))
                 .await;
+            if let Err(e) = &result
+                && is_retryable(e)
+            {
+                // The sender reconnects and resumes; the user already said yes.
+                gate.keep_file(peer, offer.file_hash, dest_dir);
+            }
             tracker.finish(&result, |p| Some(p.display().to_string()));
             ignore_cancelled(result)?;
         }
@@ -794,6 +916,16 @@ async fn handle_batch<H: TransferHandler>(
     Ok(approval)
 }
 
+/// Whether a failed transfer is worth resuming on a new connection: the
+/// connection broke or timed out, as opposed to a refusal, a corrupted file or
+/// a full disk.
+fn is_retryable(error: &anyhow::Error) -> bool {
+    matches!(
+        crate::error::kind(error),
+        crate::error::ErrorKind::Connection | crate::error::ErrorKind::Timeout
+    )
+}
+
 /// Turns a [`Cancelled`] error into success: cancelling is the user's choice,
 /// not a failure.
 fn ignore_cancelled<T>(result: Result<T>) -> Result<()> {
@@ -918,7 +1050,7 @@ pub async fn send_files(
             Ok(BatchDecision::Accepted | BatchDecision::AskEach) => {}
             Err(e) => {
                 debug!("Batch not supported by {peer} ({e:#}), offering files one by one");
-                conn = engine.connect(target).await?;
+                conn = engine.connect(target.clone()).await?;
             }
         }
     }
@@ -927,13 +1059,17 @@ pub async fn send_files(
         let tracker =
             Tracker::new(peer, name, *size, Direction::Upload, sink).with_connection(&conn);
         tracker.emit(0, TransferStatus::Preparing);
-        let result = tracker
+        let prepared = tracker
             .cancellable(async {
                 let mut file = prepare_file(&item.path).await?;
                 file.folder.clone_from(&item.folder);
-                push_file(&conn, &file, &|d| tracker.progress(d)).await
+                Ok(file)
             })
             .await;
+        let result = match prepared {
+            Ok(file) => push_with_retries(engine, &target, &mut conn, &file, &tracker).await,
+            Err(e) => Err(e),
+        };
         if report_send(&tracker, result).is_err() {
             failures += 1;
         }
@@ -947,6 +1083,63 @@ pub async fn send_files(
         ));
     }
     Ok(())
+}
+
+/// Pushes `file` on `conn`. When the connection breaks, waits a little
+/// ([`RETRY_DELAYS`]), reconnects to `target` and pushes again: the receiver
+/// resumes from its partial file and does not ask the user again
+/// ([`QuestionGate::keep_file`]). `conn` is replaced by the new connection.
+///
+/// # Errors
+///
+/// The error of the last attempt, or [`Cancelled`].
+async fn push_with_retries(
+    engine: &NodeEngine,
+    target: &iroh::EndpointAddr,
+    conn: &mut Connection,
+    file: &PreparedFile,
+    tracker: &Tracker<'_>,
+) -> Result<SendOutcome> {
+    let attempts = u32::try_from(RETRY_DELAYS.len()).unwrap_or(u32::MAX);
+    for (attempt, delay) in (1..).zip(RETRY_DELAYS) {
+        let result = tracker
+            .cancellable(push_file(conn, file, &|d| tracker.progress(d)))
+            .await;
+        match &result {
+            Err(e) if is_retryable(e) => {
+                warn!(
+                    "Sending '{}' broke off ({e:#}); retry {attempt}/{attempts} in {delay:?}",
+                    file.name
+                );
+            }
+            _ => return result,
+        }
+        let done = tracker.last_done.load(std::sync::atomic::Ordering::Relaxed);
+        tracker.emit(
+            done,
+            TransferStatus::Retrying {
+                attempt,
+                of: attempts,
+            },
+        );
+        let reconnect = async {
+            tokio::time::sleep(delay).await;
+            engine.connect(target.clone()).await
+        };
+        match tracker.cancellable(reconnect).await {
+            Ok(new) => {
+                *conn = new;
+                tracker.reconnected(conn);
+            }
+            Err(e) if e.is::<Cancelled>() => return Err(e),
+            // The next push fails at once on the old connection and counts
+            // as the next attempt.
+            Err(e) => warn!("Reconnecting to {} failed: {e:#}", target.id),
+        }
+    }
+    tracker
+        .cancellable(push_file(conn, file, &|d| tracker.progress(d)))
+        .await
 }
 
 /// Downloads a file shared by TICKET; this device dials and receives.
@@ -1083,6 +1276,26 @@ mod tests {
         gate.block_pairing(a);
         assert!(!gate.pairing_allowed(&a));
         assert!(gate.pairing_allowed(&b));
+    }
+
+    proptest::proptest! {
+        /// Whatever a sender offers after an accepted batch, no more files and
+        /// bytes are accepted than announced.
+        #[test]
+        fn batch_approval_holds_for_any_offers(
+            files in 0u32..20,
+            bytes in 0u64..10_000,
+            sizes in proptest::collection::vec(0u64..4_000, 0..40),
+        ) {
+            let mut approval = BatchApproval {
+                remaining_files: files,
+                remaining_bytes: bytes,
+                dest_dir: PathBuf::from("/tmp"),
+            };
+            let accepted: Vec<u64> = sizes.into_iter().filter(|s| approval.take(&offer(*s)).is_some()).collect();
+            proptest::prop_assert!(accepted.len() as u64 <= u64::from(files));
+            proptest::prop_assert!(accepted.iter().sum::<u64>() <= bytes);
+        }
     }
 
     #[test]

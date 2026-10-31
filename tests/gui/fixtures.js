@@ -47,6 +47,9 @@ function installMock(responses) {
       },
     },
   };
+  window.__respond = (cmd, value) => {
+    responses[cmd] = value;
+  };
   window.__emit = (name, payload) => {
     for (const callback of listeners[name] ?? []) callback({ payload });
   };
@@ -74,6 +77,10 @@ export const test = base.extend({
 
 /** Commands the page invoked so far, as `[name, args]` pairs. */
 export const calls = (page) => page.evaluate(() => window.__calls);
+
+/** Changes the answer of a mocked command. */
+export const respond = (page, cmd, value) =>
+  page.evaluate(([c, v]) => window.__respond(c, v), [cmd, value]);
 
 /** Sends a Tauri event to the page. */
 export const emit = (page, name, payload) =>

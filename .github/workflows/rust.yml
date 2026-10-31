@@ -120,6 +120,80 @@ jobs:
           export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
           cargo clippy -p ferry -p ferry-gui --target aarch64-linux-android --locked -- -D warnings
 
+  coverage:
+    name: Test coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
+        with:
+          tool: cargo-llvm-cov
+      # The library holds everything that handles data from other devices;
+      # the threshold stops coverage from silently going down.
+      - name: Coverage of the library (at least 78 % of lines)
+        run: cargo llvm-cov -p ferry --locked --fail-under-lines 78 --lcov --output-path lcov.info
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-lcov
+          path: lcov.info
+          retention-days: 14
+
+  network:
+    name: Bad network conditions
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # Loss, delay, a network change and long outages through the forwarder in
+      # the test itself, including the tests that wait for the QUIC idle timeout.
+      - name: Simulated link (loss, network change, outages)
+        run: cargo test -p ferry --locked --release --test network_conditions -- --include-ignored
+      # The same end-to-end tests as usual, but with the kernel dropping and
+      # delaying packets on loopback (tc netem).
+      - name: End-to-end tests over a lossy loopback (tc netem)
+        run: |
+          sudo tc qdisc add dev lo root netem delay 5ms 2ms loss 1%
+          cargo test -p ferry --locked --release --test integration_tests
+      - name: Remove netem
+        if: always()
+        run: sudo tc qdisc del dev lo root || true
+
+  benchmarks:
+    name: Performance against the base branch
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/../bench-target
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # Both revisions run on the same machine, one after the other, so they
+      # are compared under the same conditions.
+      - name: Benchmarks of the base branch
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          git worktree add ../base "origin/$BASE"
+          cd ../base
+          cargo bench --bench transfer_benchmarks -- --save-baseline base
+      - name: Benchmarks of this change
+        run: cargo bench --bench transfer_benchmarks -- --baseline base
+      - name: Compare (fails when a benchmark is clearly over 15 % slower)
+        run: node scripts/bench-compare.mjs "$CARGO_TARGET_DIR/criterion" 15
+
   dependencies:
     name: Licenses and advisories
     runs-on: ubuntu-24.04

@@ -90,3 +90,9 @@ npm-debug.log*
 # package-lock.json is committed: `npm ci` in CI installs exactly these versions.
 /test-results/
 /playwright-report/
+
+# cargo fuzz
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
+/fuzz/coverage/

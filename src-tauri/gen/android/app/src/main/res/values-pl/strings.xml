@@ -6,4 +6,7 @@
     <string name="notif_node_title">Ferry działa w tle</string>
     <string name="notif_node_text">Możesz odbierać i wysyłać pliki</string>
     <string name="notif_action_stop">Zatrzymaj</string>
+    <string name="notif_node_transferring">Przesyłanie plików…</string>
+    <string name="notif_stopped_title">Ferry przestała odbierać w tle</string>
+    <string name="notif_stopped_text">Android ogranicza czas pracy w tle. Dotknij, aby otworzyć Ferry i kontynuować.</string>
 </resources>

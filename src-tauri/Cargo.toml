@@ -6,7 +6,6 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 authors.workspace = true
 publish = false
 
@@ -59,4 +58,6 @@ tauri-plugin-fs = "2.4.0"
 tracing-android = "0.2.0"
 # Calling MediaScannerConnection so received photos appear in the gallery.
 jni = "0.21.1"
+# Background limits reported by PowerHelper.kt as JSON.
+serde_json = "1"
 ndk-context = "0.1.1"

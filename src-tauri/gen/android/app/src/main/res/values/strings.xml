@@ -8,4 +8,7 @@
     <string name="notif_node_title">Ferry is running in the background</string>
     <string name="notif_node_text">You can send and receive files</string>
     <string name="notif_action_stop">Stop</string>
+    <string name="notif_node_transferring">Transferring files…</string>
+    <string name="notif_stopped_title">Ferry stopped receiving in the background</string>
+    <string name="notif_stopped_text">Android limits background time. Tap to open Ferry and continue.</string>
 </resources>

@@ -213,7 +213,7 @@ pub struct PairReveal {
 }
 
 /// Final answer to [`Hello::Pair`], sent after the user made a decision.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PairResponse {
     /// Whether the user accepted the pairing request.
     pub accepted: bool,
@@ -224,7 +224,7 @@ pub struct PairResponse {
 }
 
 /// Description of the file the sender is about to transfer.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TransferOffer {
     /// File name proposed by the sender (sanitized by the receiver).
     pub file_name: String,
@@ -297,7 +297,7 @@ impl TransferOffer {
 }
 
 /// Receiver's answer to a [`TransferOffer`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransferDecision {
     /// Send chunks starting at `start_chunk_index` (non-zero when resuming).
     Accept {
@@ -312,7 +312,7 @@ pub enum TransferDecision {
 }
 
 /// Header preceding the payload on every unidirectional chunk stream.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChunkHeader {
     /// Zero-based chunk index.
     pub chunk_index: u64,
@@ -325,7 +325,7 @@ pub struct ChunkHeader {
 /// Messages from the receiver on the control stream after it accepted a file:
 /// any number of [`TransferResult::Progress`] updates, then the final verdict
 /// ([`TransferResult::Verified`] or [`TransferResult::Failed`]).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransferResult {
     /// The file was saved and its hash matches the offer.
     Verified,

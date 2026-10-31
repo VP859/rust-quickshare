@@ -11,10 +11,17 @@
          any local network traffic, i.e. discovery and direct LAN transfers. -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
-    <!-- Foreground service with a persistent notification keeps transfers alive -->
+    <!-- Foreground service with a persistent notification keeps the node reachable.
+         Type connectedDevice (exchanging data with other devices over the network;
+         its prerequisite is CHANGE_WIFI_MULTICAST_STATE above) has no daily time
+         limit, unlike dataSync, which Android 15+ stops after 6 hours a day and
+         which stays as a fallback. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Keeps the CPU awake while a transfer runs with the screen off. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Storage: only writing to the public Download and Pictures folders on
          Android 10 and older (Android 10 uses legacy storage through
@@ -68,7 +75,7 @@
         <service
             android:name=".FerryService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="connectedDevice|dataSync" />
 
         <provider
           android:name="androidx.core.content.FileProvider"

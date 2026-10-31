@@ -19,6 +19,21 @@ compatibility).
 
 ### Added
 
+- **Transfers survive broken connections**: when the connection breaks (a phone falling asleep,
+  Wi-Fi dropping), the sender reconnects up to three times and the receiver resumes the partial
+  file without asking the user again. Interfaces show "Connection lost – reconnecting (n/3)".
+- **Faster transfers over lossy links** in internet mode: BBRv3 congestion control instead of
+  Cubic – 7× faster at 1 % packet loss and about 20× at 3 % in tests. Local mode keeps Cubic,
+  which is faster on clean, fast links.
+- **Android background**: the foreground service is of type `connectedDevice`, which Android 15+
+  does not stop after 6 hours (`dataSync` remains a fallback and stops cleanly with a notification
+  when its time is up); wake and Wi-Fi locks while transfers run; *Settings → Background* shows
+  battery optimization, battery saver, background restriction and data saver and opens the system
+  app settings.
+- Tests: property-based tests (proptest), fuzz targets for every parser (`fuzz/`), network tests
+  with packet loss, a network change and outages, `tc netem` in CI, a coverage threshold (78 %)
+  and benchmark comparisons against the base branch on pull requests. See `docs/TESTING.md`.
+
 - **Folders**: send whole folders with their structure (CLI `ferry send <folder>`, *Choose a
   folder* in the desktop GUI, paths typed in the TUI).
 - **Cancel transfers**: the ✕ button in the GUI, `x` in the TUI transfers panel. A partly
@@ -48,6 +63,10 @@ compatibility).
 - Dual license MIT OR Apache-2.0.
 
 ### Fixed
+
+- File names such as `". A"` were sanitized to `" A"` (leading space), and sanitizing again gave
+  another name; dots and whitespace are now trimmed together (found by the property tests).
+- Errors of a broken QUIC connection read through `tokio::io` were classified as local I/O errors.
 
 - GUI: Tab could leave an open dialog (icons were taken for focusable elements), and the controls
   of closed dialogs stayed reachable with Tab and screen readers.

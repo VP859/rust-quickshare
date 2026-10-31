@@ -165,6 +165,7 @@ audited.
 - [Architecture](docs/ARCHITECTURE.md) – how the crates and interfaces fit together
 - [Protocol](docs/PROTOCOL.md) – wire format, pairing and discovery
 - [Building](docs/BUILDING.md) – desktop, Android, checks and releases
+- [Testing](docs/TESTING.md) – tests, fuzzing, bad networks, benchmarks, Android by hand
 - [Translating](docs/TRANSLATING.md) – improving or adding a language
 - [Contributing](CONTRIBUTING.md) and the [changelog](CHANGELOG.md)
 

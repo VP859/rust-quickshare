@@ -1,0 +1,52 @@
+[package]
+name = "ferry-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+description = "Fuzz targets for everything Ferry parses from other devices (see README.md)"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+arbitrary = { version = "1.5.0", features = ["derive"] }
+ferry = { path = "..", features = ["fuzzing"] }
+
+# Not part of the main workspace: built with nightly by `cargo fuzz`.
+[workspace]
+
+[[bin]]
+name = "frame"
+path = "fuzz_targets/frame.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "offer"
+path = "fuzz_targets/offer.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ticket"
+path = "fuzz_targets/ticket.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "file_name"
+path = "fuzz_targets/file_name.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "announcement"
+path = "fuzz_targets/announcement.rs"
+test = false
+doc = false
+bench = false

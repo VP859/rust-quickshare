@@ -312,6 +312,9 @@ cli.delivered:
 cli.rejected:
   en: "[REJECTED] %{name}: %{reason}"
   pl: "[ODRZUCONO] %{name}: %{reason}"
+cli.retrying:
+  en: "connection lost, reconnecting (%{attempt}/%{of})"
+  pl: "utracono połączenie, ponowne łączenie (%{attempt}/%{of})"
 cli.cancelled:
   en: "[CANCELLED] %{name}"
   pl: "[ANULOWANO] %{name}"
@@ -765,6 +768,9 @@ tui.cancelling:
 tui.cannot_cancel:
   en: "This transfer has already ended"
   pl: "Ten transfer już się zakończył"
+tui.st_retrying:
+  en: "Connection lost – reconnecting (%{attempt}/%{of})..."
+  pl: "Utracono połączenie – ponowne łączenie (%{attempt}/%{of})..."
 tui.st_cancelled:
   en: "Cancelled – a partly received file is resumed next time"
   pl: "Anulowano – częściowo odebrany plik zostanie wznowiony następnym razem"

@@ -44,8 +44,9 @@ const WINDOWS_RESERVED: &[&str] = &[
 /// Turns a file name received from a peer into a safe single file name.
 ///
 /// Rejects path traversal and absolute paths, replaces characters that are
-/// invalid on common file systems with `_`, strips leading dots and trailing
-/// dots/spaces, and prefixes Windows reserved names with `_`.
+/// invalid on common file systems with `_`, strips dots and whitespace at both
+/// ends (no hidden files, no names Windows cannot open), and prefixes Windows
+/// reserved names with `_`. Sanitizing a sanitized name changes nothing.
 ///
 /// # Errors
 ///
@@ -96,9 +97,11 @@ pub fn sanitize_filename(raw_name: &str) -> Result<String, SecurityError> {
         })
         .collect();
 
+    // Dots and whitespace go together: ". A" must not leave " A" behind (a
+    // name starting with a space, which a second pass would change again).
     let final_name = sanitized
-        .trim_start_matches('.')
-        .trim_end_matches(['.', ' '])
+        .trim_start_matches(|c: char| c == '.' || c.is_whitespace())
+        .trim_end_matches(|c: char| c == '.' || c.is_whitespace())
         .to_string();
     if final_name.is_empty() {
         return Err(SecurityError::InvalidFileName);
@@ -228,6 +231,11 @@ mod tests {
         assert_eq!(sanitize_filename(".bashrc").unwrap(), "bashrc");
         assert_eq!(sanitize_filename("a\nb:c.txt ").unwrap(), "a_b_c.txt");
         assert_eq!(sanitize_filename("zdjęcie.jpg").unwrap(), "zdjęcie.jpg");
+        assert_eq!(
+            sanitize_filename(". A").unwrap(),
+            "A",
+            "found by tests/properties.rs"
+        );
     }
 
     #[test]

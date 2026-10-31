@@ -4,6 +4,8 @@ members = [
     "cli",
     "src-tauri"
 ]
+# Built with nightly by `cargo fuzz`, see fuzz/README.md.
+exclude = ["fuzz"]
 resolver = "2"
 
 # Shared by all crates; the version is the single source for the CLI, the GUI
@@ -14,7 +16,6 @@ edition = "2024"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/VP859/rust-quickshare"
-homepage = "https://github.com/VP859/rust-quickshare"
 authors = ["VP859 and the Ferry contributors"]
 
 [workspace.lints.rust]
@@ -53,7 +54,6 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 authors.workspace = true
 readme = "README.md"
 keywords = ["file-sharing", "p2p", "quic", "lan", "airdrop"]
@@ -67,6 +67,10 @@ workspace = true
 [lib]
 name = "ferry"
 path = "src/lib.rs"
+
+[features]
+# Entry points for the fuzz targets in fuzz/ (never enabled in builds).
+fuzzing = []
 
 # The `ferry` binary (CLI, TUI, daemon) is the `ferry-cli` crate in cli/, the
 # desktop and Android app the `ferry-gui` crate in src-tauri/.
@@ -92,6 +96,9 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 iroh = { workspace = true }
+# BBRv3 congestion control for the QUIC connections (the QUIC library iroh
+# uses; must stay the version iroh depends on). See node::engine::transport_config.
+noq-proto = "1.4.0"
 socket2 = { version = "0.6.5", features = ["all"] }
 gethostname = "1.1.0"
 rust-i18n = "4.2.4"
@@ -114,6 +121,11 @@ libc = "0.2"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+# Property-based tests (tests/properties.rs and unit tests of limits).
+proptest = "1.12.0"
+# tests/network_conditions.rs pins connections to a lossy link with a custom
+# path selector; dev-dependency features never reach release builds.
+iroh = { workspace = true, features = ["unstable-custom-transports"] }
 criterion = { version = "0.8.2", features = ["async_tokio"] }
 
 [[bench]]

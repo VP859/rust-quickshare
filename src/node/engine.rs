@@ -11,13 +11,14 @@
 //!   packets, but they see IP addresses and Node IDs.
 
 use anyhow::{Context, Result};
-use iroh::endpoint::{Connection, presets};
+use iroh::endpoint::{Connection, QuicTransportConfig, presets};
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, SecretKey, Watcher};
 use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, info};
 
@@ -103,7 +104,42 @@ pub struct NodeEngine {
     mode: NetworkMode,
 }
 
+/// QUIC settings of a node in `mode`: iroh's defaults with the congestion
+/// control that suits the network.
+///
+/// Measured with `tests/network_conditions.rs` (3 MiB, 40 ms round trip) and
+/// the loopback benchmark (64 MiB, no loss), release build:
+///
+/// | | 0–0.5 % loss | 1 % loss | 3 % loss | loopback |
+/// |---|---|---|---|---|
+/// | Cubic | 0.6 s | 5.7 s | 13 s | 347 MiB/s |
+/// | BBRv3 | 0.6 s | 0.8 s | 0.7 s | 149 MiB/s |
+///
+/// Loss-based Cubic halves its rate on every lost packet, so on mobile and
+/// long-distance paths – where packets are lost without congestion – it stays
+/// far below the link speed; BBRv3 does not. On a local network Wi-Fi and
+/// Ethernet retransmit lost frames themselves, losses are rare, and Cubic
+/// reaches higher speeds on fast links. So [`NetworkMode::Local`] uses Cubic
+/// and [`NetworkMode::Internet`] BBRv3.
+pub fn transport_config(mode: NetworkMode) -> QuicTransportConfig {
+    let builder = QuicTransportConfig::builder();
+    match mode {
+        NetworkMode::Local => builder
+            .congestion_controller_factory(Arc::new(noq_proto::congestion::CubicConfig::default())),
+        NetworkMode::Internet => builder
+            .congestion_controller_factory(Arc::new(noq_proto::congestion::Bbr3Config::default())),
+    }
+    .build()
+}
+
 impl NodeEngine {
+    /// Wraps an endpoint configured by the caller (e.g. tests that control the
+    /// network paths). It must accept [`ALPN`]; `mode` is only reported by
+    /// [`NodeEngine::mode`].
+    pub fn from_endpoint(endpoint: Endpoint, mode: NetworkMode) -> Self {
+        Self { endpoint, mode }
+    }
+
     /// Binds a new endpoint in [`NetworkMode::Local`]: no relay servers and no
     /// DNS/pkarr address lookup, so it never contacts servers on the internet.
     ///
@@ -128,7 +164,10 @@ impl NodeEngine {
                 }
                 NetworkMode::Internet => Endpoint::builder(presets::N0),
             };
-            builder.secret_key(key).alpns(vec![ALPN.to_vec()])
+            builder
+                .secret_key(key)
+                .alpns(vec![ALPN.to_vec()])
+                .transport_config(transport_config(mode))
         };
         let preferred = match builder(secret_key.clone())
             .bind_addr(SocketAddr::from((Ipv4Addr::UNSPECIFIED, QUIC_PORT)))

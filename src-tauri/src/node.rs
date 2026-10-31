@@ -58,6 +58,9 @@ pub struct AppState {
     pub quit_on_close: std::sync::atomic::AtomicBool,
     /// The user was already told this session that Ferry keeps running in the tray.
     pub tray_hint_shown: std::sync::atomic::AtomicBool,
+    /// IDs of transfers that have not ended; while there are any, Android keeps
+    /// the phone awake.
+    active_transfers: std::sync::Mutex<HashSet<String>>,
 }
 
 impl AppState {
@@ -74,6 +77,7 @@ impl AppState {
             received: std::sync::Mutex::new(HashSet::new()),
             quit_on_close: std::sync::atomic::AtomicBool::new(false),
             tray_hint_shown: std::sync::atomic::AtomicBool::new(false),
+            active_transfers: std::sync::Mutex::new(HashSet::new()),
         }
     }
 
@@ -82,6 +86,23 @@ impl AppState {
     pub fn sync_visibility(&self, config: &Config) {
         if let Some(discovery) = self.discovery.get() {
             discovery.set_visibility(Visibility::from_config(config));
+        }
+    }
+
+    /// Follows every transfer event: when the first transfer starts or the last
+    /// one ends, tells the platform (Android holds a wake lock in between).
+    pub fn track_transfer(&self, event: &TransferEvent) {
+        let Ok(mut active) = self.active_transfers.lock() else {
+            return;
+        };
+        let was_idle = active.is_empty();
+        if event.status.is_final() {
+            active.remove(&event.id);
+        } else {
+            active.insert(event.id.clone());
+        }
+        if was_idle != active.is_empty() {
+            crate::platform::set_transfers_active(!active.is_empty());
         }
     }
 
@@ -442,6 +463,7 @@ impl TransferHandler for GuiHandler {
     fn on_event(&self, mut event: TransferEvent) {
         crate::platform::finalize_download(&self.app, &mut event);
         self.state().record_download(&event);
+        self.state().track_transfer(&event);
         if event.direction == Direction::Download
             && let TransferStatus::Completed { .. } = event.status
         {

@@ -9,9 +9,31 @@
 //!
 //! Files are received into `Download/Ferry`; completed photos and videos are
 //! then moved to `Pictures/Ferry`, which galleries show as an album.
+//!
+//! Android also reports what limits Ferry in the background
+//! ([`background_status`], from `PowerHelper.kt`) and keeps the phone awake
+//! while transfers run ([`set_transfers_active`], `FerryService.kt`).
 
 use ferry::transfer::service::TransferEvent;
+use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
+
+/// What limits Ferry in the background on Android (see `PowerHelper.kt`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BackgroundStatus {
+    /// Battery optimization applies: Doze may pause the network for minutes.
+    #[serde(default)]
+    pub battery_optimized: bool,
+    /// Battery saver is on.
+    #[serde(default)]
+    pub power_save: bool,
+    /// The user restricted the app in the background; no foreground service.
+    #[serde(default)]
+    pub background_restricted: bool,
+    /// Data saver blocks background traffic on metered networks.
+    #[serde(default)]
+    pub data_saver: bool,
+}
 
 /// Android: public folders, gallery integration and the "Share" menu.
 #[cfg(target_os = "android")]
@@ -23,7 +45,10 @@ mod imp {
     use tauri::{AppHandle, Manager};
     use tracing::warn;
 
+    use super::BackgroundStatus;
     use crate::node::AppState;
+    use jni::objects::{JClass, JObject, JString, JValue};
+    use jni::{JNIEnv, JavaVM};
 
     /// Shared files older than a day are deleted at startup.
     const SHARE_RETENTION: Duration = Duration::from_secs(24 * 3600);
@@ -168,6 +193,105 @@ mod imp {
         result
     }
 
+    /// Runs `call` with a JNI environment, the application context and the app
+    /// class `name` (e.g. `io.github.vp859.ferry.PowerHelper`).
+    ///
+    /// App classes are loaded through the context's class loader: `FindClass`
+    /// on a thread started by Rust only sees the classes of the system.
+    #[allow(unsafe_code)]
+    fn with_app_class<R>(
+        name: &str,
+        call: impl FnOnce(&mut JNIEnv<'_>, &JObject<'_>, &JClass<'_>) -> jni::errors::Result<R>,
+    ) -> jni::errors::Result<R> {
+        let ctx = ndk_context::android_context();
+        // SAFETY: tao initializes the ndk context with a valid JavaVM pointer
+        // before the app starts and never releases it.
+        let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }?;
+        let mut env = vm.attach_current_thread()?;
+        // SAFETY: the context is the application context, kept alive by tao in
+        // a global reference for the whole process lifetime.
+        let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+        let run = || {
+            let loader = env
+                .call_method(&context, "getClassLoader", "()Ljava/lang/ClassLoader;", &[])?
+                .l()?;
+            let class_name = env.new_string(name)?;
+            let class = env
+                .call_method(
+                    &loader,
+                    "loadClass",
+                    "(Ljava/lang/String;)Ljava/lang/Class;",
+                    &[JValue::Object(&class_name)],
+                )?
+                .l()?;
+            call(&mut env, &context, &JClass::from(class))
+        };
+        let result = run();
+        if env.exception_check().unwrap_or(false) {
+            let _ = env.exception_clear();
+        }
+        result
+    }
+
+    /// Background limits reported by `PowerHelper.status`.
+    pub fn background_status() -> Option<BackgroundStatus> {
+        let json = with_app_class(
+            "io.github.vp859.ferry.PowerHelper",
+            |env, context, class| {
+                let value = env
+                    .call_static_method(
+                        class,
+                        "status",
+                        "(Landroid/content/Context;)Ljava/lang/String;",
+                        &[JValue::Object(context)],
+                    )?
+                    .l()?;
+                env.get_string(&JString::from(value)).map(String::from)
+            },
+        )
+        .inspect_err(|e| warn!("Could not read the background limits: {e}"))
+        .ok()?;
+        serde_json::from_str(&json).ok()
+    }
+
+    /// Opens the system app info screen (battery usage, permissions).
+    pub fn open_app_settings() {
+        let result = with_app_class(
+            "io.github.vp859.ferry.PowerHelper",
+            |env, context, class| {
+                env.call_static_method(
+                    class,
+                    "openAppSettings",
+                    "(Landroid/content/Context;)V",
+                    &[JValue::Object(context)],
+                )
+                .map(|_| ())
+            },
+        );
+        if let Err(e) = result {
+            warn!("Could not open the app settings: {e}");
+        }
+    }
+
+    /// Holds or releases the wake and Wi-Fi locks of `FerryService`.
+    pub fn set_transfers_active(active: bool) {
+        let result = with_app_class(
+            "io.github.vp859.ferry.FerryService",
+            |env, context, class| {
+                env.call_static_method(
+                    class,
+                    "setTransfersActive",
+                    "(Landroid/content/Context;Z)V",
+                    &[JValue::Object(context), JValue::Bool(u8::from(active))],
+                )
+                .map(|_| ())
+            },
+        );
+        if let Err(e) = result {
+            warn!("Could not update the transfer locks: {e}");
+        }
+    }
+
     /// Copies a `content://` URI (from the file picker) into the app cache,
     /// because the transfer engine needs a regular file (size, seeking on resume).
     pub async fn local_path(app: &AppHandle, input: &str) -> Result<PathBuf, String> {
@@ -256,6 +380,17 @@ mod imp {
     pub fn take_shared_text(_app: &AppHandle) -> Option<String> {
         None
     }
+
+    /// Desktop systems do not limit the app in the background.
+    pub fn background_status() -> Option<super::BackgroundStatus> {
+        None
+    }
+
+    /// Only Android has the app info screen with battery settings.
+    pub fn open_app_settings() {}
+
+    /// Desktop systems do not suspend a running transfer.
+    pub fn set_transfers_active(_active: bool) {}
 }
 
 /// Sets platform-specific directories; called before the configuration is loaded.
@@ -277,6 +412,22 @@ pub fn take_shared_files(app: &AppHandle) -> Vec<String> {
 /// A text shared to the app from the Android "Share" menu (none on desktop).
 pub fn take_shared_text(app: &AppHandle) -> Option<String> {
     imp::take_shared_text(app)
+}
+
+/// What limits Ferry in the background (Android); `None` on desktop.
+pub fn background_status() -> Option<BackgroundStatus> {
+    imp::background_status()
+}
+
+/// Opens the system app info screen of Ferry (Android).
+pub fn open_app_settings() {
+    imp::open_app_settings();
+}
+
+/// Tells Android whether transfers are running, so the phone stays awake
+/// while they do (no-op on desktop).
+pub fn set_transfers_active(active: bool) {
+    imp::set_transfers_active(active);
 }
 
 /// Turns a path or a `content://` URI from the frontend into a local file path.

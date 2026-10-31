@@ -111,8 +111,18 @@ fn classify(error: &(dyn std::error::Error + 'static)) -> Option<ErrorKind> {
         return Some(kind);
     }
     let io = error.downcast_ref::<std::io::Error>()?;
+    // QUIC streams read through `tokio::io` report a broken connection as an
+    // `io::Error` wrapping the QUIC error.
+    if let Some(kind) = io.get_ref().and_then(|inner| classify(inner)) {
+        return Some(kind);
+    }
     Some(match io.kind() {
         std::io::ErrorKind::StorageFull => ErrorKind::DiskFull,
+        std::io::ErrorKind::TimedOut => ErrorKind::Timeout,
+        std::io::ErrorKind::ConnectionReset
+        | std::io::ErrorKind::ConnectionAborted
+        | std::io::ErrorKind::NotConnected
+        | std::io::ErrorKind::BrokenPipe => ErrorKind::Connection,
         _ => ErrorKind::Io,
     })
 }
@@ -142,6 +152,10 @@ mod tests {
             Err(std::io::Error::from(std::io::ErrorKind::NotFound)).context("reading");
         assert_eq!(kind(&io.unwrap_err()), ErrorKind::Io);
         assert_eq!(kind(&anyhow::anyhow!("plain")), ErrorKind::Other);
+        // A QUIC read error seen through tokio::io, as when a connection broke.
+        let lost = std::io::Error::other(iroh::endpoint::ReadError::ClosedStream);
+        let read: anyhow::Result<()> = Err(lost).context("codec.read");
+        assert_eq!(kind(&read.unwrap_err()), ErrorKind::Connection);
     }
 
     #[test]

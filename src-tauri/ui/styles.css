@@ -154,6 +154,10 @@ select {
 }
 .inline { display: flex; gap: 8px; }
 
+.background-status { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.background-status li { display: flex; gap: 8px; align-items: baseline; }
+.background-status li.warn::before { content: "!"; color: var(--warn); font-weight: 700; }
+.background-status li.ok::before { content: "✓"; color: var(--ok); }
 .toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .toggle .label { font-weight: 500; }
 .toggle .desc { color: var(--muted); font-size: 12.5px; }

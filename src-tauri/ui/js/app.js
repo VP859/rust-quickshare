@@ -510,6 +510,7 @@ function renderTransfer(ev) {
   // How the data travels; a relay explains a slow transfer in internet mode.
   const route = ev.route ? ' · ' + t('route_' + ev.route) : '';
   const detail = kind === 'running' ? (ev.total ? `${pct}% · ${fmtSize(ev.done)} / ${fmtSize(ev.total)}${route}` : fmtSize(ev.done) + route)
+    : kind === 'retrying' ? t('st_retrying', { attempt: ev.status.attempt, of: ev.status.of })
     : kind === 'failed' ? t('tr_failed', { error: ev.status.error }) : kind === 'rejected' ? t('tr_rejected', { reason: ev.status.reason })
     : kind === 'completed' ? (ev.status.path ? t('tr_saved', { path: ev.status.path }) : t('st_completed')) + route
     : t('st_' + kind);
@@ -522,7 +523,7 @@ function renderTransfer(ev) {
       el('div', { class: 'meta' }, el('span', { class: 'title' }, ev.file_name), el('span', { class: 'muted small' }, peer)),
       bar,
       el('div', { class: 'detail' }, detail))];
-  if (kind === 'preparing' || kind === 'running') {
+  if (kind === 'preparing' || kind === 'running' || kind === 'retrying') {
     parts.push(el('div', { class: 'trailing' },
       el('button', { class: 'ghost icon', title: t('cancel_transfer'), 'aria-label': t('cancel_transfer'),
         onclick: () => invoke('cancel_transfer', { id: ev.id }).catch(fail) }, icon('x', 'sm'))));
@@ -674,10 +675,27 @@ $('btn-settings').onclick = async () => {
   $('language').value = lang;
   await loadNetwork();
   await loadPrivacy();
+  await loadBackgroundStatus();
   if (!isMobile) { try { $('autostart').checked = await invoke('plugin:autostart|is_enabled'); } catch {} }
   if (!isMobile) { try { $('close-action').value = (await invoke('get_quit_on_close')) ? 'quit' : 'tray'; } catch {} }
   open('modal-settings');
 };
+// Android only: what may pause Ferry in the background, with a way to the
+// system screen where it is changed. The section stays hidden on desktop.
+async function loadBackgroundStatus() {
+  let status = null;
+  try { status = await invoke('background_status'); } catch (e) { console.warn('Background status:', e); }
+  $('background-section').hidden = !status;
+  if (!status) return;
+  const row = (problem, key) => el('li', { class: problem ? 'warn' : 'ok' }, t(problem ? `bg_${key}` : `bg_${key}_ok`));
+  $('background-status').replaceChildren(
+    row(status.battery_optimized, 'battery'),
+    row(status.background_restricted, 'restricted'),
+    row(status.power_save, 'power_save'),
+    row(status.data_saver, 'data_saver'),
+  );
+}
+$('btn-app-settings').onclick = () => invoke('open_app_settings').catch(fail);
 $('mode-pill').onclick = () => $('btn-settings').click();
 $('close-action').onchange = async (e) => {
   try { await invoke('set_quit_on_close', { quit: e.target.value === 'quit' }); }

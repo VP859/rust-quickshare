@@ -297,6 +297,10 @@ fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
                 TransferStatus::AwaitingDecision => {
                     (t!("tui.st_awaiting").into_owned(), Color::Yellow)
                 }
+                TransferStatus::Retrying { attempt, of } => (
+                    t!("tui.st_retrying", attempt = attempt, of = of).into_owned(),
+                    Color::Yellow,
+                ),
                 TransferStatus::Running => {
                     let speed = if row.speed > 0.0 {
                         format!(" · {}/s", human_size(row.speed as u64))

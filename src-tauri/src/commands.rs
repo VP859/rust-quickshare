@@ -431,7 +431,8 @@ pub async fn send_files(
         local.push(crate::platform::local_path(&app, p).await?);
     }
     tauri::async_runtime::spawn(async move {
-        let sink = |ev| {
+        let sink = |ev: service::TransferEvent| {
+            app.state::<AppState>().track_transfer(&ev);
             let _ = app.emit("transfer", ev);
         };
         if let Err(e) = service::send_files(&engine, addr, &local, &sink).await {
@@ -536,6 +537,7 @@ pub async fn receive_from_ticket(
         let sink = |mut ev: service::TransferEvent| {
             crate::platform::finalize_download(&app, &mut ev);
             app.state::<AppState>().record_download(&ev);
+            app.state::<AppState>().track_transfer(&ev);
             let _ = app.emit("transfer", ev);
         };
         if let Err(e) = service::pull_shared(&engine, &ticket, &dest_dir, &sink).await {
@@ -715,6 +717,18 @@ pub async fn set_network_mode(mode: String, state: State<'_, AppState>) -> CmdRe
     let mut config = state.config.lock().await;
     config.network_mode = mode;
     config.save().map_err(err)
+}
+
+/// What limits Ferry in the background on Android; `null` on desktop.
+#[tauri::command]
+pub fn background_status() -> Option<crate::platform::BackgroundStatus> {
+    crate::platform::background_status()
+}
+
+/// Opens the system app info screen of Ferry (Android: battery usage).
+#[tauri::command]
+pub fn open_app_settings() {
+    crate::platform::open_app_settings();
 }
 
 /// Cancels a running transfer by its ID; `false` when it has already ended.

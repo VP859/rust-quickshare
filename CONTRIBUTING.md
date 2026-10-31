@@ -62,7 +62,8 @@ Guidelines:
 - **User-facing text** goes through `t!("key")` with entries in `locales/app.yml` for every
   language; the GUI keeps its strings in `src-tauri/ui/js/locales/<code>.js`.
 - **Tests:** new behaviour comes with a test; protocol changes come with an end-to-end test in
-  `tests/integration_tests.rs`.
+  `tests/integration_tests.rs`, and new parsers of data from other devices with a property test
+  and a fuzz target. [docs/TESTING.md](docs/TESTING.md) lists every kind of test.
 - **Protocol changes** follow [docs/PROTOCOL.md](docs/PROTOCOL.md): an incompatible change bumps
   the ALPN.
 

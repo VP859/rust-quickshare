@@ -597,6 +597,53 @@ fn decode_beacon(data: &[u8], now: u64) -> Option<Beacon> {
     (beacon.timestamp.abs_diff(now) <= MAX_BEACON_AGE.as_secs()).then_some(beacon)
 }
 
+/// The device described by a valid announcement received from `from`: the
+/// name is cleaned (or replaced by a short Node ID), the platform reduced to a
+/// short alphanumeric word and the QUIC ports combined with the sender's IP.
+/// Everything in it comes from the network, so nothing is trusted as is.
+fn nearby_device(beacon: Beacon, from: SocketAddr) -> NearbyDevice {
+    let id = beacon.addr.id;
+    let mut addr = beacon.addr;
+    for port in beacon.quic_ports.iter().take(MAX_QUIC_PORTS) {
+        addr.addrs
+            .insert(TransportAddr::Ip(SocketAddr::new(from.ip(), *port)));
+    }
+    let name = match clean_device_name(&beacon.name) {
+        n if n.is_empty() => t!("config.fallback_alias", id = id.fmt_short()).into_owned(),
+        n => n,
+    };
+    let platform: String = beacon
+        .platform
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(16)
+        .collect();
+    NearbyDevice {
+        node_id: id.to_string(),
+        name,
+        platform,
+        id,
+        addr,
+    }
+}
+
+/// Entry point for the `announcement` fuzz target (feature `fuzzing`): decodes
+/// `data` as a datagram, and as the body of an announcement an attacker signed
+/// with their own key, and checks what would reach the device list.
+#[cfg(feature = "fuzzing")]
+#[doc(hidden)]
+pub fn fuzz_announcement(data: &[u8]) {
+    let _ = decode_beacon(data, unix_now());
+    if let Ok(beacon) = postcard::from_bytes::<Beacon>(data) {
+        let listed = beacon.addr.addrs.len();
+        let device = nearby_device(beacon, SocketAddr::from(([192, 168, 1, 2], DISCOVERY_PORT)));
+        assert!(!device.name.is_empty());
+        assert!(device.name.chars().all(|c| !c.is_control()));
+        assert!(device.platform.len() <= 16);
+        assert!(device.addr.addrs.len() <= listed + MAX_QUIC_PORTS);
+    }
+}
+
 /// Sends one announcement round and updates [`DiscoveryHealth`].
 ///
 /// Only sends to local networks count towards `lan_send_ok`; loopback and
@@ -763,28 +810,8 @@ async fn handle_packet(
     }
 
     let id = beacon.addr.id;
-    let mut addr = beacon.addr;
-    for port in beacon.quic_ports.iter().take(MAX_QUIC_PORTS) {
-        addr.addrs
-            .insert(TransportAddr::Ip(SocketAddr::new(from.ip(), *port)));
-    }
-    let name = match clean_device_name(&beacon.name) {
-        n if n.is_empty() => t!("config.fallback_alias", id = id.fmt_short()).into_owned(),
-        n => n,
-    };
-    let platform: String = beacon
-        .platform
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric())
-        .take(16)
-        .collect();
-    let device = NearbyDevice {
-        node_id: id.to_string(),
-        name,
-        platform,
-        id,
-        addr,
-    };
+    let reply = beacon.reply;
+    let device = nearby_device(beacon, from);
 
     let changed = {
         let Ok(mut devices) = shared.devices.lock() else {
@@ -819,7 +846,7 @@ async fn handle_packet(
     };
 
     if changed
-        && !beacon.reply
+        && !reply
         && shared.visibility.read().is_ok_and(|v| v.answers(&id))
         && let Some(bytes) = encode_beacon(engine, shared, true)
         && let Err(e) = socket.send_to(&bytes, from).await

@@ -1,5 +1,5 @@
 // Behaviour of the GUI frontend against a mocked Tauri API (see fixtures.js).
-import { calls, emit, expect, test } from './fixtures.js';
+import { calls, emit, expect, respond, test } from './fixtures.js';
 
 const PEER = 'b'.repeat(64);
 
@@ -97,4 +97,27 @@ test('dialogs keep the keyboard focus and give it back when closed', async ({ ap
   await app.keyboard.press('Escape');
   await expect(modal).not.toHaveClass(/active/);
   await expect(settings).toBeFocused();
+});
+
+test('Android shows what limits it in the background', async ({ app }, info) => {
+  const android = info.project.name === 'android';
+  if (android) {
+    await respond(app, 'background_status', {
+      battery_optimized: true,
+      power_save: false,
+      background_restricted: false,
+      data_saver: true,
+    });
+  }
+  await app.locator('#btn-settings').click();
+  const section = app.locator('#background-section');
+  if (!android) {
+    await expect(section).toBeHidden();
+    return;
+  }
+  await expect(section).toBeVisible();
+  await expect(section.locator('li.warn')).toHaveCount(2);
+  await expect(section).toContainText('Battery optimization is on');
+  await section.getByRole('button', { name: 'Open app settings' }).click();
+  expect(await calls(app)).toContainEqual(['open_app_settings', {}]);
 });
