@@ -5,10 +5,10 @@ use rust_i18n::t;
 use std::path::PathBuf;
 
 use crate::cli::args::{ConfigCommands, SettingKey};
-use crate::config::Config;
-use crate::i18n::{self, Language};
-use crate::node::NetworkMode;
-use crate::pairing::clean_device_name;
+use ferry::config::Config;
+use ferry::i18n::{self, Language};
+use ferry::node::NetworkMode;
+use ferry::pairing::clean_device_name;
 
 /// `ferry name [new name]`: shows or changes the name visible to other devices.
 ///
@@ -91,13 +91,14 @@ pub fn run_network(mode: Option<&str>) -> Result<()> {
 }
 
 /// Every key of `ferry config`, in display order.
-const SETTING_KEYS: [SettingKey; 6] = [
+const SETTING_KEYS: [SettingKey; 7] = [
     SettingKey::DeviceName,
     SettingKey::Language,
     SettingKey::NetworkMode,
     SettingKey::DownloadDir,
     SettingKey::Hidden,
     SettingKey::AutoAcceptTexts,
+    SettingKey::QuitOnClose,
 ];
 
 /// Name of a setting as typed on the command line (`device-name`, …).
@@ -120,6 +121,7 @@ fn get_setting(config: &Config, key: SettingKey) -> String {
         SettingKey::DownloadDir => config.download_dir().display().to_string(),
         SettingKey::Hidden => config.hidden.to_string(),
         SettingKey::AutoAcceptTexts => config.auto_accept_texts.to_string(),
+        SettingKey::QuitOnClose => config.quit_on_close.to_string(),
     }
 }
 
@@ -156,6 +158,7 @@ fn set_setting(config: &mut Config, key: SettingKey, value: &str) -> Result<()> 
         }
         SettingKey::Hidden => config.hidden = parse_bool(value)?,
         SettingKey::AutoAcceptTexts => config.auto_accept_texts = parse_bool(value)?,
+        SettingKey::QuitOnClose => config.quit_on_close = parse_bool(value)?,
     }
     Ok(())
 }
@@ -169,6 +172,7 @@ fn unset_setting(config: &mut Config, key: SettingKey) {
         SettingKey::DownloadDir => config.default_download_dir = None,
         SettingKey::Hidden => config.hidden = false,
         SettingKey::AutoAcceptTexts => config.auto_accept_texts = false,
+        SettingKey::QuitOnClose => config.quit_on_close = false,
     }
 }
 

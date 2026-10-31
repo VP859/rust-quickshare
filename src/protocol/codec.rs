@@ -5,6 +5,8 @@
 
 use anyhow::{Context, Result};
 use rust_i18n::t;
+
+use crate::error::ProtocolViolation;
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -64,7 +66,10 @@ where
 
     let len = u32::from_be_bytes(len_buf);
     if len > MAX_FRAME_LEN {
-        anyhow::bail!(t!("codec.frame_rejected", len = len, max = MAX_FRAME_LEN));
+        return Err(ProtocolViolation(
+            t!("codec.frame_rejected", len = len, max = MAX_FRAME_LEN).into_owned(),
+        )
+        .into());
     }
 
     let mut buf = vec![0u8; len as usize];

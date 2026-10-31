@@ -124,6 +124,8 @@ pub enum SettingKey {
     Hidden,
     /// Copy texts from Auto-Accept devices without asking (`true`/`false`).
     AutoAcceptTexts,
+    /// Desktop app: quit when the window is closed instead of staying in the tray (`true`/`false`).
+    QuitOnClose,
 }
 
 /// Subcommands of `ferry config`.

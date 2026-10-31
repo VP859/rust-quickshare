@@ -15,6 +15,13 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      frontend-tools:
+        patterns: ["*"]
   - package-ecosystem: gradle
     directory: /src-tauri/gen/android
     schedule:

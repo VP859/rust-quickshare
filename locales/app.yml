@@ -2,8 +2,8 @@ _version: 2
 
 # ---------------------------------------------------------------- protocol
 protocol.bad_chunk_size:
-  en: "Invalid chunk size: %{size}"
-  pl: "Nieprawidłowy rozmiar chunka: %{size}"
+  en: "Invalid chunk size: %{size} (16 KiB – 16 MiB allowed)"
+  pl: "Nieprawidłowy rozmiar chunka: %{size} (dozwolone 16 KiB – 16 MiB)"
 protocol.too_deep:
   en: "The offered folder structure is deeper than %{max} levels"
   pl: "Oferowana struktura folderów ma więcej niż %{max} poziomów"
@@ -172,6 +172,9 @@ receiver.create_dir:
 receiver.open_part:
   en: "Cannot open the partial file %{path}"
   pl: "Nie można otworzyć pliku tymczasowego %{path}"
+receiver.no_space:
+  en: "Not enough free space on the receiving device: %{needed} needed, %{free} free"
+  pl: "Za mało wolnego miejsca na urządzeniu odbiorcy: potrzeba %{needed}, wolne %{free}"
 receiver.hash_mismatch:
   en: "BLAKE3 hash mismatch for the whole file"
   pl: "Niezgodność końcowego haszu BLAKE3 całego pliku"
@@ -431,6 +434,12 @@ settings.language:
   pl: "Język: %{language} (dostępne: %{available})"
 
 # ---------------------------------------------------------------- daemon
+transfer.route_direct:
+  en: "direct"
+  pl: "bezpośrednio"
+transfer.route_relay:
+  en: "via relay (slower)"
+  pl: "przez przekaźnik (wolniej)"
 transfer.cancelled:
   en: "Cancelled"
   pl: "Anulowano"
@@ -797,6 +806,12 @@ gui.notify_offer:
 gui.notify_batch:
   en: "%{sender} wants to send %{count} files"
   pl: "%{sender} chce wysłać pliki (%{count})"
+gui.notify_tray_title:
+  en: "Ferry is still running"
+  pl: "Ferry nadal działa"
+gui.notify_tray:
+  en: "Ferry keeps receiving files in the background. Quit it from the tray icon, or change what closing the window does in Settings."
+  pl: "Ferry dalej odbiera pliki w tle. Zamknij ją z ikony w zasobniku albo zmień działanie zamykania okna w Ustawieniach."
 gui.notify_pair_title:
   en: "Pairing request"
   pl: "Prośba o sparowanie"

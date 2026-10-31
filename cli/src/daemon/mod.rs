@@ -14,12 +14,12 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 use crate::cli::display::human_size;
-use crate::config::Config;
-use crate::discovery::{Discovery, DiscoveryOptions};
-use crate::node::NodeEngine;
-use crate::pairing::PairRequest;
-use crate::protocol::messages::{BatchOffer, TextDecision, TransferOffer};
-use crate::transfer::service::{
+use ferry::config::Config;
+use ferry::discovery::{Discovery, DiscoveryOptions};
+use ferry::node::NodeEngine;
+use ferry::pairing::PairRequest;
+use ferry::protocol::messages::{BatchOffer, TextDecision, TransferOffer};
+use ferry::transfer::service::{
     self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
 

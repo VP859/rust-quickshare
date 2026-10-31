@@ -48,6 +48,8 @@ rust-i18n = "4.2.4"
 [target.'cfg(not(target_os = "android"))'.dependencies]
 tauri = { version = "2.12.5", features = ["tray-icon", "image-png"] }
 tauri-plugin-autostart = "2"
+# Starting Ferry again only shows the running instance instead of a second one.
+tauri-plugin-single-instance = "2"
 
 [target.'cfg(target_os = "android")'.dependencies]
 tauri-plugin-barcode-scanner = "2"

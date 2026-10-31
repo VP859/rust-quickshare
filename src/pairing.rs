@@ -30,6 +30,8 @@
 use anyhow::{Context, Result};
 use iroh::{EndpointAddr, EndpointId};
 use rust_i18n::t;
+
+use crate::error::ProtocolViolation;
 use std::time::Duration;
 
 use crate::node::NodeEngine;
@@ -174,7 +176,7 @@ pub(crate) async fn answer_pairing(
         .with_context(|| t!("pairing.interrupted"))??;
     // blake3::Hash compares in constant time.
     if commitment(requester, &reveal.nonce) != blake3::Hash::from_bytes(*requester_commitment) {
-        anyhow::bail!(t!("pairing.bad_commitment"));
+        return Err(ProtocolViolation(t!("pairing.bad_commitment").into_owned()).into());
     }
     Ok(pairing_code(requester, me, &reveal.nonce, &mine))
 }

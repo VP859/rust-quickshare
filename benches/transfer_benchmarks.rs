@@ -149,14 +149,28 @@ impl TransferHandler for AcceptAll {
 
 /// Whole user-visible transfer: hashing on the sender, offer, chunks over QUIC,
 /// writing, verification and renaming on the receiver.
+///
+/// The file has 64 MiB; `FERRY_BENCH_MIB=3072` measures another size (the
+/// chunk size grows with the file, see `chunk_size_for`).
 fn bench_end_to_end_transfer(c: &mut Criterion) {
-    const SIZE: usize = 64 * 1024 * 1024;
+    let mib: usize = std::env::var("FERRY_BENCH_MIB")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(64);
+    let size = mib * 1024 * 1024;
     let rt = Runtime::new().unwrap();
     let src = tempfile::tempdir().unwrap();
     let dst = tempfile::tempdir().unwrap();
     let path = src.path().join("bench.bin");
-    let data: Vec<u8> = (0..SIZE).map(|i| (i % 251) as u8).collect();
-    std::fs::write(&path, &data).unwrap();
+    {
+        use std::io::Write;
+        let block: Vec<u8> = (0..1024 * 1024).map(|i| (i % 251) as u8).collect();
+        let mut file = std::io::BufWriter::new(std::fs::File::create(&path).unwrap());
+        for _ in 0..mib {
+            file.write_all(&block).unwrap();
+        }
+        file.flush().unwrap();
+    }
 
     let (sender, addr) = rt.block_on(async {
         let receiver = NodeEngine::new(load_or_generate_secret_key(None).unwrap())
@@ -174,10 +188,10 @@ fn bench_end_to_end_transfer(c: &mut Criterion) {
     });
 
     let mut group = c.benchmark_group("end_to_end_transfer");
-    group.throughput(Throughput::Bytes(SIZE as u64));
+    group.throughput(Throughput::Bytes(size as u64));
     group.sample_size(10);
     group.measurement_time(Duration::from_secs(30));
-    group.bench_function("push_64MiB_loopback", |b| {
+    group.bench_function(format!("push_{mib}MiB_loopback"), |b| {
         b.to_async(&rt).iter(|| async {
             service::send_files(&sender, addr.clone(), std::slice::from_ref(&path), &|_| {})
                 .await

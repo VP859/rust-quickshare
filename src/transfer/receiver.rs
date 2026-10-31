@@ -1,20 +1,24 @@
 //! Receiving half of the transfer protocol, with resume support.
 
 use anyhow::{Context, Result};
-use iroh::endpoint::{Connection, RecvStream};
+use iroh::endpoint::{Connection, RecvStream, SendStream};
 use rust_i18n::t;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncSeekExt, AsyncWriteExt, SeekFrom};
 use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 use super::{Channel, ProgressFn, short_hex};
+use crate::error::{IntegrityError, NotEnoughSpace, ProtocolViolation};
 use crate::protocol::codec::{read_msg, write_msg};
 use crate::protocol::messages::{
-    CHUNK_WINDOW, ChunkHeader, TransferDecision, TransferOffer, TransferResult,
+    ChunkHeader, TransferDecision, TransferOffer, TransferResult, chunk_window,
 };
+use crate::size::human_size;
 use crate::transfer::hash::hash_prefix;
 use crate::transfer::security::{
     resolve_secure_folder, resolve_secure_target_path, sanitize_filename, unique_destination,
@@ -46,6 +50,37 @@ pub async fn reject(mut channel: Channel, reason: &str) -> Result<()> {
     };
     write_msg(&mut channel.send, &decision).await?;
     channel.finish().await;
+    Ok(())
+}
+
+/// Free space kept on the disk after a transfer (256 MiB), so a received file
+/// never fills it completely.
+pub const DISK_RESERVE: u64 = 256 * 1024 * 1024;
+
+/// Checks that `needed` more bytes fit on the disk holding `dir`, keeping
+/// [`DISK_RESERVE`] free; the error is the localized reason for the sender.
+/// When the free space cannot be determined the transfer is allowed.
+///
+/// # Errors
+///
+/// Returns the reason when the disk is too full.
+pub fn check_free_space(dir: &Path, needed: u64) -> Result<(), String> {
+    // The folder may not exist yet (e.g. a batch's destination); the disk is
+    // the one of its nearest existing parent.
+    let Some(existing) = dir.ancestors().find(|p| p.exists()) else {
+        return Ok(());
+    };
+    let Ok(free) = fs4::available_space(existing) else {
+        return Ok(());
+    };
+    if needed.saturating_add(DISK_RESERVE) > free {
+        return Err(t!(
+            "receiver.no_space",
+            needed = human_size(needed),
+            free = human_size(free)
+        )
+        .into_owned());
+    }
     Ok(())
 }
 
@@ -117,6 +152,20 @@ pub async fn receive_on_channel(
         blake3::Hasher::new()
     };
 
+    // Refuse what does not fit instead of failing near the end of a long
+    // transfer with a full disk (which would also fill it for everyone else).
+    if let Err(reason) = check_free_space(&target_dir, offer.file_size - valid_bytes) {
+        write_msg(
+            &mut channel.send,
+            &TransferDecision::Reject {
+                reason: reason.clone(),
+            },
+        )
+        .await?;
+        channel.finish().await;
+        return Err(NotEnoughSpace(reason).into());
+    }
+
     write_msg(
         &mut channel.send,
         &TransferDecision::Accept { start_chunk_index },
@@ -136,6 +185,7 @@ pub async fn receive_on_channel(
 
     receive_chunks(
         conn,
+        &mut channel.send,
         offer,
         start_chunk_index,
         valid_bytes,
@@ -158,7 +208,7 @@ pub async fn receive_on_channel(
         )
         .await?;
         channel.finish().await;
-        anyhow::bail!(reason);
+        return Err(IntegrityError(reason).into());
     }
 
     let final_path = unique_destination(&final_target);
@@ -195,51 +245,120 @@ impl ChunkTask {
 ///
 /// Every written chunk is also fed to `hasher`, which therefore ends up with
 /// the hash of the whole file without reading it back from disk.
+#[allow(clippy::too_many_arguments)] // the state of one transfer, passed down once
 async fn receive_chunks(
     conn: &Connection,
+    feedback: &mut SendStream,
     offer: &TransferOffer,
     start_chunk_index: u64,
-    mut done: u64,
+    done: u64,
     part_file: &mut File,
     hasher: &mut blake3::Hasher,
     progress: ProgressFn<'_>,
 ) -> Result<()> {
-    let mut pending: VecDeque<ChunkTask> = VecDeque::with_capacity(CHUNK_WINDOW);
+    // The same window as the sender's; it also bounds the memory of the
+    // chunks being read to about IN_FLIGHT_BYTES.
+    let window = chunk_window(offer.chunk_size);
+    let mut pending: VecDeque<ChunkTask> = VecDeque::with_capacity(window);
+    let mut meter = ArrivalMeter::new(done, progress, feedback);
 
     for chunk_index in start_chunk_index..offer.total_chunks() {
-        if pending.len() >= CHUNK_WINDOW
+        if pending.len() >= window
             && let Some(task) = pending.pop_front()
         {
-            let payload = task.join().await?;
+            let payload = meter.while_waiting(task.join()).await??;
             hasher.update(&payload);
             part_file.write_all(&payload).await?;
-            done += payload.len() as u64;
-            progress(done);
+            meter.report().await?;
         }
 
         let expected_len = offer
             .chunk_len(chunk_index)
             .with_context(|| t!("transfer.chunk_len"))?;
-        let stream = conn
-            .accept_uni()
-            .await
+        let stream = meter
+            .while_waiting(conn.accept_uni())
+            .await?
             .with_context(|| t!("receiver.connection_lost"))?;
         pending.push_back(ChunkTask(tokio::spawn(read_chunk(
             stream,
             chunk_index,
             expected_len,
+            meter.arrived.clone(),
         ))));
     }
 
     while let Some(task) = pending.pop_front() {
-        let payload = task.join().await?;
+        let payload = meter.while_waiting(task.join()).await??;
         hasher.update(&payload);
         part_file.write_all(&payload).await?;
-        done += payload.len() as u64;
-        progress(done);
+        meter.report().await?;
     }
     part_file.flush().await?;
     Ok(())
+}
+
+/// Reports bytes as they arrive, not only after whole chunks: with 1 MiB
+/// chunks a small file on a slow link would otherwise stay at 0% for minutes.
+/// Every change goes to the local progress callback and, as
+/// [`TransferResult::Progress`], to the sender, so both screens agree.
+struct ArrivalMeter<'a> {
+    /// Bytes that were already on disk when the transfer started (resume).
+    base: u64,
+    /// Payload bytes received so far by all chunk tasks.
+    arrived: Arc<AtomicU64>,
+    /// Last reported value, to avoid repeating it.
+    last: u64,
+    /// Progress callback of the transfer.
+    progress: ProgressFn<'a>,
+    /// Control stream to the sender.
+    feedback: &'a mut SendStream,
+}
+
+impl<'a> ArrivalMeter<'a> {
+    /// Interval of progress updates while waiting for data.
+    const TICK: std::time::Duration = std::time::Duration::from_millis(250);
+
+    /// Starts counting at `base` bytes.
+    fn new(base: u64, progress: ProgressFn<'a>, feedback: &'a mut SendStream) -> Self {
+        Self {
+            base,
+            arrived: Arc::new(AtomicU64::new(0)),
+            last: base,
+            progress,
+            feedback,
+        }
+    }
+
+    /// Reports the current count to this device and to the sender if it changed.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the control stream to the sender is broken.
+    async fn report(&mut self) -> Result<()> {
+        let now = self.base + self.arrived.load(Ordering::Relaxed);
+        if now != self.last {
+            self.last = now;
+            (self.progress)(now);
+            write_msg(self.feedback, &TransferResult::Progress { received: now }).await?;
+        }
+        Ok(())
+    }
+
+    /// Awaits `fut`, reporting progress periodically in the meantime.
+    ///
+    /// # Errors
+    ///
+    /// Fails when a progress report cannot be sent; `fut` is then dropped.
+    async fn while_waiting<T>(&mut self, fut: impl std::future::Future<Output = T>) -> Result<T> {
+        let mut fut = std::pin::pin!(fut);
+        let mut tick = tokio::time::interval(Self::TICK);
+        loop {
+            tokio::select! {
+                result = &mut fut => return Ok(result),
+                _ = tick.tick() => self.report().await?,
+            }
+        }
+    }
 }
 
 /// Reads one chunk stream and checks its index, length and BLAKE3 hash.
@@ -247,33 +366,87 @@ async fn read_chunk(
     mut stream: RecvStream,
     chunk_index: u64,
     expected_len: u32,
+    arrived: Arc<AtomicU64>,
 ) -> Result<Vec<u8>> {
     let header: ChunkHeader = read_msg(&mut stream).await?;
     if header.chunk_index != chunk_index {
-        anyhow::bail!(t!(
-            "receiver.chunk_order",
-            expected = chunk_index,
-            got = header.chunk_index
-        ));
+        return Err(ProtocolViolation(
+            t!(
+                "receiver.chunk_order",
+                expected = chunk_index,
+                got = header.chunk_index
+            )
+            .into_owned(),
+        )
+        .into());
     }
     if header.payload_len != expected_len {
-        anyhow::bail!(t!(
-            "receiver.chunk_len",
-            index = chunk_index,
-            got = header.payload_len,
-            expected = expected_len
-        ));
+        return Err(ProtocolViolation(
+            t!(
+                "receiver.chunk_len",
+                index = chunk_index,
+                got = header.payload_len,
+                expected = expected_len
+            )
+            .into_owned(),
+        )
+        .into());
     }
 
     let mut payload = vec![0u8; expected_len as usize];
-    stream
-        .read_exact(&mut payload)
+    let mut filled = 0;
+    while filled < payload.len() {
+        let n = stream
+            .read(&mut payload[filled..])
+            .await
+            .with_context(|| t!("receiver.chunk_read"))?
+            .with_context(|| t!("receiver.chunk_read"))?;
+        filled += n;
+        arrived.fetch_add(n as u64, Ordering::Relaxed);
+    }
+    // Read up to the end of the stream: dropping it before the sender's FIN
+    // arrived would send STOP_SENDING, which the sender reports as a failure.
+    if stream
+        .read(&mut [0u8; 1])
         .await
-        .with_context(|| t!("receiver.chunk_read"))?;
+        .with_context(|| t!("receiver.chunk_read"))?
+        .is_some()
+    {
+        return Err(ProtocolViolation(
+            t!(
+                "receiver.chunk_len",
+                index = chunk_index,
+                got = "> expected",
+                expected = expected_len
+            )
+            .into_owned(),
+        )
+        .into());
+    }
 
     if *blake3::hash(&payload).as_bytes() != header.chunk_hash {
         warn!("Chunk #{chunk_index} failed BLAKE3 verification");
-        anyhow::bail!(t!("receiver.chunk_hash", index = chunk_index));
+        return Err(
+            IntegrityError(t!("receiver.chunk_hash", index = chunk_index).into_owned()).into(),
+        );
     }
     Ok(payload)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn free_space_is_checked_with_a_reserve() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(check_free_space(dir.path(), 1).is_ok());
+        assert!(check_free_space(dir.path(), u64::MAX).is_err());
+        let missing = dir.path().join("not/yet/created");
+        assert!(
+            check_free_space(&missing, 1).is_ok(),
+            "uses the existing parent"
+        );
+        assert!(check_free_space(&missing, u64::MAX).is_err());
+    }
 }

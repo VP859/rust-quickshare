@@ -1,8 +1,9 @@
 //! Tauri v2 desktop and Android application of Ferry.
 //!
 //! The Rust side runs the P2P node ([`ferry`]) and exposes [`commands`] to the
-//! web frontend in `ui/index.html`. On desktop the app keeps running in the
-//! system tray when its window is closed.
+//! web frontend in `ui/index.html`. On desktop only one instance runs: starting
+//! Ferry again shows the existing window. Closing the window keeps Ferry running
+//! in the system tray, or quits it when `quit_on_close` is set.
 
 rust_i18n::i18n!("../locales", fallback = "en");
 
@@ -47,7 +48,18 @@ fn init_logging() {
 pub fn run() {
     init_logging();
 
-    let mut builder = tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    // Must be the first plugin: a second start hands over to the running
+    // instance and exits before anything else is initialized.
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            tray::show_main(app);
+        }));
+    }
+
+    builder = builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init());
@@ -68,8 +80,7 @@ pub fn run() {
             ))
             .on_window_event(|window, event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
+                    on_close_requested(window, api);
                 }
             });
     }
@@ -108,6 +119,8 @@ pub fn run() {
             refresh_nearby,
             pair_device,
             cancel_transfer,
+            get_quit_on_close,
+            set_quit_on_close,
             get_privacy,
             set_privacy,
             get_device_name,
@@ -134,6 +147,33 @@ pub fn run() {
         });
 }
 
+/// Closing the main window: quits Ferry when the user chose so, otherwise hides
+/// the window and keeps receiving in the background. The first time in a
+/// session a notification says where Ferry went, so it does not seem to have
+/// quit (on desktops without a tray, starting Ferry again shows the window).
+#[cfg(desktop)]
+fn on_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) {
+    use std::sync::atomic::Ordering;
+    use tauri_plugin_notification::NotificationExt;
+
+    let app = window.app_handle();
+    let state = app.state::<AppState>();
+    if state.quit_on_close.load(Ordering::Relaxed) {
+        app.exit(0);
+        return;
+    }
+    api.prevent_close();
+    let _ = window.hide();
+    if !state.tray_hint_shown.swap(true, Ordering::Relaxed) {
+        let _ = app
+            .notification()
+            .builder()
+            .title(rust_i18n::t!("gui.notify_tray_title"))
+            .body(rust_i18n::t!("gui.notify_tray"))
+            .show();
+    }
+}
+
 /// System tray icon and its menu (desktop only).
 #[cfg(desktop)]
 pub(crate) mod tray {
@@ -146,7 +186,7 @@ pub(crate) mod tray {
     const TRAY_ID: &str = "ferry-tray";
 
     /// Shows, restores and focuses the main window.
-    fn show_main(app: &AppHandle) {
+    pub fn show_main(app: &AppHandle) {
         if let Some(window) = app.get_webview_window("main") {
             let _ = window.show();
             let _ = window.unminimize();

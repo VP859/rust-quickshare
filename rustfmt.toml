@@ -1,0 +1,8 @@
+# Formatting of every crate in the workspace; `cargo fmt --all --check` runs in CI.
+# Only stable options, so the stable toolchain from rust-toolchain.toml is enough.
+edition = "2024"
+style_edition = "2024"
+max_width = 100
+newline_style = "Unix"
+use_field_init_shorthand = true
+use_try_shorthand = true

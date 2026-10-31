@@ -14,8 +14,11 @@
 
 ## Library and CLI
 
+The workspace has three crates: `ferry` (the library, repository root), `ferry-cli` (`cli/`, the
+`ferry` binary with the CLI, TUI and daemon) and `ferry-gui` (`src-tauri/`).
+
 ```bash
-cargo build --release -p ferry                # target/release/ferry
+cargo build --release -p ferry-cli            # target/release/ferry
 cargo test --workspace                        # unit and end-to-end tests (two real iroh nodes)
 cargo bench --bench transfer_benchmarks       # hashing, framing, a 64 MiB transfer over QUIC
 cargo doc --no-deps --workspace --open        # API documentation
@@ -32,7 +35,7 @@ FERRY_CONFIG_DIR=/tmp/ferry-b cargo run --bin ferry -- tui
 
 ```bash
 cd src-tauri
-npx @tauri-apps/cli@2 dev                      # hot reload of ui/index.html
+npx @tauri-apps/cli@2 dev                      # hot reload of ui/
 npx @tauri-apps/cli@2 build                    # .deb/.rpm/.AppImage or .msi/.exe
 ```
 
@@ -66,7 +69,13 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace
-node scripts/check-frontend.mjs src-tauri/ui/index.html
+cargo rustdoc -p ferry-cli --bin ferry -- -D warnings --document-private-items
+
+# GUI frontend (Node.js 22): syntax, translations, lint and browser tests
+npm ci
+npm run check:ui
+npm run lint:ui
+npx playwright install chromium && npm run test:ui
 cargo deny check                               # licenses and advisories (cargo install cargo-deny)
 ```
 
@@ -94,3 +103,10 @@ gh attestation verify <file> --repo VP859/rust-quickshare
 
 Android signing in CI uses the `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
 `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets.
+
+## Repository settings (maintainers)
+
+Protect the `main` branch in *Settings → Branches* (or with a ruleset): require a pull request and
+the CI checks *Format*, *Clippy and tests*, *Minimum supported Rust*, *Documentation*,
+*Android (aarch64)*, *Licenses and advisories* and *GUI frontend* to pass, and disallow force
+pushes. Enable private vulnerability reporting in *Settings → Security* (see `SECURITY.md`).

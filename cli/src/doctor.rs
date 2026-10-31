@@ -12,10 +12,15 @@ use tracing::info;
 pub struct DoctorReport {
     /// A UDP socket can be opened.
     pub udp_socket_ok: bool,
-    /// A VPN or tunnel interface is active.
-    pub vpn_interface_detected: bool,
     /// `config.toml` is missing or parses correctly.
     pub config_valid: bool,
+}
+
+impl DoctorReport {
+    /// No check found a problem that prevents Ferry from working.
+    pub fn healthy(&self) -> bool {
+        self.udp_socket_ok && self.config_valid
+    }
 }
 
 /// Runs all checks, prints a human readable report and returns its summary.
@@ -37,7 +42,7 @@ pub async fn run_doctor() -> Result<DoctorReport> {
         }
     };
 
-    let mode = crate::config::Config::load()
+    let mode = ferry::config::Config::load()
         .map(|c| c.network_mode)
         .unwrap_or_default();
     println!("[i] {}", t!("doctor.network_mode", mode = mode));
@@ -51,7 +56,7 @@ pub async fn run_doctor() -> Result<DoctorReport> {
 
     check_discovery().await;
 
-    let config_ok = match crate::config::Config::load() {
+    let config_ok = match ferry::config::Config::load() {
         Ok(_) => {
             println!("[✓] {}\n", t!("doctor.config_ok"));
             true
@@ -67,16 +72,15 @@ pub async fn run_doctor() -> Result<DoctorReport> {
 
     Ok(DoctorReport {
         udp_socket_ok: udp_ok,
-        vpn_interface_detected: vpn_detected,
         config_valid: config_ok,
     })
 }
 
 /// Runs local network discovery for a few seconds and prints what it found.
 async fn check_discovery() {
-    use crate::discovery::{DISCOVERY_PORT, Discovery, DiscoveryOptions};
-    let config = crate::config::Config::load().unwrap_or_default();
-    let engine = match crate::node::NodeEngine::with_persistent_identity().await {
+    use ferry::discovery::{DISCOVERY_PORT, Discovery, DiscoveryOptions};
+    let config = ferry::config::Config::load().unwrap_or_default();
+    let engine = match ferry::node::NodeEngine::with_persistent_identity().await {
         Ok(e) => e,
         Err(e) => {
             println!(

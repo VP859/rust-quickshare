@@ -11,7 +11,7 @@ use rust_i18n::t;
 
 use super::app::{App, Focus, PendingKind, Popup, display_path};
 use crate::cli::display::{human_size, qr_terminal};
-use crate::transfer::service::{Direction as TransferDirection, TransferStatus};
+use ferry::transfer::service::{Direction as TransferDirection, TransferStatus};
 
 /// Width of transfer progress bars in characters.
 const BAR_WIDTH: usize = 16;
@@ -303,8 +303,16 @@ fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
                     } else {
                         String::new()
                     };
+                    let route = ev
+                        .route
+                        .map(|r| format!(" · {}", r.label()))
+                        .unwrap_or_default();
                     (
-                        format!("{} / {}{speed}", human_size(ev.done), human_size(ev.total)),
+                        format!(
+                            "{} / {}{speed}{route}",
+                            human_size(ev.done),
+                            human_size(ev.total)
+                        ),
                         Color::Yellow,
                     )
                 }

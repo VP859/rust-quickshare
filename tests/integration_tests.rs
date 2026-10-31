@@ -9,7 +9,7 @@ use ferry::pairing::{PairOutcome, PairRequest, request_pairing};
 use ferry::protocol::codec::{read_msg, write_msg};
 use ferry::protocol::messages::{
     BatchOffer, DEFAULT_CHUNK_SIZE, Hello, MAX_TEXT_LEN, PairChallenge, PairResponse, PairReveal,
-    ShareToken, TextDecision, TransferDecision, TransferOffer,
+    ShareToken, TextDecision, TransferDecision, TransferOffer, chunk_size_for,
 };
 use ferry::transfer::Channel;
 use ferry::transfer::receiver::part_path_for;
@@ -170,6 +170,17 @@ async fn push_multi_chunk_file_to_accepting_peer() -> Result<()> {
             Some(TransferStatus::Completed { .. })
         ));
         assert!(sent.iter().all(|e| e.total == data.len() as u64));
+        assert!(
+            sent.iter()
+                .filter(|e| e.status == TransferStatus::Running)
+                .all(|e| e.route == Some(service::Route::Direct)),
+            "a loopback transfer is direct"
+        );
+        assert!(
+            sent.iter()
+                .any(|e| e.status == TransferStatus::Running && e.done == data.len() as u64),
+            "the receiver's progress reports reach the sender"
+        );
         Ok(())
     })
     .await
@@ -433,6 +444,40 @@ async fn malicious_offers_are_refused() -> Result<()> {
         }
         assert!(!dst.path().join(".bashrc").exists());
         assert!(!inner.exists() || std::fs::read_dir(&inner)?.count() == 0);
+        Ok(())
+    })
+    .await
+}
+
+/// A file larger than the free disk space is declined before any data is sent,
+/// with a reason the sender can show.
+#[tokio::test(flavor = "multi_thread")]
+async fn file_larger_than_free_space_is_declined() -> Result<()> {
+    with_timeout(async {
+        let dst = tempdir()?;
+        let handler = Arc::new(TestHandler::new(true, dst.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+
+        let conn = sender.connect(addr).await?;
+        let mut ch = Channel::open(&conn, &Hello::Push).await?;
+        let file_size = 1 << 60; // 1 EiB
+        let offer = TransferOffer {
+            file_name: "huge.bin".into(),
+            file_size,
+            chunk_size: chunk_size_for(file_size),
+            file_hash: [0; 32],
+            folder: Vec::new(),
+        };
+        write_msg(&mut ch.send, &offer).await?;
+        match read_msg::<_, TransferDecision>(&mut ch.recv).await? {
+            TransferDecision::Reject { reason } => assert!(!reason.is_empty()),
+            other => panic!("expected a rejection, got {other:?}"),
+        }
+        assert!(std::fs::read_dir(dst.path())?.all(|e| {
+            e.map(|e| !e.file_name().to_string_lossy().starts_with("huge"))
+                .unwrap_or(true)
+        }));
         Ok(())
     })
     .await
@@ -785,8 +830,15 @@ async fn internet_mode_transfers_through_a_relay() -> Result<()> {
         ));
 
         let sender = NodeEngine::with_mode(key()?, NetworkMode::Internet).await?;
-        service::send_files(&sender, relay_only, &[path], &|_| {}).await?;
+        let routes = Mutex::new(Vec::new());
+        service::send_files(&sender, relay_only, &[path], &|e| {
+            routes.lock().unwrap().push(e.route);
+        })
+        .await?;
         assert_eq!(tokio::fs::read(dst.path().join("relay.bin")).await?, data);
+        let routes = routes.into_inner().unwrap();
+        eprintln!("routes: {routes:?}");
+        assert!(routes.iter().any(Option::is_some), "the route is reported");
         Ok(())
     })
     .await

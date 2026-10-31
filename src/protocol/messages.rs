@@ -10,6 +10,7 @@
 //! sender   ── TransferOffer ──────────────────────────────────────────────────▶
 //! receiver ◀─ TransferDecision::Accept { start_chunk_index } | Reject { reason } ─
 //! sender   ── one unidirectional stream per chunk: ChunkHeader + payload ─────▶
+//! receiver ◀─ TransferResult::Progress { received }* (while data arrives) ─────
 //! receiver ◀─ TransferResult::Verified | Failed { reason } ───────────────────
 //! ```
 //!
@@ -30,12 +31,27 @@
 
 use iroh::EndpointAddr;
 use rust_i18n::t;
+
+use crate::error::ProtocolViolation;
 use serde::{Deserialize, Serialize};
 
-/// Default chunk size used by senders (1 MiB).
+/// Chunk size of files up to 1 GiB (1 MiB); see [`chunk_size_for`].
 pub const DEFAULT_CHUNK_SIZE: u32 = 1024 * 1024;
+/// Smallest chunk size a sender picks (1 MiB). Smaller chunks cost more CPU
+/// per byte (a stream, a header and a hash each) – about 30% less throughput
+/// with 256 KiB – and progress no longer depends on the chunk size.
+pub const MIN_SEND_CHUNK_SIZE: u32 = DEFAULT_CHUNK_SIZE;
+/// Largest chunk size a sender picks (8 MiB).
+pub const MAX_SEND_CHUNK_SIZE: u32 = 8 * 1024 * 1024;
+/// Smallest chunk size accepted from a remote peer (16 KiB): tiny chunks would
+/// turn a large file into millions of streams.
+pub const MIN_CHUNK_SIZE: u32 = 16 * 1024;
 /// Largest chunk size accepted from a remote peer (16 MiB).
 pub const MAX_CHUNK_SIZE: u32 = 16 * 1024 * 1024;
+/// Chunk data kept in flight per transfer (8 MiB): enough for about
+/// 650 Mbit/s at 100 ms round trip, and the bound of the receiver's buffers.
+/// More only adds work on fast local links, where the CPU is the limit.
+pub const IN_FLIGHT_BYTES: u64 = 8 * 1024 * 1024;
 /// Largest accepted metadata frame (offer, chunk header, …) in bytes.
 pub const MAX_FRAME_LEN: u32 = 64 * 1024;
 /// Largest accepted file name in bytes (the limit of most file systems).
@@ -48,8 +64,42 @@ pub const MAX_TEXT_LEN: usize = 32 * 1024;
 pub const MAX_BATCH_NAMES: usize = 20;
 /// Deepest folder structure accepted in [`TransferOffer::folder`].
 pub const MAX_FOLDER_DEPTH: usize = 16;
-/// Number of chunk streams in flight at the same time.
-pub const CHUNK_WINDOW: usize = 8;
+/// Chunk size a sender uses for a file of `file_size` bytes.
+///
+/// Aims at about 1024 chunks per file, rounded up to a power of two between
+/// [`MIN_SEND_CHUNK_SIZE`] and [`MAX_SEND_CHUNK_SIZE`]: 1 MiB up to 1 GiB, then
+/// growing to 8 MiB for files above 4 GiB. Large files thus need fewer streams,
+/// headers and hashes, and the number of chunks a receiver handles stays
+/// bounded; a resume repeats at most one chunk. The size depends only on the
+/// file size, so an interrupted transfer resumes with the same chunks.
+///
+/// # Examples
+///
+/// ```
+/// use ferry::protocol::messages::chunk_size_for;
+///
+/// assert_eq!(chunk_size_for(5 * 1024 * 1024), 1024 * 1024);
+/// assert_eq!(chunk_size_for(3 * 1024 * 1024 * 1024), 4 * 1024 * 1024);
+/// assert_eq!(chunk_size_for(100 * 1024 * 1024 * 1024), 8 * 1024 * 1024);
+/// ```
+pub fn chunk_size_for(file_size: u64) -> u32 {
+    /// Number of chunks the size aims at.
+    const TARGET_CHUNKS: u64 = 1024;
+    let wanted = file_size
+        .div_ceil(TARGET_CHUNKS)
+        .clamp(MIN_SEND_CHUNK_SIZE.into(), MAX_SEND_CHUNK_SIZE.into());
+    // `wanted` ≤ MAX_SEND_CHUNK_SIZE, a power of two, so neither step overflows.
+    u32::try_from(wanted.next_power_of_two()).unwrap_or(MAX_SEND_CHUNK_SIZE)
+}
+
+/// Number of chunk streams in flight for chunks of `chunk_size` bytes, so that
+/// about [`IN_FLIGHT_BYTES`] are on the way: 8 chunks of 1 MiB, 4 of 2 MiB or
+/// larger (never fewer, so the link does not idle between chunks), up to 64
+/// of a peer's small chunks. Sender and receiver compute the same value.
+pub fn chunk_window(chunk_size: u32) -> usize {
+    let window = IN_FLIGHT_BYTES / u64::from(chunk_size.max(1));
+    usize::try_from(window.clamp(4, 64)).unwrap_or(4)
+}
 
 /// Random token identifying a file shared through a TICKET ("pull" mode).
 pub type ShareToken = [u8; 16];
@@ -115,7 +165,7 @@ impl BatchOffer {
             || self.names.len() > MAX_BATCH_NAMES
             || self.names.iter().any(|n| n.len() > MAX_FILE_NAME_LEN)
         {
-            anyhow::bail!(t!("protocol.bad_batch"));
+            return Err(ProtocolViolation(t!("protocol.bad_batch").into_owned()).into());
         }
         Ok(())
     }
@@ -210,15 +260,21 @@ impl TransferOffer {
     /// [`MAX_FILE_NAME_LEN`], or when there are more than [`MAX_FOLDER_DEPTH`]
     /// folders.
     pub fn validate(&self) -> anyhow::Result<()> {
-        if self.chunk_size == 0 || self.chunk_size > MAX_CHUNK_SIZE {
-            anyhow::bail!(t!("protocol.bad_chunk_size", size = self.chunk_size));
+        if !(MIN_CHUNK_SIZE..=MAX_CHUNK_SIZE).contains(&self.chunk_size) {
+            return Err(ProtocolViolation(
+                t!("protocol.bad_chunk_size", size = self.chunk_size).into_owned(),
+            )
+            .into());
         }
         let bad_name = |name: &String| name.is_empty() || name.len() > MAX_FILE_NAME_LEN;
         if bad_name(&self.file_name) || self.folder.iter().any(bad_name) {
-            anyhow::bail!(t!("protocol.bad_file_name_len"));
+            return Err(ProtocolViolation(t!("protocol.bad_file_name_len").into_owned()).into());
         }
         if self.folder.len() > MAX_FOLDER_DEPTH {
-            anyhow::bail!(t!("protocol.too_deep", max = MAX_FOLDER_DEPTH));
+            return Err(ProtocolViolation(
+                t!("protocol.too_deep", max = MAX_FOLDER_DEPTH).into_owned(),
+            )
+            .into());
         }
         Ok(())
     }
@@ -266,7 +322,9 @@ pub struct ChunkHeader {
     pub chunk_hash: [u8; 32],
 }
 
-/// Receiver's final verdict after verifying the hash of the whole file.
+/// Messages from the receiver on the control stream after it accepted a file:
+/// any number of [`TransferResult::Progress`] updates, then the final verdict
+/// ([`TransferResult::Verified`] or [`TransferResult::Failed`]).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TransferResult {
     /// The file was saved and its hash matches the offer.
@@ -276,11 +334,48 @@ pub enum TransferResult {
         /// Human readable failure reason.
         reason: String,
     },
+    /// Bytes of the file the receiver has so far (including a resumed
+    /// prefix), sent a few times per second while data arrives. The sender
+    /// shows it as its progress: its own count only says what left its
+    /// buffers, which on a slow link is far ahead of what arrived.
+    Progress {
+        /// Bytes received so far.
+        received: u64,
+    },
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chunk_sizes_follow_the_file_size() {
+        assert_eq!(chunk_size_for(0), MIN_SEND_CHUNK_SIZE);
+        assert_eq!(chunk_size_for(10), MIN_SEND_CHUNK_SIZE);
+        assert_eq!(chunk_size_for(1024 * 1024 * 1024), MIN_SEND_CHUNK_SIZE);
+        assert_eq!(chunk_size_for(1024 * 1024 * 1024 + 1), 2 * 1024 * 1024);
+        assert_eq!(chunk_size_for(4 * 1024 * 1024 * 1024), 4 * 1024 * 1024);
+        assert_eq!(chunk_size_for(5 * 1024 * 1024 * 1024), MAX_SEND_CHUNK_SIZE);
+        assert_eq!(chunk_size_for(u64::MAX), MAX_SEND_CHUNK_SIZE);
+        let mut previous = 0;
+        for shift in 0..48 {
+            let size = chunk_size_for(1u64 << shift);
+            assert!(size.is_power_of_two() && size >= previous);
+            assert!((MIN_SEND_CHUNK_SIZE..=MAX_SEND_CHUNK_SIZE).contains(&size));
+            previous = size;
+        }
+    }
+
+    #[test]
+    fn window_bounds_memory() {
+        assert_eq!(chunk_window(MIN_CHUNK_SIZE), 64);
+        assert_eq!(chunk_window(1024 * 1024), 8);
+        assert_eq!(chunk_window(MAX_SEND_CHUNK_SIZE), 4);
+        // A peer's largest or smallest chunks keep the receiver within 64 MiB.
+        assert!(chunk_window(MAX_CHUNK_SIZE) as u64 * u64::from(MAX_CHUNK_SIZE) <= 64 << 20);
+        assert!(chunk_window(MIN_CHUNK_SIZE) as u64 * u64::from(MIN_CHUNK_SIZE) <= 64 << 20);
+        assert_eq!(chunk_window(0), 64);
+    }
 
     fn offer(size: u64, chunk: u32) -> TransferOffer {
         TransferOffer {
@@ -295,6 +390,10 @@ mod tests {
     #[test]
     fn chunk_math() {
         let o = offer(2 * 1024 * 1024 + 5, DEFAULT_CHUNK_SIZE);
+        assert!(
+            offer(10, MIN_CHUNK_SIZE - 1).validate().is_err(),
+            "tiny chunks"
+        );
         assert_eq!(o.total_chunks(), 3);
         assert_eq!(o.chunk_len(0), Some(DEFAULT_CHUNK_SIZE));
         assert_eq!(o.chunk_len(2), Some(5));

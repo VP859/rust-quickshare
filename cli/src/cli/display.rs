@@ -6,39 +6,15 @@ use qrcode::render::unicode::Dense1x2;
 use rust_i18n::t;
 use std::sync::Mutex;
 
-use crate::transfer::service::{Direction, TransferEvent, TransferStatus};
+use ferry::transfer::service::{Direction, TransferEvent, TransferStatus};
 
-/// Formats a size with a readable unit: `512 B`, `12.3 KB`, `4.0 MB`, `1.25 GB`.
-///
-/// # Examples
-///
-/// ```
-/// use ferry::cli::display::human_size;
-///
-/// assert_eq!(human_size(18), "18 B");
-/// assert_eq!(human_size(5 * 1024 * 1024), "5.0 MB");
-/// ```
-pub fn human_size(bytes: u64) -> String {
-    /// Units for successive powers of 1024.
-    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
-    if bytes < 1024 {
-        return format!("{bytes} B");
-    }
-    let mut value = bytes as f64;
-    let mut unit = 0;
-    while value >= 1024.0 && unit < UNITS.len() - 1 {
-        value /= 1024.0;
-        unit += 1;
-    }
-    let decimals = if unit >= 3 { 2 } else { 1 };
-    format!("{value:.decimals$} {}", UNITS[unit])
-}
+pub use ferry::size::human_size;
 
 /// Creates a byte progress bar with the given message.
 pub fn create_progress_bar(total_bytes: u64, message: &str) -> ProgressBar {
     let pb = ProgressBar::new(total_bytes);
     if let Ok(style) = ProgressStyle::default_bar().template(
-        "{msg}\n[{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, ETA {eta})",
+        "{msg}{prefix}\n[{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, ETA {eta})",
     ) {
         pb.set_style(style.progress_chars("#>-"));
     }
@@ -97,6 +73,9 @@ impl TerminalProgress {
         if ev.total > 0 {
             pb.set_length(ev.total);
         }
+        if let Some(route) = ev.route {
+            pb.set_prefix(format!(" · {}", route.label()));
+        }
         match ev.status {
             TransferStatus::Preparing => pb.set_message(t!("cli.hashing", name = &ev.file_name)),
             TransferStatus::AwaitingDecision => pb.set_message(t!("cli.awaiting")),
@@ -133,18 +112,4 @@ fn finish(pb: &ProgressBar, msg: String) {
         println!("{msg}");
     }
     pb.finish_with_message(msg);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::human_size;
-
-    #[test]
-    fn sizes_use_readable_units() {
-        assert_eq!(human_size(0), "0 B");
-        assert_eq!(human_size(812), "812 B");
-        assert_eq!(human_size(12 * 1024 + 300), "12.3 KB");
-        assert_eq!(human_size(5 * 1024 * 1024), "5.0 MB");
-        assert_eq!(human_size(3 * 1024 * 1024 * 1024 / 2), "1.50 GB");
-    }
 }

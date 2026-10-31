@@ -3,6 +3,8 @@
 use anyhow::{Context, Result};
 use iroh::endpoint::Connection;
 use rust_i18n::t;
+
+use crate::error::{IntegrityError, ProtocolViolation};
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
@@ -12,8 +14,8 @@ use tracing::info;
 use super::{Channel, ProgressFn};
 use crate::protocol::codec::{read_msg, write_msg};
 use crate::protocol::messages::{
-    CHUNK_WINDOW, ChunkHeader, DEFAULT_CHUNK_SIZE, Hello, MAX_FOLDER_DEPTH, TransferDecision,
-    TransferOffer, TransferResult,
+    ChunkHeader, Hello, MAX_FOLDER_DEPTH, TransferDecision, TransferOffer, TransferResult,
+    chunk_size_for, chunk_window,
 };
 use crate::transfer::hash::compute_file_hash;
 use crate::transfer::security::sanitize_filename;
@@ -166,7 +168,7 @@ pub async fn push_file(
 /// Runs the sending side of the protocol on an already opened control stream.
 ///
 /// Sends the offer, waits for the decision, streams the remaining chunks on
-/// separate unidirectional streams (up to [`CHUNK_WINDOW`] in flight) and waits
+/// separate unidirectional streams (up to [`chunk_window`] in flight) and waits
 /// for the receiver's verdict. Chunk buffers are handed over to QUIC without
 /// copying.
 ///
@@ -183,7 +185,7 @@ pub async fn send_on_channel(
     let offer = TransferOffer {
         file_name: file.name.clone(),
         file_size: file.size,
-        chunk_size: DEFAULT_CHUNK_SIZE,
+        chunk_size: chunk_size_for(file.size),
         file_hash: file.hash,
         folder: file
             .folder
@@ -199,7 +201,10 @@ pub async fn send_on_channel(
     };
     let total_chunks = offer.total_chunks();
     if start_chunk_index > total_chunks {
-        anyhow::bail!(t!("sender.bad_start", index = start_chunk_index));
+        return Err(ProtocolViolation(
+            t!("sender.bad_start", index = start_chunk_index).into_owned(),
+        )
+        .into());
     }
     info!(
         "Sending '{}' from chunk {}/{}",
@@ -209,52 +214,72 @@ pub async fn send_on_channel(
     let mut source = File::open(&file.path).await?;
     let start_offset = start_chunk_index * offer.chunk_size as u64;
     source.seek(SeekFrom::Start(start_offset)).await?;
-    let mut done = start_offset.min(file.size);
-    progress(done);
+    progress(start_offset.min(file.size));
 
-    let mut in_flight: JoinSet<Result<u32>> = JoinSet::new();
-    for chunk_index in start_chunk_index..total_chunks {
-        while in_flight.len() >= CHUNK_WINDOW {
-            done += join_next(&mut in_flight).await? as u64;
-            progress(done);
+    // Chunks are sent while the receiver's reports are read: the progress
+    // shown here is what the receiver says it has, since data leaving this
+    // device's buffers says little about what arrived on a slow link.
+    let window = chunk_window(offer.chunk_size);
+    let send_chunks = async {
+        let mut in_flight: JoinSet<Result<u32>> = JoinSet::new();
+        for chunk_index in start_chunk_index..total_chunks {
+            while in_flight.len() >= window {
+                join_next(&mut in_flight).await?;
+            }
+
+            let len = offer
+                .chunk_len(chunk_index)
+                .with_context(|| t!("transfer.chunk_len"))?;
+            let mut payload = vec![0u8; len as usize];
+            source
+                .read_exact(&mut payload)
+                .await
+                .with_context(|| t!("sender.file_changed"))?;
+
+            let mut stream = conn
+                .open_uni()
+                .await
+                .with_context(|| t!("sender.open_stream"))?;
+            in_flight.spawn(async move {
+                let header = ChunkHeader {
+                    chunk_index,
+                    payload_len: len,
+                    chunk_hash: *blake3::hash(&payload).as_bytes(),
+                };
+                write_msg(&mut stream, &header).await?;
+                stream.write_chunk(bytes::Bytes::from(payload)).await?;
+                stream.finish()?;
+                // Not waiting for the acknowledgement (`stopped`): QUIC delays
+                // acknowledgements by up to 25 ms, which would leave the window
+                // idle. Flow control limits what is buffered, the receiver's
+                // progress reports say what arrived, and its final result says
+                // whether the file is complete.
+                Ok(len)
+            });
         }
-
-        let len = offer
-            .chunk_len(chunk_index)
-            .with_context(|| t!("transfer.chunk_len"))?;
-        let mut payload = vec![0u8; len as usize];
-        source
-            .read_exact(&mut payload)
-            .await
-            .with_context(|| t!("sender.file_changed"))?;
-
-        let mut stream = conn
-            .open_uni()
-            .await
-            .with_context(|| t!("sender.open_stream"))?;
-        in_flight.spawn(async move {
-            let header = ChunkHeader {
-                chunk_index,
-                payload_len: len,
-                chunk_hash: *blake3::hash(&payload).as_bytes(),
-            };
-            write_msg(&mut stream, &header).await?;
-            stream.write_chunk(bytes::Bytes::from(payload)).await?;
-            stream.finish()?;
-            Ok(len)
-        });
-    }
-    while !in_flight.is_empty() {
-        done += join_next(&mut in_flight).await? as u64;
-        progress(done);
-    }
-
-    match read_msg(&mut channel.recv).await? {
-        TransferResult::Verified => Ok(SendOutcome::Delivered),
-        TransferResult::Failed { reason } => {
-            anyhow::bail!(t!("sender.verify_failed", reason = reason))
+        while !in_flight.is_empty() {
+            join_next(&mut in_flight).await?;
         }
-    }
+        Ok::<_, anyhow::Error>(())
+    };
+
+    let await_result = async {
+        loop {
+            match read_msg(&mut channel.recv).await? {
+                TransferResult::Progress { received } => progress(received.min(file.size)),
+                TransferResult::Verified => return Ok(SendOutcome::Delivered),
+                TransferResult::Failed { reason } => {
+                    return Err(IntegrityError(
+                        t!("sender.verify_failed", reason = reason).into_owned(),
+                    )
+                    .into());
+                }
+            }
+        }
+    };
+
+    let ((), outcome) = tokio::try_join!(send_chunks, await_result)?;
+    Ok(outcome)
 }
 
 /// Waits for the next finished chunk task and returns the bytes it sent.

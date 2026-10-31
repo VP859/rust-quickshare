@@ -87,4 +87,6 @@ desktop.ini
 # ---- Node (Tauri frontend / npm tooling) ------------------------------------
 node_modules/
 npm-debug.log*
-package-lock.json
+# package-lock.json is committed: `npm ci` in CI installs exactly these versions.
+/test-results/
+/playwright-report/

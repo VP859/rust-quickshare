@@ -4,10 +4,10 @@ use anyhow::{Context, Result};
 use rust_i18n::t;
 use std::time::Duration;
 
-use crate::config::Config;
-use crate::discovery::{Discovery, DiscoveryHealth, DiscoveryOptions, NearbyDevice};
-use crate::node::{NodeEngine, NodeTicket};
-use crate::pairing::{PairOutcome, request_pairing};
+use ferry::config::Config;
+use ferry::discovery::{Discovery, DiscoveryHealth, DiscoveryOptions, NearbyDevice};
+use ferry::node::{NodeEngine, NodeTicket};
+use ferry::pairing::{PairOutcome, request_pairing};
 
 /// How long `ferry pair` looks for the named device on the local network.
 const PAIR_LOOKUP_TIMEOUT: Duration = Duration::from_secs(8);

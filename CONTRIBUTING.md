@@ -14,8 +14,9 @@ all welcome.
 
 | Path | Contents |
 |------|----------|
-| `src/` | `ferry` crate: protocol, transfers, discovery, pairing, CLI, TUI and daemon |
-| `src-tauri/` | `ferry-gui` crate: Tauri v2 desktop and Android app; `ui/index.html` is the frontend |
+| `src/` | `ferry` library: protocol, transfers, discovery, pairing, configuration |
+| `cli/` | `ferry-cli` crate: the `ferry` binary (CLI, terminal UI, daemon, `ferry doctor`) |
+| `src-tauri/` | `ferry-gui` crate: Tauri v2 desktop and Android app; `ui/` is the frontend |
 | `src-tauri/gen/android/` | Android project (Kotlin: share target, foreground service) |
 | `locales/app.yml` | translations of the Rust side (English and Polish) |
 | `tests/`, `benches/` | end-to-end tests on two real nodes and Criterion benchmarks |
@@ -31,7 +32,7 @@ WebKitGTK development packages. The full list per platform is in [docs/BUILDING.
 ```bash
 cargo build                    # library, CLI and GUI
 cargo run --bin ferry -- tui   # terminal UI
-cd src-tauri && cargo tauri dev   # GUI with hot reload of ui/index.html
+cd src-tauri && cargo tauri dev   # GUI with hot reload of ui/
 ```
 
 Use `FERRY_CONFIG_DIR=/tmp/ferry-a` and `FERRY_CONFIG_DIR=/tmp/ferry-b` to run two independent
@@ -46,7 +47,8 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --workspace
-node scripts/check-frontend.mjs src-tauri/ui/index.html   # when the GUI changed
+cargo rustdoc -p ferry-cli --bin ferry -- -D warnings --document-private-items
+npm ci && npm run check:ui && npm run lint:ui && npm run test:ui   # when the GUI changed
 ```
 
 Guidelines:
@@ -55,8 +57,10 @@ Guidelines:
   Comments explain *why*, not *what*.
 - **Errors and panics:** no `unwrap()`/`expect()` outside tests unless the invariant is documented.
   `unsafe` is denied except in the few modules that need FFI, each block with a `// SAFETY:` comment.
+  Library errors are `anyhow` errors with localized context; a failure that callers may want to
+  handle differently gets a typed error in `src/error.rs` and an `ErrorKind`.
 - **User-facing text** goes through `t!("key")` with entries in `locales/app.yml` for every
-  language; the GUI keeps its strings in the `I18N` table of `src-tauri/ui/index.html`.
+  language; the GUI keeps its strings in `src-tauri/ui/js/locales/<code>.js`.
 - **Tests:** new behaviour comes with a test; protocol changes come with an end-to-end test in
   `tests/integration_tests.rs`.
 - **Protocol changes** follow [docs/PROTOCOL.md](docs/PROTOCOL.md): an incompatible change bumps

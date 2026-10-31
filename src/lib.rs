@@ -19,7 +19,11 @@
 //! - [`pairing`] – one-button pairing with a verification code.
 //! - [`config`] – trusted devices and settings in `config.toml`.
 //! - [`i18n`] – interface language (English, Polish).
-//! - [`cli`], [`tui`], [`daemon`] – the terminal user interfaces of the `ferry` binary.
+//! - [`error`] – classifying errors ([`error::kind`]).
+//! - [`size`], [`system`] – readable sizes, opening files and links.
+//!
+//! The `ferry` binary (CLI, terminal UI, daemon) lives in the `ferry-cli`
+//! crate and the desktop/Android app in `ferry-gui`; both only use this API.
 //!
 //! ## Example
 //!
@@ -42,15 +46,13 @@
 
 rust_i18n::i18n!("locales", fallback = "en");
 
-pub mod cli;
 pub mod config;
-pub mod daemon;
 pub mod discovery;
+pub mod error;
 pub mod i18n;
 pub mod node;
 pub mod pairing;
 pub mod protocol;
+pub mod size;
 pub mod system;
-pub mod telemetry;
 pub mod transfer;
-pub mod tui;

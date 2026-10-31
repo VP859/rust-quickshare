@@ -1,18 +1,26 @@
-//! `ferry`: command line, terminal UI and daemon of Ferry.
+//! `ferry`: command line, terminal UI and daemon of Ferry, built on the
+//! `ferry` library.
+
+rust_i18n::i18n!("../locales", fallback = "en");
+
+mod cli;
+mod daemon;
+mod doctor;
+mod tui;
 
 use anyhow::Result;
 use clap::Parser;
 
-use ferry::cli::args::{Cli, Commands};
-use ferry::cli::identity_cmd::run_identity;
-use ferry::cli::nearby_cmd::{run_discover, run_pair};
-use ferry::cli::peer_cmd::handle_peer_cmd;
-use ferry::cli::settings_cmd::{run_config, run_language, run_name, run_network};
-use ferry::cli::transfer_cmd::{run_receive, run_send, run_send_text, run_show_ticket};
+use crate::cli::args::{Cli, Commands};
+use crate::cli::identity_cmd::run_identity;
+use crate::cli::nearby_cmd::{run_discover, run_pair};
+use crate::cli::peer_cmd::handle_peer_cmd;
+use crate::cli::settings_cmd::{run_config, run_language, run_name, run_network};
+use crate::cli::transfer_cmd::{run_receive, run_send, run_send_text, run_show_ticket};
+use crate::daemon::run_daemon;
+use crate::doctor::run_doctor;
+use crate::tui::run_tui;
 use ferry::config::Config;
-use ferry::daemon::run_daemon;
-use ferry::telemetry::doctor::run_doctor;
-use ferry::tui::run_tui;
 
 /// Parses arguments, sets the language and logging, and runs the command.
 #[tokio::main]
@@ -55,7 +63,10 @@ async fn main() -> Result<()> {
         Commands::Config { command } => run_config(command)?,
         Commands::Identity { command } => run_identity(command)?,
         Commands::Doctor => {
-            run_doctor().await?;
+            // A failed check gives exit code 1, e.g. for scripts and support.
+            if !run_doctor().await?.healthy() {
+                std::process::exit(1);
+            }
         }
     }
 

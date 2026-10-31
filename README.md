@@ -21,15 +21,15 @@ its authors. In the default mode it does not contact any server at all.
 ## Features
 
 - **End-to-end encryption** – QUIC + TLS 1.3 with a persistent Ed25519 key per device (the Node ID).
-- **Integrity and resume** – every 1 MiB chunk and the whole file are checked with BLAKE3;
+- **Integrity and resume** – every chunk and the whole file are checked with BLAKE3;
   interrupted transfers resume where they stopped.
 - **Files, folders and text** – send several files or whole folders (their structure is kept), or
   a link that lands in the other device's clipboard after confirmation.
 - **Nearby devices and one-button pairing** – Ferry devices on the same network appear on their
   own; pairing shows the same six-digit code on both screens.
 - **Trusted devices** – an alias and optional Auto-Accept per device; everything else asks first.
-- **Privacy controls** – hide the device from everyone except paired devices, and see exactly what
-  leaves the device (*Settings → Privacy*).
+- **Privacy controls** – hide the device from local network discovery except for paired devices,
+  and see exactly what leaves the device (*Settings → Privacy*, [details](docs/SECURITY-MODEL.md#what-each-party-can-see)).
 - **Cancel any transfer** – a partly received file is resumed next time.
 - **Every interface** – desktop and Android app (Tauri), terminal UI, command line and a
   background daemon; English and Polish.
@@ -40,7 +40,7 @@ Ferry is not published yet. Build it from source as described in
 [docs/BUILDING.md](docs/BUILDING.md):
 
 ```bash
-cargo install --path . --locked     # the `ferry` command line tool
+cargo install --path cli --locked   # the `ferry` command line tool
 cd src-tauri && npx @tauri-apps/cli@2 build   # desktop app (.deb/.rpm/.AppImage, .msi/.exe)
 ```
 
@@ -79,6 +79,7 @@ ferry doctor                            # network and discovery diagnostics
 | Download folder | `download-dir ~/Inbox` | system Downloads folder |
 | Hidden from unpaired devices | `hidden true` | `false` |
 | Copy texts from Auto-Accept devices without asking | `auto-accept-texts true` | `false` |
+| Desktop app quits when its window is closed | `quit-on-close true` | `false` (keeps running in the tray) |
 
 Settings are stored in `~/.config/ferry/config.toml` (Linux), `%APPDATA%\ferry\config.toml`
 (Windows) or the app's private storage (Android). Environment variables:
@@ -114,7 +115,9 @@ Panels: **[1] Trusted**, **[2] Nearby**, **[3] Transfers** (`Tab` or `1 2 3` to 
 | Windows | `dist/windows/install-autostart.ps1` | Task Scheduler task at logon |
 
 A daemon without a terminal accepts files **only** from devices with Auto-Accept. The desktop app
-has its own *Start at login* switch and keeps running in the system tray.
+has its own *Start at login* switch. Closing its window keeps it running in the system tray, or
+quits it if you choose so in *Settings → Receiving*; starting Ferry again always brings back the
+running window instead of opening a second one.
 
 ## Network modes
 

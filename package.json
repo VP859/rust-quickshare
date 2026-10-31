@@ -1,0 +1,15 @@
+{
+  "name": "ferry-dev-tools",
+  "private": true,
+  "description": "Development tools for the Ferry GUI frontend (src-tauri/ui); not shipped with the app.",
+  "type": "module",
+  "scripts": {
+    "check:ui": "node scripts/check-frontend.mjs src-tauri/ui",
+    "lint:ui": "biome lint",
+    "test:ui": "playwright test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@playwright/test": "1.64.1"
+  }
+}

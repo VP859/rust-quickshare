@@ -25,7 +25,7 @@ use tokio::sync::mpsc;
 
 use app::{App, Focus, Popup, TuiHandler, UiMessage};
 
-use crate::transfer::service;
+use ferry::transfer::service;
 
 /// Runs the TUI until the user quits.
 ///

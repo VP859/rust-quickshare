@@ -2,7 +2,7 @@
 //!
 //! The key is what paired devices recognize; a backup lets a reinstalled
 //! system keep its pairings. It is stored as a file readable only by the user
-//! (see [`crate::node::identity`]), not in an OS keyring: Ferry also runs as a
+//! (see [`ferry::node::identity`]), not in an OS keyring: Ferry also runs as a
 //! headless daemon and on Android, where no common keyring API exists.
 
 use anyhow::{Context, Result};
@@ -10,7 +10,7 @@ use rust_i18n::t;
 use std::path::Path;
 
 use crate::cli::args::IdentityCommands;
-use crate::node::identity::{
+use ferry::node::identity::{
     default_key_path, load_or_generate_default_key, parse_identity, replace_secret_key,
     write_identity_export,
 };

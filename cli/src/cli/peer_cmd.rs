@@ -5,7 +5,7 @@ use rust_i18n::t;
 
 use crate::cli::args::PeerCommands;
 use crate::cli::nearby_cmd::run_peer_add;
-use crate::config::Config;
+use ferry::config::Config;
 
 /// Runs a `ferry peer` subcommand.
 ///

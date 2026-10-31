@@ -9,12 +9,12 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use super::display::{TerminalProgress, print_ticket};
-use crate::config::Config;
-use crate::discovery::{Discovery, DiscoveryOptions};
-use crate::node::{NodeEngine, NodeTicket};
-use crate::protocol::messages::{ShareToken, TextDecision, TransferOffer};
-use crate::transfer::sender::{PreparedFile, prepare_file};
-use crate::transfer::service::{
+use ferry::config::Config;
+use ferry::discovery::{Discovery, DiscoveryOptions};
+use ferry::node::{NodeEngine, NodeTicket};
+use ferry::protocol::messages::{ShareToken, TextDecision, TransferOffer};
+use ferry::transfer::sender::{PreparedFile, prepare_file};
+use ferry::transfer::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
 

@@ -24,7 +24,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use super::Channel;
-use super::receiver::{read_offer, receive_on_channel, reject};
+use super::receiver::{check_free_space, read_offer, receive_on_channel, reject};
 use super::sender::{
     PreparedFile, SendItem, SendOutcome, expand_paths, prepare_file, push_file, send_on_channel,
 };
@@ -147,6 +147,41 @@ pub struct TransferEvent {
     pub done: u64,
     /// Current state.
     pub status: TransferStatus,
+    /// How the data currently travels; `None` before the connection exists.
+    pub route: Option<Route>,
+}
+
+/// Network path a transfer currently uses.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Route {
+    /// Straight between the two devices (local network or holepunched).
+    Direct,
+    /// Through a public relay server (internet mode only); still end-to-end
+    /// encrypted, but usually slower.
+    Relay,
+}
+
+impl Route {
+    /// Short localized label (`direct`, `via relay`).
+    pub fn label(self) -> String {
+        match self {
+            Self::Direct => t!("transfer.route_direct"),
+            Self::Relay => t!("transfer.route_relay"),
+        }
+        .into_owned()
+    }
+
+    /// Path the connection currently sends on; `None` when no path is open.
+    pub fn of(conn: &Connection) -> Option<Self> {
+        let paths = conn.paths();
+        let selected = paths.iter().find(|p| p.is_selected())?;
+        Some(if selected.is_relay() {
+            Self::Relay
+        } else {
+            Self::Direct
+        })
+    }
 }
 
 /// Callback receiving [`TransferEvent`]s.
@@ -360,6 +395,8 @@ pub struct Tracker<'a> {
     sink: EventSink<'a>,
     /// Triggered by [`cancel_transfer`].
     cancel: CancellationToken,
+    /// Connection whose path is reported in every event, once known.
+    conn: Option<Connection>,
 }
 
 impl Drop for Tracker<'_> {
@@ -393,10 +430,18 @@ impl<'a> Tracker<'a> {
                 total,
                 done: 0,
                 status: TransferStatus::Preparing,
+                route: None,
             },
             sink,
             cancel,
+            conn: None,
         }
+    }
+
+    /// Reports the path of `conn` ([`Route`]) in the following events.
+    pub fn with_connection(mut self, conn: &Connection) -> Self {
+        self.conn = Some(conn.clone());
+        self
     }
 
     /// Runs `transfer` until it finishes or the transfer is cancelled, in
@@ -424,6 +469,7 @@ impl<'a> Tracker<'a> {
         let mut ev = self.base.clone();
         ev.done = done;
         ev.status = status;
+        ev.route = self.conn.as_ref().and_then(Route::of);
         (self.sink)(ev);
     }
 
@@ -539,7 +585,8 @@ async fn handle_push<H: TransferHandler>(
         offer.file_size,
         Direction::Download,
         &sink,
-    );
+    )
+    .with_connection(conn);
     let decision = match approval.as_mut().and_then(|a| a.take(&offer)) {
         Some(dest_dir) => OfferDecision::Accept { dest_dir },
         None => match gate.enter(peer) {
@@ -589,7 +636,8 @@ async fn handle_pull<H: TransferHandler>(
         file.size,
         Direction::Upload,
         &sink,
-    );
+    )
+    .with_connection(conn);
     let result = tracker
         .cancellable(send_on_channel(conn, &mut channel, &file, &|d| {
             tracker.progress(d)
@@ -720,6 +768,15 @@ async fn handle_batch<H: TransferHandler>(
                 reason: t!("transfer.user_rejected").into_owned(),
             })
         });
+    let decision = match decision {
+        Some(OfferDecision::Accept { dest_dir }) => {
+            match check_free_space(&dest_dir, batch.total_size) {
+                Ok(()) => Some(OfferDecision::Accept { dest_dir }),
+                Err(reason) => Some(OfferDecision::Reject { reason }),
+            }
+        }
+        other => other,
+    };
     let (answer, approval) = match decision {
         None => (BatchDecision::AskEach, None),
         Some(OfferDecision::Accept { dest_dir }) => (
@@ -867,7 +924,8 @@ pub async fn send_files(
     }
     let mut failures = 0usize;
     for (item, (name, size)) in items.iter().zip(&files) {
-        let tracker = Tracker::new(peer, name, *size, Direction::Upload, sink);
+        let tracker =
+            Tracker::new(peer, name, *size, Direction::Upload, sink).with_connection(&conn);
         tracker.emit(0, TransferStatus::Preparing);
         let result = tracker
             .cancellable(async {
@@ -916,7 +974,8 @@ pub async fn pull_shared(
         offer.file_size,
         Direction::Download,
         sink,
-    );
+    )
+    .with_connection(&conn);
     let result = tracker
         .cancellable(receive_on_channel(&conn, channel, &offer, dest_dir, &|d| {
             tracker.progress(d)

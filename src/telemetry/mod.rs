@@ -1,3 +1,0 @@
-//! Diagnostics.
-
-pub mod doctor;

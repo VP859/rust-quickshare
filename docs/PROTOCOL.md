@@ -32,10 +32,21 @@ Hello::Batch { count, total_size, names }    several files follow, decide once
 sender   ── TransferOffer { file_name, file_size, chunk_size, file_hash, folder } ─▶
 receiver ◀─ TransferDecision::Accept { start_chunk_index } | Reject { reason } ─────
 sender   ── one unidirectional stream per chunk: ChunkHeader { index, len, hash } + payload ─▶
+receiver ◀─ TransferResult::Progress { received }   (every ~250 ms while data arrives) ─
 receiver ◀─ TransferResult::Verified | Failed { reason } ───────────────────────────
 ```
 
-* `chunk_size` is 1 MiB (accepted: 1 B – 16 MiB); up to 8 chunk streams are in flight.
+The sender shows the receiver's `Progress` reports as its own progress: what left the sender's
+buffers says little about what arrived on a slow link.
+
+* `chunk_size` depends on the file size (`chunk_size_for`): about 1024 chunks per file, a power of
+  two from 1 MiB (files up to 1 GiB) to 8 MiB (above 4 GiB). Since it depends only on the size, a
+  resumed transfer uses the same chunks. Receivers accept 16 KiB – 16 MiB.
+* Both sides keep `chunk_window(chunk_size)` chunk streams in flight – about 8 MiB of data, at
+  least 4 and at most 64 streams – which also bounds the receiver's memory per transfer.
+* Before accepting, the receiver checks that the rest of the file fits on its disk with 256 MiB to
+  spare; otherwise it declines with a reason (`TransferDecision::Reject`). An accepted batch is
+  checked against its announced total size the same way.
 * `file_hash` and each chunk `hash` are BLAKE3.
 * `folder` lists the folders the file belongs in, relative to the download folder
   (`["Photos", "2024"]`); empty for a single file. At most 16 levels, each sanitized like a file

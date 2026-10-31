@@ -53,6 +53,11 @@ pub struct AppState {
     pub discovery: OnceLock<Discovery>,
     /// Received files; only these may be opened from the interface.
     pub received: std::sync::Mutex<HashSet<PathBuf>>,
+    /// Copy of [`Config::quit_on_close`], read synchronously when the window
+    /// is closed.
+    pub quit_on_close: std::sync::atomic::AtomicBool,
+    /// The user was already told this session that Ferry keeps running in the tray.
+    pub tray_hint_shown: std::sync::atomic::AtomicBool,
 }
 
 impl AppState {
@@ -67,6 +72,8 @@ impl AppState {
             platform_media_dir: OnceLock::new(),
             discovery: OnceLock::new(),
             received: std::sync::Mutex::new(HashSet::new()),
+            quit_on_close: std::sync::atomic::AtomicBool::new(false),
+            tray_hint_shown: std::sync::atomic::AtomicBool::new(false),
         }
     }
 

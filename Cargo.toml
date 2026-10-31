@@ -1,14 +1,15 @@
 [workspace]
 members = [
     ".",
+    "cli",
     "src-tauri"
 ]
 resolver = "2"
 
-# Shared by both crates; the version is the single source for the CLI, the GUI
+# Shared by all crates; the version is the single source for the CLI, the GUI
 # and (through scripts/set-version.sh) tauri.conf.json.
 [workspace.package]
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"
@@ -46,7 +47,7 @@ blake3 = { version = "1.8.7", features = ["mmap", "rayon"] }
 
 [package]
 name = "ferry"
-description = "Secure peer-to-peer file sharing over QUIC: library, CLI, terminal UI and daemon"
+description = "Secure peer-to-peer file sharing over QUIC: the core library of Ferry"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -56,7 +57,7 @@ homepage.workspace = true
 authors.workspace = true
 readme = "README.md"
 keywords = ["file-sharing", "p2p", "quic", "lan", "airdrop"]
-categories = ["command-line-utilities", "network-programming"]
+categories = ["network-programming"]
 # Not published to crates.io until the library API is stabilized.
 publish = false
 
@@ -67,26 +68,22 @@ workspace = true
 name = "ferry"
 path = "src/lib.rs"
 
-[[bin]]
-name = "ferry"
-path = "src/main.rs"
+# The `ferry` binary (CLI, TUI, daemon) is the `ferry-cli` crate in cli/, the
+# desktop and Android app the `ferry-gui` crate in src-tauri/.
 
 [dependencies]
 postcard = { version = "1.1.3", features = ["alloc"] }
 # Zero-copy chunk buffers handed to QUIC streams (already used by iroh).
 bytes = "1.12.1"
-clap = { version = "4.6.7", features = ["derive"] }
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 base64 = "0.23.1"
 blake3 = { workspace = true }
 # OS random numbers for the pairing nonces (already used by iroh and tempfile).
 getrandom = "0.4.3"
-indicatif = "0.18.6"
-ratatui = "0.30.2"
-crossterm = "0.29.0"
 dirs = "7.0.0"
 toml = "1.1.8"
 tokio = { workspace = true }
+# Free disk space, checked before accepting a file (pure Rust, no libc).
+fs4 = "1.1.0"
 # CancellationToken for cancelling transfers (already used by iroh).
 tokio-util = "0.7.20"
 serde = { workspace = true }
@@ -95,7 +92,6 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 iroh = { workspace = true }
-qrcode = { version = "0.14.1", default-features = false }
 socket2 = { version = "0.6.5", features = ["all"] }
 gethostname = "1.1.0"
 rust-i18n = "4.2.4"
@@ -105,8 +101,6 @@ rust-i18n = "4.2.4"
 # or raw netlink sockets, so these crates are compiled conditionally)
 # ---------------------------------------------------------------------------
 [target.'cfg(not(target_os = "android"))'.dependencies]
-# System clipboard (copying the TICKET in the TUI), desktop only
-arboard = "3.7.0"
 # Network interface enumeration via getifaddrs/netlink, desktop only
 network-interface = "2.0.5"
 

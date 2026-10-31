@@ -164,7 +164,7 @@ fn qr_svg(text: &str) -> CmdResult<String> {
 /// Reports a failed background transfer with a `transfer-error` event; a
 /// cancellation is already shown on the transfer itself.
 fn emit_error(app: &AppHandle, e: anyhow::Error) {
-    if e.is::<service::Cancelled>() {
+    if ferry::error::kind(&e) == ferry::error::ErrorKind::Cancelled {
         return;
     }
     let _ = app.emit(
@@ -723,6 +723,33 @@ pub fn cancel_transfer(id: String) -> bool {
     service::cancel_transfer(&id)
 }
 
+/// What closing the main window does (desktop): `true` quits Ferry, `false`
+/// keeps it running in the system tray.
+///
+/// # Errors
+///
+/// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
+#[tauri::command]
+pub async fn get_quit_on_close(state: State<'_, AppState>) -> CmdResult<bool> {
+    Ok(state.config.lock().await.quit_on_close)
+}
+
+/// Saves what closing the main window does; applies immediately.
+///
+/// # Errors
+///
+/// When the configuration cannot be saved.
+#[tauri::command]
+pub async fn set_quit_on_close(quit: bool, state: State<'_, AppState>) -> CmdResult<()> {
+    let mut config = state.config.lock().await;
+    config.quit_on_close = quit;
+    config.save().map_err(err)?;
+    state
+        .quit_on_close
+        .store(quit, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
 /// Privacy settings shown in the settings dialog.
 #[derive(Serialize, serde::Deserialize)]
 pub struct PrivacySettings {
@@ -880,6 +907,9 @@ pub fn load_config(app: &AppHandle) {
     });
     i18n::init(None, config.language.as_deref());
     let state = app.state::<AppState>();
+    state
+        .quit_on_close
+        .store(config.quit_on_close, std::sync::atomic::Ordering::Relaxed);
     tauri::async_runtime::block_on(async {
         *state.config.lock().await = config;
     });

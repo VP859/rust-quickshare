@@ -51,6 +51,10 @@ pub struct Config {
     /// and could be pasted unknowingly (e.g. a changed account number).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub auto_accept_texts: bool,
+    /// Desktop app: closing the window quits Ferry instead of keeping it
+    /// running in the system tray.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub quit_on_close: bool,
 }
 
 impl Config {

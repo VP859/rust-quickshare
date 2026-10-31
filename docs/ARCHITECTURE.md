@@ -1,14 +1,18 @@
 # Architecture
 
-Ferry is a Cargo workspace with two crates:
+Ferry is a Cargo workspace with three crates:
 
-* **`ferry`** (repository root) – the library with the protocol, transfers, discovery and pairing,
-  plus the `ferry` binary: CLI, terminal UI and background daemon.
-* **`ferry-gui`** (`src-tauri/`) – the Tauri v2 application for Linux, Windows and Android. It uses
-  the library directly; `src-tauri/ui/index.html` is the whole frontend (no build step).
+* **`ferry`** (repository root) – the library: protocol, transfers, discovery, pairing,
+  configuration. It has no user interface and no terminal or GUI dependencies.
+* **`ferry-cli`** (`cli/`) – the `ferry` binary: command line, terminal UI (`ratatui`), background
+  daemon and `ferry doctor`.
+* **`ferry-gui`** (`src-tauri/`) – the Tauri v2 application for Linux, Windows and Android;
+  `src-tauri/ui/` is the frontend (plain HTML, CSS and JavaScript modules, no build step).
+
+Both interfaces use only the library's public API.
 
 ```text
- CLI, TUI, daemon (src/cli, src/tui, src/daemon)    GUI (src-tauri)
+ ferry-cli: CLI, TUI, daemon (cli/src)          ferry-gui (src-tauri)
                      │                                │
                      └──── implement TransferHandler ─┘
                                      │
@@ -19,6 +23,7 @@ Ferry is a Cargo workspace with two crates:
    node/       iroh endpoint, persistent identity, TICKET
    protocol/   messages + length-prefixed postcard codec (no I/O)
    config/     config.toml, trusted devices, paths      i18n.rs  languages
+   error.rs    error classification for callers          size.rs, system.rs  helpers
 ```
 
 ## Layers
@@ -48,9 +53,9 @@ only in how they ask the user:
 
 | Interface | Location | Asking |
 |-----------|----------|--------|
-| CLI | `src/cli/` | one-shot commands; progress bars with `indicatif` |
-| TUI | `src/tui/` | `ratatui`; questions are queued as popups |
-| Daemon | `src/daemon/` | terminal prompts, or Auto-Accept only without a terminal |
+| CLI | `cli/src/cli/` | one-shot commands; progress bars with `indicatif` |
+| TUI | `cli/src/tui/` | `ratatui`; questions are queued as popups |
+| Daemon | `cli/src/daemon/` | terminal prompts, or Auto-Accept only without a terminal |
 | GUI | `src-tauri/src/node.rs` | Tauri events to the web view, system notifications |
 
 The GUI talks to the frontend through Tauri commands (`src-tauri/src/commands.rs`) and events
@@ -75,7 +80,8 @@ Logs: `adb logcat -s FerryCore FerryService FerryShare`.
    file (BLAKE3) right before sending it.
 2. The receiver validates the offer, asks the handler (or uses the batch approval), and replies
    with the first chunk it still needs.
-3. Chunks travel on separate unidirectional streams (8 in flight); the receiver writes them in
+3. Chunks (1–8 MiB, growing with the file) travel on separate unidirectional streams, about
+   8 MiB in flight; the receiver writes them in
    order to `<name>.<hash>.part`, hashing as it goes.
 4. After the last chunk the whole-file hash is compared, the `.part` file is renamed to a free
    name, and `Verified` is sent back.
@@ -86,7 +92,24 @@ Logs: `adb logcat -s FerryCore FerryService FerryShare`.
   services or permissions (except Android 17's local network permission).
 * **No servers by default** – iroh runs with relays and DNS lookup disabled; internet mode is an
   explicit opt-in.
-* **One frontend file** – the GUI has no JavaScript build step; `scripts/check-frontend.mjs`
-  checks its syntax and translation keys in CI.
+* **No frontend build step** – the GUI is plain HTML, CSS and ES modules (`src-tauri/ui/js/`:
+  `app.js` with the features, `dom.js`, `i18n.js` with `locales/`, `tauri.js` as the bridge to the
+  native side). Scripts are separate files, so the Content-Security-Policy forbids inline
+  scripts. CI checks syntax and translation keys (`scripts/check-frontend.mjs`), lints with Biome
+  and runs Playwright tests against a mocked Tauri API (`tests/gui/`).
+* **Errors** – the library returns `anyhow` errors with a localized context chain;
+  `ferry::error::kind` classifies them (cancelled, connection, timeout, protocol, integrity,
+  unsafe path, disk full, …) through typed errors in the chain, so callers never parse messages.
+
+## Former name
+
+Ferry was called "RQS P2P Quick Share". What remains of that name is on purpose:
+
+* `~/.config/rqs` (and the same folder on Windows) is moved to `~/.config/ferry` on the first
+  start (`config::paths::migrate_legacy_dir`), so devices keep their identity and pairings.
+* The old Android app `com.rqs.quickshare` is a different package; it is not updated and has to
+  be uninstalled by hand.
+
+Everything else – crates, binaries, protocol identifiers, Android classes – uses the new name.
 * **Shared accept loop** – all interfaces behave the same because the protocol logic lives in
   `serve`, not in the interfaces.
