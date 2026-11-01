@@ -69,7 +69,11 @@ test('changing the network mode asks for a restart and shows the pending mode', 
 
   // Only the desktop can restart itself; Android explains how to do it.
   const ok = app.locator('#btn-restart-ok');
-  await (info.project.name === 'desktop' ? expect(ok).toBeVisible() : expect(ok).toBeHidden());
+  if (info.project.name === 'desktop') {
+    await expect(ok).toBeVisible();
+  } else {
+    await expect(ok).toBeHidden();
+  }
 
   await app.locator('#btn-restart-later').click();
   await expect(app.locator('#modal-restart')).toBeHidden();

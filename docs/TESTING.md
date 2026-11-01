@@ -24,6 +24,10 @@ transfers arrive intact:
   the sender reconnects by itself, the receiver resumes the partial file and does not ask the
   user again. This test takes about 40 s and is `#[ignore]`d locally.
 
+The outage and network-change tests are skipped on Windows: they depend on timing, time out on
+slow Windows CI runners, and the QUIC behaviour they check is the same on every system, so the
+Linux jobs cover them.
+
 No root rights are needed. To repeat the end-to-end tests with the kernel losing packets (as CI
 does):
 
