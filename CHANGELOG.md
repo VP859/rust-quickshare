@@ -78,6 +78,12 @@ compatibility).
 
 ### Security
 
+- The `ferry daemon` systemd service runs sandboxed (system folders read-only, no capabilities,
+  restricted system calls and socket types; systemd's exposure score 1.6 instead of 8.6) and
+  works for package and cargo installs alike; the .deb and .rpm packages install it. The home
+  folder stays writable, so any download folder works; how to restrict it further is in the file.
+- The daemon checks at start that it can write to the download folder and says what to fix
+  instead of failing on the first file.
 - Pairing codes depend on random nonces exchanged with a commit-reveal scheme; previously the code
   depended only on the two Node IDs and could be matched by an attacker generating keys.
 - Discovery announcements are signed with the device key and expire after 5 minutes, so nobody

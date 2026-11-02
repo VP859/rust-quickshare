@@ -44,12 +44,14 @@
     "linux": {
       "deb": {
         "files": {
-          "/usr/bin/ferry": "../target/release/ferry"
+          "/usr/bin/ferry": "../target/release/ferry",
+          "/usr/lib/systemd/user/ferry-daemon.service": "../dist/systemd/ferry-daemon.service"
         }
       },
       "rpm": {
         "files": {
-          "/usr/bin/ferry": "../target/release/ferry"
+          "/usr/bin/ferry": "../target/release/ferry",
+          "/usr/lib/systemd/user/ferry-daemon.service": "../dist/systemd/ferry-daemon.service"
         }
       }
     }

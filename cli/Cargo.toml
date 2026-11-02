@@ -37,6 +37,8 @@ crossterm = "0.29.0"
 qrcode = { version = "0.14.1", default-features = false }
 dirs = "7.0.0"
 rust-i18n = "4.2.4"
+# Probe file when the daemon checks its download folder.
+tempfile = "3.27.0"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 # System clipboard (copying the TICKET and received texts), desktop only.
@@ -44,5 +46,4 @@ arboard = "3.7.0"
 # Network interfaces for `ferry doctor`.
 network-interface = "2.0.5"
 
-[dev-dependencies]
 tempfile = "3.27.0"

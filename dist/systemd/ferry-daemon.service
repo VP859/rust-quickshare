@@ -1,15 +1,30 @@
 # systemd user service for the Ferry daemon (`ferry daemon`).
 #
-# Installation (no root needed):
+# The .deb and .rpm packages install this file as
+# /usr/lib/systemd/user/ferry-daemon.service; enable it with:
+#   systemctl --user enable --now ferry-daemon.service
+#
+# Installed with cargo or the shell installer (~/.cargo/bin/ferry) instead:
 #   mkdir -p ~/.config/systemd/user
 #   cp ferry-daemon.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now ferry-daemon.service
+#
 #   loginctl enable-linger "$USER"    # optional: keep running without a login session
 #
 # TICKET and logs: journalctl --user -u ferry-daemon -f
 # Without a terminal the daemon only accepts files from Auto-Accept devices
 # (ferry peer add <TICKET> --alias Laptop --auto-accept).
+#
+# The daemon receives data from the network, so it runs in a sandbox: system folders are
+# read-only, there are no capabilities, only IP, netlink and local sockets are allowed and the
+# system calls of an ordinary service. The home folder stays writable, because the
+# download folder differs between systems and languages (Downloads, Pobrane, ...);
+# to restrict it to one folder add to `systemctl --user edit ferry-daemon.service`:
+#   [Service]
+#   ProtectSystem=strict
+#   ProtectHome=read-only
+#   ReadWritePaths=%h/Downloads %h/.config/ferry
 
 [Unit]
 Description=Ferry – P2P file receiving daemon
@@ -19,21 +34,45 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# The directories must exist before ReadWritePaths is applied ("+" = outside the sandbox).
-ExecStartPre=+/usr/bin/mkdir -p %h/.config/ferry %h/Downloads
-# Default cargo-dist install path; change to /usr/bin/ferry when installed from a package.
-ExecStart=%h/.cargo/bin/ferry daemon
+# Works for both installations: the package's /usr/bin/ferry comes first in PATH,
+# ~/.cargo/bin/ferry (cargo, shell installer) is the fallback. systemd itself does
+# not search ~/.cargo/bin.
+ExecStart=/bin/sh -c 'PATH="$PATH:$HOME/.cargo/bin" exec ferry daemon'
 Restart=on-failure
 RestartSec=5s
 Environment=RUST_LOG=info
+# Received files and the key are readable only by the user.
+UMask=0077
 
+# --- Sandbox -------------------------------------------------------------------
 NoNewPrivileges=true
+CapabilityBoundingSet=
 PrivateTmp=true
-ProtectSystem=strict
-# Add your download folder here if it differs (default_download_dir in config.toml).
-ReadWritePaths=%h/Downloads %h/.config/ferry
-LockPersonality=true
+PrivateDevices=true
+# "full": /usr, /boot and /etc read-only; "strict" would make the home folder read-only too.
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+# Other processes are hidden; /proc/net stays visible (network libraries read it).
+ProtectProc=invisible
+# IPv4/IPv6 for QUIC and discovery, netlink for the network interfaces, local
+# sockets for the clipboard of received texts.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+RestrictNamespaces=true
 RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+KeyringMode=private
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
 
 [Install]
 WantedBy=default.target

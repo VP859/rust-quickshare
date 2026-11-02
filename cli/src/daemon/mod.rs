@@ -247,9 +247,26 @@ impl TransferHandler for DaemonHandler {
 ///
 /// `downloads_dir` overrides the configured download folder.
 ///
+/// Creates `dir` if needed and checks that a file can be written there.
+///
 /// # Errors
 ///
-/// Fails when the node cannot start.
+/// Fails with a hint when the folder cannot be created or written to.
+fn ensure_writable(dir: &std::path::Path) -> Result<()> {
+    use anyhow::Context;
+    std::fs::create_dir_all(dir)
+        .and_then(|()| {
+            tempfile::Builder::new()
+                .prefix(".ferry-check")
+                .tempfile_in(dir)
+        })
+        .map(drop)
+        .with_context(|| t!("daemon.folder_not_writable", path = dir.display()))
+}
+
+/// # Errors
+///
+/// Fails when the node cannot start or the download folder is not writable.
 pub async fn run_daemon(downloads_dir: Option<PathBuf>) -> Result<()> {
     let engine = NodeEngine::with_persistent_identity().await?;
     let ticket_str = engine.ticket().await?.serialize_to_string()?;
@@ -257,6 +274,10 @@ pub async fn run_daemon(downloads_dir: Option<PathBuf>) -> Result<()> {
     let target = downloads_dir
         .clone()
         .unwrap_or_else(|| config.download_dir());
+
+    // Fail now, with the reason, instead of on the first file: a missing folder
+    // that cannot be created, or one the service sandbox does not allow writing to.
+    ensure_writable(&target)?;
 
     println!("==================================================================");
     println!(" {}", t!("daemon.started"));
@@ -288,4 +309,23 @@ pub async fn run_daemon(downloads_dir: Option<PathBuf>) -> Result<()> {
     }
     engine.close().await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ensure_writable;
+
+    #[test]
+    fn download_folder_is_checked_before_the_daemon_starts() -> std::io::Result<()> {
+        let dir = tempfile::tempdir()?;
+        // A missing folder is created, and the probe file does not stay behind.
+        let new = dir.path().join("Pobrane");
+        ensure_writable(&new).expect("created and writable");
+        assert!(new.is_dir() && std::fs::read_dir(&new)?.next().is_none());
+        // A path below a regular file can never be a folder.
+        let file = dir.path().join("file");
+        std::fs::write(&file, b"x")?;
+        assert!(ensure_writable(&file.join("sub")).is_err());
+        Ok(())
+    }
 }

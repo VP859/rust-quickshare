@@ -108,5 +108,5 @@ Android signing in CI uses the `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASS
 
 Protect the `main` branch in *Settings → Branches* (or with a ruleset): require a pull request and
 the CI checks *Format*, *Clippy and tests*, *Minimum supported Rust*, *Documentation*,
-*Android (aarch64)*, *Licenses and advisories* and *GUI frontend* to pass, and disallow force
+*Android (aarch64)*, *Android APK (debug build)*, *Licenses and advisories* and *GUI frontend* to pass, and disallow force
 pushes. Enable private vulnerability reporting in *Settings → Security* (see `SECURITY.md`).

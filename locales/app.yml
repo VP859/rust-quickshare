@@ -467,6 +467,9 @@ daemon.pair:
 daemon.started:
   en: "FERRY DAEMON STARTED"
   pl: "DEMON FERRY URUCHOMIONY"
+daemon.folder_not_writable:
+  en: "Cannot write to the download folder %{path}. Check its permissions; under systemd also ReadWritePaths= (systemctl --user edit ferry-daemon.service)."
+  pl: "Nie można zapisywać w folderze pobierania %{path}. Sprawdź jego uprawnienia; w systemd także ReadWritePaths= (systemctl --user edit ferry-daemon.service)."
 daemon.folder:
   en: "Download folder: %{path}"
   pl: "Katalog pobierania: %{path}"

@@ -11,6 +11,7 @@
 | Coverage | `cargo llvm-cov` | `cargo llvm-cov -p ferry --fail-under-lines 78` | every push |
 | Benchmarks | `benches/transfer_benchmarks.rs` | `cargo bench --bench transfer_benchmarks` | pull requests, compared with the base branch |
 | GUI frontend | `tests/gui/` (Playwright, mocked Tauri API) | `npm ci && npm run test:ui` | every push |
+| Android app (Kotlin, Gradle, Rust for arm64) | `src-tauri/gen/android/` | `cd src-tauri && cargo tauri android build --debug --apk --target aarch64` | every push; the debug APK is kept for 7 days as an artifact |
 
 ## Bad network conditions
 

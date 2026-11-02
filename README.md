@@ -111,7 +111,7 @@ Panels: **[1] Trusted**, **[2] Nearby**, **[3] Transfers** (`Tab` or `1 2 3` to 
 
 | System | File | Setup |
 |--------|------|-------|
-| Linux | `dist/systemd/ferry-daemon.service` | `systemctl --user enable --now ferry-daemon` (see the file) |
+| Linux | `dist/systemd/ferry-daemon.service` (installed by the .deb/.rpm packages) | `systemctl --user enable --now ferry-daemon` – runs sandboxed; see the file for cargo installs |
 | Windows | `dist/windows/install-autostart.ps1` | Task Scheduler task at logon |
 
 A daemon without a terminal accepts files **only** from devices with Auto-Accept. The desktop app
