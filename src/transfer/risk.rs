@@ -52,7 +52,7 @@ impl Risk {
 /// Extensions of programs and installers (lower case, without the dot).
 const PROGRAMS: &[&str] = &[
     "exe", "com", "scr", "msi", "msp", "msix", "appx", "dll", "cpl", "apk", "xapk", "apks",
-    "appimage", "deb", "rpm", "pkg", "dmg", "run", "bin", "jar", "app",
+    "appimage", "deb", "rpm", "pkg", "dmg", "run", "jar", "app",
 ];
 
 /// Extensions of scripts and shortcuts.
@@ -163,6 +163,7 @@ mod tests {
             ("photo.jpg", None),
             ("photo.jpg.txt", None),
             ("notes", None),
+            ("firmware.bin", None),
             ("exe", None),
             (".exe", None),
             ("archive.zip", None),
