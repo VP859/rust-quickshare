@@ -81,7 +81,23 @@ async fn a_newer_peer_that_still_speaks_the_old_version_is_reached() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_newer_client_is_accepted_with_the_old_version() {
     let server = engine().await;
-    let addr = server.node_addr().await.unwrap();
+    // The client below is bound to the loopback interface, so it needs the server's
+    // loopback address: `node_addr()` lists the addresses of the network cards, which
+    // on some systems (Windows) do not include it.
+    let port = server
+        .endpoint()
+        .bound_sockets()
+        .iter()
+        .find(|a| a.is_ipv4())
+        .expect("an IPv4 socket")
+        .port();
+    let addr = iroh::EndpointAddr::from_parts(
+        server.node_id(),
+        [iroh::TransportAddr::Ip(SocketAddr::from((
+            [127, 0, 0, 1],
+            port,
+        )))],
+    );
     let accepting = server.clone();
     let accepted = tokio::spawn(async move { accepting.accept().await.unwrap().unwrap() });
 
