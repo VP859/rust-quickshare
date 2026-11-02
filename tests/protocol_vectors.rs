@@ -295,12 +295,25 @@ fn the_vectors_document_matches_the_implementation() {
         std::fs::write(&path, &current).unwrap();
         return;
     }
-    let saved = std::fs::read_to_string(&path).unwrap_or_default();
-    assert!(
-        saved == current,
-        "{FILE} is out of date. If the protocol change is intended (and versioned), run\n  \
-         FERRY_UPDATE_VECTORS=1 cargo test --test protocol_vectors\nand review the diff."
-    );
+    // Git may check the file out with CRLF line endings (Windows); the content is what counts.
+    let saved = std::fs::read_to_string(&path)
+        .unwrap_or_default()
+        .replace("\r\n", "\n");
+    if saved != current {
+        let (line, (a, b)) = saved
+            .lines()
+            .zip(current.lines())
+            .enumerate()
+            .find(|(_, (a, b))| a != b)
+            .map_or((0, ("<end of file>", "<more lines>")), |(i, pair)| {
+                (i + 1, pair)
+            });
+        panic!(
+            "{FILE} is out of date (first difference at line {line}):\n  file:    {a}\n  current: {b}\n\
+             If the protocol change is intended (and versioned), run\n  \
+             FERRY_UPDATE_VECTORS=1 cargo test --test protocol_vectors\nand review the diff."
+        );
+    }
 }
 
 #[test]
