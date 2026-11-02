@@ -116,6 +116,18 @@ pub enum Popup {
     Ticket,
     /// Keyboard shortcuts.
     Help,
+    /// The safety number shared with a trusted device, to compare with the
+    /// other device's screen.
+    SafetyNumber {
+        /// Node ID of the device.
+        node_id: String,
+        /// Alias shown in the title.
+        alias: String,
+        /// 12 groups of 5 digits.
+        number: String,
+        /// The user already verified it.
+        verified: bool,
+    },
     /// Confirmation of removing a trusted device.
     ConfirmRemove {
         /// Node ID of the device.

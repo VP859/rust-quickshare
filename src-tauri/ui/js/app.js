@@ -80,7 +80,9 @@ function renderPeers() {
       el('div', { class: 'avatar' }, initials(p.alias), el('span', { class: dotClass(state) })),
       el('div', { class: 'body' },
         el('div', { class: 'title' }, p.alias),
-        el('div', { class: 'sub', title: p.node_id }, status, p.auto_accept ? [' · ', el('span', { class: 'tag' }, 'Auto-Accept')] : '')),
+        el('div', { class: 'sub', title: p.node_id }, status,
+          p.auto_accept ? [' · ', el('span', { class: 'tag' }, 'Auto-Accept')] : '',
+          p.verified ? [' · ', el('span', { class: 'tag verified', title: t('safety_verified') }, `✓ ${t('verified_tag')}`)] : '')),
       el('div', { class: 'trailing' }, sendBtn, menuBtn));
     box.append(row);
   }
@@ -94,9 +96,28 @@ async function checkOnline() {
   }));
 }
 
+// The safety number shared with a trusted device: equal on both devices, so
+// comparing it (reading it out, side by side) shows nobody is in between.
+let safetyPeer = null;
+async function showSafetyNumber(p) {
+  const info = await invoke('safety_number', { nodeId: p.node_id });
+  safetyPeer = p.node_id;
+  $('safety-title').textContent = t('safety_title', { name: p.alias });
+  $('safety-number').replaceChildren(...info.number.split(' ').map((group) => el('span', {}, group)));
+  $('safety-verified').checked = info.verified;
+  open('modal-safety');
+}
+$('safety-verified').onchange = async (e) => {
+  try {
+    await invoke('set_verified', { nodeId: safetyPeer, verified: e.target.checked });
+    await refreshPeers();
+  } catch (err) { fail(err); e.target.checked = !e.target.checked; }
+};
+$('btn-safety-copy').onclick = () => copyText($('safety-number').textContent.replace(/(\d{5})(?=\d)/g, '$1 '));
+
 function showMenu(row, p) {
   closeMenu();
-  const item = (iconName, label, fn, cls = '') => el('button', { class: cls, onclick: async (e) => { e.stopPropagation(); closeMenu(); try { await fn(); } catch (err) { fail(err); } } }, icon(iconName, 'sm'), label);
+  const item = (iconName, label, fn, cls = '') => el('button', { class: cls, role: 'menuitem', onclick: async (e) => { e.stopPropagation(); closeMenu(); try { await fn(); } catch (err) { fail(err); } } }, icon(iconName, 'sm'), label);
   openMenu = el('div', { class: 'menu', role: 'menu', onclick: (e) => e.stopPropagation() },
     item('send', t('send_file_menu'), () => sendToPeer(p)),
     item('text', t('send_text_menu'), () => composeText(p.node_id, p.alias)),
@@ -106,6 +127,7 @@ function showMenu(row, p) {
       await refreshPeers();
       toast(t(p.auto_accept ? 'auto_accept_disabled' : 'auto_accept_enabled', { name: p.alias }));
     }),
+    item('shield', t('safety_number'), () => showSafetyNumber(p)),
     item('code', t('copy_node_id'), () => copyText(p.node_id)),
     el('hr'),
     item('x', t('remove_device'), async () => {
@@ -561,6 +583,9 @@ function showNextOffer() {
   $('offer-names').textContent = batch ? o.names.join('\n') + (more > 0 ? '\n' + t('and_more', { n: more }) : '') : '';
   $('offer-names').hidden = !batch;
   $('offer-meta').textContent = t('from', { size: fmtSize(o.size), name: o.alias ?? t('unknown_device', { id: shortId(o.peer) }) });
+  // Programs, scripts and documents with macros: say so before the user decides.
+  $('offer-risk').hidden = !o.risk;
+  $('offer-risk').textContent = o.risk ? t(`risk_${o.risk}`) : '';
   $('offer-queue').textContent = offers.length > 1 ? t('queued', { n: offers.length - 1 }) : '';
   open('modal-offer');
 }
@@ -620,11 +645,12 @@ $('btn-restart-later').onclick = () => close('modal-restart');
 $('btn-restart-ok').onclick = () => invoke('restart_app').catch(fail);
 $('btn-restart').onclick = () => invoke('restart_app').catch(fail);
 
-let privacy = { hidden: false, auto_accept_texts: false };
+let privacy = { hidden: false, auto_accept_texts: false, auto_accept_executables: false };
 async function loadPrivacy() {
   try { privacy = await invoke('get_privacy'); } catch (e) { console.warn('Privacy:', e); }
   $('privacy-hidden').checked = privacy.hidden;
   $('privacy-texts').checked = privacy.auto_accept_texts;
+  $('privacy-exe').checked = privacy.auto_accept_executables;
   renderModePill();
 }
 async function savePrivacy(change) {
@@ -637,9 +663,11 @@ async function savePrivacy(change) {
   renderModePill();
   $('privacy-hidden').checked = privacy.hidden;
   $('privacy-texts').checked = privacy.auto_accept_texts;
+  $('privacy-exe').checked = privacy.auto_accept_executables;
 }
 $('privacy-hidden').onchange = (e) => savePrivacy({ hidden: e.target.checked });
 $('privacy-texts').onchange = (e) => savePrivacy({ auto_accept_texts: e.target.checked });
+$('privacy-exe').onchange = (e) => savePrivacy({ auto_accept_executables: e.target.checked });
 
 async function loadLanguage() {
   try {

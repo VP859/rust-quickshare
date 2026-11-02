@@ -17,7 +17,8 @@ Both interfaces use only the library's public API.
                      └──── implement TransferHandler ─┘
                                      │
  ferry library ──────────────────────▼──────────────────────────────────────
-   transfer/   service (accept loop, events), sender, receiver, path security
+   transfer/   service (accept loop, events), sender, receiver, path security,
+               risk (dangerous file types, Mark-of-the-Web), share (one-time identity)
    pairing.rs  commit-reveal pairing code
    discovery/  signed UDP announcements on the local network
    node/       iroh endpoint, persistent identity, TICKET

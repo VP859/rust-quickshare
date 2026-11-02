@@ -158,6 +158,9 @@ select {
 .background-status li { display: flex; gap: 8px; align-items: baseline; }
 .background-status li.warn::before { content: "!"; color: var(--warn); font-weight: 700; }
 .background-status li.ok::before { content: "✓"; color: var(--ok); }
+.safety-number { display: grid; grid-template-columns: repeat(4, auto); justify-content: space-between; gap: 6px 10px; padding: 14px; font: 600 17px var(--mono); letter-spacing: .06em; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); -webkit-user-select: text; user-select: text; }
+.tag.verified { color: var(--ok); }
+.risk-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--bad); border-radius: var(--radius); background: var(--bad-soft); color: var(--bad); font-size: 13px; font-weight: 500; }
 .toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .toggle .label { font-weight: 500; }
 .toggle .desc { color: var(--muted); font-size: 12.5px; }

@@ -124,6 +124,8 @@ pub enum SettingKey {
     Hidden,
     /// Copy texts from Auto-Accept devices without asking (`true`/`false`).
     AutoAcceptTexts,
+    /// Accept programs, scripts and macro documents from Auto-Accept devices without asking (`true`/`false`).
+    AutoAcceptExecutables,
     /// Desktop app: quit when the window is closed instead of staying in the tray (`true`/`false`).
     QuitOnClose,
 }
@@ -203,6 +205,18 @@ pub enum PeerCommands {
         /// New Auto-Accept setting.
         #[arg(long)]
         auto_accept: Option<bool>,
+    },
+    /// Show the safety number shared with a trusted device, to compare it with
+    /// the other device; `--confirm` records that both match.
+    Verify {
+        /// Alias or Node ID.
+        target: String,
+        /// The numbers are equal: mark the device as verified.
+        #[arg(long, conflicts_with = "unconfirm")]
+        confirm: bool,
+        /// Remove the verified mark.
+        #[arg(long)]
+        unconfirm: bool,
     },
     /// Remove a trusted device.
     Remove {

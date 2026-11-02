@@ -195,6 +195,41 @@ impl App {
         }
     }
 
+    /// Shows the safety number shared with the selected trusted device.
+    pub fn show_safety_number(&mut self) {
+        if self.focus != Focus::Trusted {
+            self.status_msg = t!("tui.safety_where").into_owned();
+            return;
+        }
+        let Some((node_id, peer)) = self.selected_trusted() else {
+            return;
+        };
+        let Ok(id) = node_id.parse::<EndpointId>() else {
+            return;
+        };
+        self.popup = Some(Popup::SafetyNumber {
+            number: ferry::pairing::safety_number(&self.engine.node_id(), &id),
+            verified: peer.verified,
+            alias: peer.alias,
+            node_id,
+        });
+    }
+
+    /// Records that the safety number of `node_id` was (or no longer is) compared.
+    pub fn set_verified(&mut self, node_id: &str, verified: bool) {
+        let result = Config::load().and_then(|mut c| {
+            c.set_verified(node_id, verified);
+            c.save()?;
+            Ok(if verified {
+                t!("tui.verified_on")
+            } else {
+                t!("tui.verified_off")
+            }
+            .into_owned())
+        });
+        self.after_config_change(result);
+    }
+
     /// Removes a trusted device after confirmation.
     pub fn confirm_remove(&mut self, node_id: &str) {
         let result = Config::load().and_then(|mut c| {

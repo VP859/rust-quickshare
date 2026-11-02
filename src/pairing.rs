@@ -162,6 +162,52 @@ pub fn pairing_code(
     format!("{:03} {:03}", n / 1000, n % 1000)
 }
 
+/// Number of five-digit groups in a [safety number](safety_number).
+const SAFETY_GROUPS: usize = 12;
+
+/// The **safety number** of two devices: 60 digits (12 groups of 5) that are the
+/// same on both devices and can be compared at any time – by reading them out,
+/// or side by side – to check that a trusted device is still the one it was
+/// when paired.
+///
+/// It is derived from the two Node IDs, i.e. the public keys that authenticate
+/// every connection, so equal numbers mean that both devices see the same two
+/// keys and nobody sits in between. Unlike the pairing code it does not change.
+/// 60 digits (about 200 bits) keep an attacker from finding a pair of keys that
+/// produces a chosen number.
+///
+/// # Examples
+///
+/// ```
+/// use ferry::pairing::safety_number;
+///
+/// let a = iroh::SecretKey::generate().public();
+/// let b = iroh::SecretKey::generate().public();
+/// let number = safety_number(&a, &b);
+/// assert_eq!(number, safety_number(&b, &a), "the same on both devices");
+/// assert_eq!(number.split(' ').count(), 12);
+/// ```
+pub fn safety_number(a: &EndpointId, b: &EndpointId) -> String {
+    let (lo, hi) = if a.as_bytes() <= b.as_bytes() {
+        (a, b)
+    } else {
+        (b, a)
+    };
+    let mut hasher = blake3::Hasher::new_derive_key("ferry safety number v1");
+    hasher.update(lo.as_bytes());
+    hasher.update(hi.as_bytes());
+    let mut reader = hasher.finalize_xof();
+    (0..SAFETY_GROUPS)
+        .map(|_| {
+            let mut chunk = [0u8; 8];
+            reader.fill(&mut chunk);
+            // 2^64 is not a multiple of 10^5, but the bias (< 10^-14) is irrelevant.
+            format!("{:05}", u64::from_le_bytes(chunk) % 100_000)
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Responder side of the nonce exchange: sends [`PairChallenge`], reads and
 /// checks [`PairReveal`] and returns the verification code.
 ///
@@ -256,6 +302,23 @@ mod tests {
         assert_ne!(code, pairing_code(&b, &a, &[1; 32], &[2; 32]));
         assert_ne!(code, pairing_code(&a, &b, &[9; 32], &[2; 32]));
         assert_ne!(code, pairing_code(&a, &b, &[1; 32], &[9; 32]));
+    }
+
+    #[test]
+    fn safety_numbers_are_symmetric_and_depend_on_both_keys() {
+        let a = iroh::SecretKey::generate().public();
+        let b = iroh::SecretKey::generate().public();
+        let c = iroh::SecretKey::generate().public();
+        let number = safety_number(&a, &b);
+        assert_eq!(number, safety_number(&b, &a));
+        assert_ne!(number, safety_number(&a, &c));
+        assert_ne!(number, safety_number(&c, &b));
+        assert_eq!(number.len(), 12 * 5 + 11);
+        assert!(
+            number
+                .split(' ')
+                .all(|g| g.len() == 5 && g.bytes().all(|b| b.is_ascii_digit()))
+        );
     }
 
     #[test]

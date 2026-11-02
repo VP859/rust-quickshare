@@ -125,3 +125,32 @@ test('Android shows what limits it in the background', async ({ app }, info) => 
   await section.getByRole('button', { name: 'Open app settings' }).click();
   expect(await calls(app)).toContainEqual(['open_app_settings', {}]);
 });
+
+test('an offer for a program carries a warning, a photo does not', async ({ app }) => {
+  const offer = (file_name, risk) => ({
+    id: `o-${file_name}`, peer: PEER, alias: 'Laptop', file_name, size: 1000, count: 1, names: [], risk,
+  });
+  await emit(app, 'incoming-offer', offer('setup.exe', 'program'));
+  await expect(app.locator('#modal-offer')).toHaveClass(/active/);
+  await expect(app.locator('#offer-risk')).toBeVisible();
+  await expect(app.locator('#offer-risk')).toContainText('program or installer');
+
+  await app.locator('#btn-offer-reject').click();
+  await emit(app, 'incoming-offer', offer('holiday.jpg', null));
+  await expect(app.locator('#offer-file')).toHaveText('holiday.jpg');
+  await expect(app.locator('#offer-risk')).toBeHidden();
+});
+
+test('the safety number of a trusted device can be compared and confirmed', async ({ app }) => {
+  await app.locator('#peers .device').first().getByRole('button', { name: 'Device options' }).click();
+  await app.getByRole('menuitem', { name: /Safety number/ }).click();
+  const dialog = app.locator('#modal-safety');
+  await expect(dialog).toHaveClass(/active/);
+  await expect(app.locator('#safety-title')).toContainText('Laptop');
+  await expect(app.locator('#safety-number span')).toHaveCount(12);
+  await expect(app.locator('#safety-number')).toContainText('54414');
+
+  await dialog.locator('label.switch').click();
+  await expect(app.locator('#safety-verified')).toBeChecked();
+  expect(await calls(app)).toContainEqual(['set_verified', { nodeId: PEER, verified: true }]);
+});

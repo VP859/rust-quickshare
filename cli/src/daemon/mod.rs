@@ -19,6 +19,7 @@ use ferry::discovery::{Discovery, DiscoveryOptions};
 use ferry::node::NodeEngine;
 use ferry::pairing::PairRequest;
 use ferry::protocol::messages::{BatchOffer, TextDecision, TransferOffer};
+use ferry::transfer::risk;
 use ferry::transfer::service::{
     self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
@@ -90,13 +91,19 @@ impl TransferHandler for DaemonHandler {
             .map(|p| p.alias.clone())
             .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
 
-        if peer_info.is_some_and(|p| p.auto_accept) {
+        if config.auto_accepts_file(&peer.to_string(), &offer.file_name) {
             info!("Auto-Accept: '{}' from '{alias}'", offer.file_name);
             return OfferDecision::Accept { dest_dir };
         }
+        let risk = risk::file_risk(&offer.file_name);
         if !self.interactive {
+            // An Auto-Accept device sending a program or script is not trusted blindly.
+            let reason = match (risk, peer_info.is_some_and(|p| p.auto_accept)) {
+                (Some(_), true) => t!("daemon.no_auto_executable", alias = &alias),
+                _ => t!("daemon.no_auto_accept", alias = &alias),
+            };
             return OfferDecision::Reject {
-                reason: t!("daemon.no_auto_accept", alias = &alias).into_owned(),
+                reason: reason.into_owned(),
             };
         }
 
@@ -107,7 +114,10 @@ impl TransferHandler for DaemonHandler {
             alias = &alias,
             id = peer
         );
-        if self.ask_user(format!("\n{question}")).await {
+        if self
+            .ask_user(format!("\n{}{question}", risk_warning(risk)))
+            .await
+        {
             OfferDecision::Accept { dest_dir }
         } else {
             OfferDecision::Reject {
@@ -126,13 +136,18 @@ impl TransferHandler for DaemonHandler {
         let alias = peer_info
             .map(|p| p.alias.clone())
             .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
-        if peer_info.is_some_and(|p| p.auto_accept) {
+        if config.auto_accepts_batch(&peer.to_string(), &batch.names) {
             info!("Auto-Accept: {} files from '{alias}'", batch.count);
             return Some(OfferDecision::Accept { dest_dir });
         }
+        let risk = risk::worst_risk(&batch.names);
         if !self.interactive {
+            let reason = match (risk, peer_info.is_some_and(|p| p.auto_accept)) {
+                (Some(_), true) => t!("daemon.no_auto_executable", alias = &alias),
+                _ => t!("daemon.no_auto_accept", alias = &alias),
+            };
             return Some(OfferDecision::Reject {
-                reason: t!("daemon.no_auto_accept", alias = &alias).into_owned(),
+                reason: reason.into_owned(),
             });
         }
         let question = t!(
@@ -142,13 +157,18 @@ impl TransferHandler for DaemonHandler {
             alias = &alias,
             names = batch.names.join(", ")
         );
-        Some(if self.ask_user(format!("\n{question}")).await {
-            OfferDecision::Accept { dest_dir }
-        } else {
-            OfferDecision::Reject {
-                reason: t!("transfer.user_rejected").into_owned(),
-            }
-        })
+        Some(
+            if self
+                .ask_user(format!("\n{}{question}", risk_warning(risk)))
+                .await
+            {
+                OfferDecision::Accept { dest_dir }
+            } else {
+                OfferDecision::Reject {
+                    reason: t!("transfer.user_rejected").into_owned(),
+                }
+            },
+        )
     }
 
     async fn confirm_pair(&self, req: PairRequest) -> bool {
@@ -247,6 +267,12 @@ impl TransferHandler for DaemonHandler {
 ///
 /// `downloads_dir` overrides the configured download folder.
 ///
+/// Warning line before a question about a file that can run code; empty for
+/// harmless files.
+fn risk_warning(risk: Option<risk::Risk>) -> String {
+    risk.map_or_else(String::new, |r| format!("{}\n", r.warning()))
+}
+
 /// Creates `dir` if needed and checks that a file can be written there.
 ///
 /// # Errors

@@ -91,13 +91,14 @@ pub fn run_network(mode: Option<&str>) -> Result<()> {
 }
 
 /// Every key of `ferry config`, in display order.
-const SETTING_KEYS: [SettingKey; 7] = [
+const SETTING_KEYS: [SettingKey; 8] = [
     SettingKey::DeviceName,
     SettingKey::Language,
     SettingKey::NetworkMode,
     SettingKey::DownloadDir,
     SettingKey::Hidden,
     SettingKey::AutoAcceptTexts,
+    SettingKey::AutoAcceptExecutables,
     SettingKey::QuitOnClose,
 ];
 
@@ -121,6 +122,7 @@ fn get_setting(config: &Config, key: SettingKey) -> String {
         SettingKey::DownloadDir => config.download_dir().display().to_string(),
         SettingKey::Hidden => config.hidden.to_string(),
         SettingKey::AutoAcceptTexts => config.auto_accept_texts.to_string(),
+        SettingKey::AutoAcceptExecutables => config.auto_accept_executables.to_string(),
         SettingKey::QuitOnClose => config.quit_on_close.to_string(),
     }
 }
@@ -158,6 +160,7 @@ fn set_setting(config: &mut Config, key: SettingKey, value: &str) -> Result<()> 
         }
         SettingKey::Hidden => config.hidden = parse_bool(value)?,
         SettingKey::AutoAcceptTexts => config.auto_accept_texts = parse_bool(value)?,
+        SettingKey::AutoAcceptExecutables => config.auto_accept_executables = parse_bool(value)?,
         SettingKey::QuitOnClose => config.quit_on_close = parse_bool(value)?,
     }
     Ok(())
@@ -172,6 +175,7 @@ fn unset_setting(config: &mut Config, key: SettingKey) {
         SettingKey::DownloadDir => config.default_download_dir = None,
         SettingKey::Hidden => config.hidden = false,
         SettingKey::AutoAcceptTexts => config.auto_accept_texts = false,
+        SettingKey::AutoAcceptExecutables => config.auto_accept_executables = false,
         SettingKey::QuitOnClose => config.quit_on_close = false,
     }
 }

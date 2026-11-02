@@ -119,6 +119,8 @@ pub fn run() {
             refresh_nearby,
             pair_device,
             cancel_transfer,
+            safety_number,
+            set_verified,
             background_status,
             open_app_settings,
             get_quit_on_close,

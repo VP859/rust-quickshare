@@ -216,6 +216,9 @@ pub async fn receive_on_channel(
         .await
         .with_context(|| t!("receiver.rename"))?;
 
+    // Windows: Mark-of-the-Web, so SmartScreen and Office warn before it is opened.
+    super::risk::mark_from_network(&final_path);
+
     write_msg(&mut channel.send, &TransferResult::Verified).await?;
     channel.finish().await;
     info!("Received and verified {}", final_path.display());

@@ -11,11 +11,12 @@ use ferry::config::Config;
 use ferry::discovery::{Discovery, DiscoveryOptions, Visibility};
 use ferry::node::NodeEngine;
 use ferry::pairing::PairRequest;
-use ferry::protocol::messages::{BatchOffer, ShareToken, TextDecision, TransferOffer};
-use ferry::transfer::sender::PreparedFile;
+use ferry::protocol::messages::{BatchOffer, TextDecision, TransferOffer};
+use ferry::transfer::risk;
 use ferry::transfer::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
+use ferry::transfer::share::Share;
 use iroh::EndpointId;
 use rust_i18n::t;
 use serde::Serialize;
@@ -43,8 +44,9 @@ pub struct AppState {
     pub config: Mutex<Config>,
     /// Pending offer and pairing decisions keyed by their ID.
     pub pending: Mutex<HashMap<String, oneshot::Sender<bool>>>,
-    /// Files shared by TICKET, keyed by share token.
-    pub shares: std::sync::Mutex<HashMap<ShareToken, PreparedFile>>,
+    /// Files shared by TICKET, each served by a node with its own one-time
+    /// identity; ended shares are dropped when a new one starts.
+    pub shares: std::sync::Mutex<Vec<Share>>,
     /// Download folder chosen at startup (on Android it depends on permissions).
     pub platform_download_dir: OnceLock<PathBuf>,
     /// Gallery folder for received photos and videos (Android only).
@@ -70,7 +72,7 @@ impl AppState {
             engine: OnceCell::new(),
             config: Mutex::new(Config::default()),
             pending: Mutex::new(HashMap::new()),
-            shares: std::sync::Mutex::new(HashMap::new()),
+            shares: std::sync::Mutex::new(Vec::new()),
             platform_download_dir: OnceLock::new(),
             platform_media_dir: OnceLock::new(),
             discovery: OnceLock::new(),
@@ -173,6 +175,9 @@ pub struct IncomingOffer {
     pub count: u32,
     /// Names of the files of a batch (at most the first 20); empty for a single file.
     pub names: Vec<String>,
+    /// Why the file(s) can be dangerous (`program`, `script`, `macro` or
+    /// `disguised`, see [`ferry::transfer::risk::Risk::code`]), if they can.
+    pub risk: Option<&'static str>,
 }
 
 /// Payload of the `incoming-text` event.
@@ -277,7 +282,14 @@ impl TransferHandler for GuiHandler {
         offer: &TransferOffer,
     ) -> OfferDecision {
         let dest_dir = self.state().download_dir().await;
-        let (alias, auto_accept) = self.sender_info(&peer).await;
+        let (alias, _) = self.sender_info(&peer).await;
+        // Auto-Accept does not cover programs and scripts: those always ask.
+        let auto_accept = self
+            .state()
+            .config
+            .lock()
+            .await
+            .auto_accepts_file(&peer.to_string(), &offer.file_name);
         let sender = alias
             .clone()
             .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
@@ -294,6 +306,7 @@ impl TransferHandler for GuiHandler {
                         size: offer.file_size,
                         count: 1,
                         names: Vec::new(),
+                        risk: risk::file_risk(&offer.file_name).map(risk::Risk::code),
                     },
                     DECISION_TIMEOUT,
                     (
@@ -313,7 +326,13 @@ impl TransferHandler for GuiHandler {
 
     async fn decide_batch(&self, peer: EndpointId, batch: &BatchOffer) -> Option<OfferDecision> {
         let dest_dir = self.state().download_dir().await;
-        let (alias, auto_accept) = self.sender_info(&peer).await;
+        let (alias, _) = self.sender_info(&peer).await;
+        let auto_accept = self
+            .state()
+            .config
+            .lock()
+            .await
+            .auto_accepts_batch(&peer.to_string(), &batch.names);
         let sender = alias
             .clone()
             .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
@@ -326,6 +345,7 @@ impl TransferHandler for GuiHandler {
             size: batch.total_size,
             count: batch.count,
             names: batch.names.clone(),
+            risk: risk::worst_risk(&batch.names).map(risk::Risk::code),
         };
         let notification = (
             &*t!("gui.notify_offer_title"),
@@ -348,10 +368,6 @@ impl TransferHandler for GuiHandler {
                 reason: t!("transfer.user_rejected").into_owned(),
             }
         })
-    }
-
-    fn shared_file(&self, token: &ShareToken) -> Option<PreparedFile> {
-        self.state().shares.lock().ok()?.get(token).cloned()
     }
 
     /// Called from async code, so it never blocks on a busy configuration lock.

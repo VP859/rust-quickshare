@@ -111,6 +111,14 @@ compromise of the libraries Ferry depends on (see [Trusted components](#trusted-
   cannot leak files from elsewhere. Peers can never request files: a device only sends what you
   chose to send, or the single file behind a share TICKET you created.
 
+* **Files that can run code** (programs, installers, scripts, shortcuts, macro documents, names with
+  direction-changing characters – `ferry::transfer::risk`) are marked with a warning in the offer,
+  are never covered by "accept the batch", and are not auto-accepted from Auto-Accept devices
+  unless `auto_accept_executables` is on. Received files never get the execute permission; on
+  Windows they carry the Mark-of-the-Web (`Zone.Identifier`, zone 3) so SmartScreen and Office
+  check them. The list is by extension and is a warning, not a scanner: an unlisted type can still
+  be dangerous.
+
 ### Consent
 
 * Files from devices that are not trusted with **Auto-Accept** require confirmation. Auto-Accept
@@ -181,11 +189,29 @@ Node IDs (earlier versions of Ferry) could be matched offline in seconds by gene
 * System notifications show the sender's name, the file name or number of files, and the pairing
   code. On a phone they may be visible on the lock screen depending on the system settings.
 
+### Safety number
+
+A trusted device is bound to its key, but the six-digit pairing code is seen only once. The
+**safety number** (60 digits, `ferry peer verify`) is derived from both Node IDs and is the same
+on both devices at any time; reading it out or comparing it side by side shows that both still
+see the same two keys, i.e. nobody replaced a device or sits in between. 60 digits (about 200
+bits) cannot be matched by generating keys. It proves key identity only: it says nothing about
+who holds the device. Verification is a local mark and is not synchronized.
+
+### Sharing by TICKET
+
+A file shared by TICKET is served by a node with a random one-time key, not the device's own.
+The recipient therefore cannot learn or track the permanent Node ID, shares cannot be linked
+to each other or to the device, and the node disappears when the share ends (first download,
+timeout or stop). The share serves one file and declines offers. Not hidden: the sender's and
+recipient's IP addresses (visible to each other, and the relay in internet mode), and anyone
+who gets the TICKET while the share is open can download the file once or until it expires.
+
 ## Known limitations
 
 * **Announced names are not authenticated.** A stranger can announce the name "Kate's Laptop".
   Before pairing, compare the code; after pairing, trust is bound to the Node ID, not the name.
-* **The Node ID is a stable identifier.** It does not change between networks or restarts, so
+* **The Node ID is a stable identifier** (except in TICKET shares, which use a one-time one). It does not change between networks or restarts, so
   anyone who sees it (local network, relay operator, a TICKET you shared) can recognize the same
   device later. A new identity is possible only by deleting `secret.key`, which also loses all
   pairings.

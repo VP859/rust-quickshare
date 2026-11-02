@@ -7,6 +7,7 @@
 | Property-based tests | `tests/properties.rs`, `transfer/service.rs` | `cargo test --test properties` (more cases: `PROPTEST_CASES=20000`) | every push |
 | Bad network conditions | `tests/network_conditions.rs` | `cargo test --release --test network_conditions -- --include-ignored` | every push (job *Bad network conditions*) |
 | The same end-to-end tests over a lossy kernel link | `tc netem` on loopback | see below | every push |
+| Sharing by TICKET (one-time identity) | `tests/share.rs` | `cargo test --test share` | every push |
 | Protocol versions | `tests/version_negotiation.rs` | `cargo test --test version_negotiation` | every push |
 | Protocol vectors | `tests/protocol_vectors.rs`, `scripts/verify-vectors.py` (independent, from the spec) | `cargo test --test protocol_vectors`; `python3 scripts/verify-vectors.py` | every push |
 | Fuzzing | `fuzz/` | `cargo +nightly fuzz run frame` ([fuzz/README.md](../fuzz/README.md)) | 1 min per target on pull requests that touch `src/`, 15 min weekly |

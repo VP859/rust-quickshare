@@ -60,6 +60,7 @@ More commands:
 ```bash
 ferry ticket                            # this device's TICKET and QR code
 ferry peer add <TICKET> --alias Laptop --auto-accept
+ferry peer verify Laptop             # safety number to compare with the other device
 ferry peer list | ferry peer edit Laptop --auto-accept false | ferry peer remove Laptop
 ferry send film.mkv                     # share one file through a one-time TICKET
 ferry receive <TICKET> ~/Downloads      # download a shared file
@@ -78,6 +79,7 @@ ferry doctor                            # network and discovery diagnostics
 | Network mode | `network-mode internet` | `local` |
 | Download folder | `download-dir ~/Inbox` | system Downloads folder |
 | Hidden from unpaired devices | `hidden true` | `false` |
+| Auto-accept programs and scripts from Auto-Accept devices | `auto-accept-executables true` | `false` (they ask) |
 | Copy texts from Auto-Accept devices without asking | `auto-accept-texts true` | `false` |
 | Desktop app quits when its window is closed | `quit-on-close true` | `false` (keeps running in the tray) |
 
@@ -134,11 +136,11 @@ it applies after a restart. The desktop app always shows the active mode in the 
 ## Local network and pairing
 
 - Every device announces itself every 5 s on UDP port **47823** (broadcast and multicast
-  `239.255.71.83`, no mDNS); transfers use UDP **47824**. Announcements are signed with the
+  `239.255.71.83`, no mDNS); transfers use UDP **47824** (files shared by TICKET use 47825–47834). Announcements are signed with the
   device key.
-- **Firewall:** allow UDP 47823–47824 on the local network. With firewalld (Fedora, openSUSE)
+- **Firewall:** allow UDP 47823–47834 on the local network. With firewalld (Fedora, openSUSE)
   Ferry shows the command:
-  `sudo firewall-cmd --permanent --add-port=47823-47824/udp && sudo firewall-cmd --reload`.
+  `sudo firewall-cmd --permanent --add-port=47823-47834/udp && sudo firewall-cmd --reload`.
   VPNs with a kill switch may block the local network (NordVPN: `nordvpn set lan-discovery on`).
 - **Android 17+** needs the *Nearby devices* permission for any local network traffic; Ferry asks
   at startup (Settings → Apps → Ferry → Permissions if it was denied).

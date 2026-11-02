@@ -1,7 +1,6 @@
 //! `ferry send`, `ferry text`, `ferry receive` and `ferry ticket`.
 
 use anyhow::{Context, Result};
-use iroh::EndpointId;
 use rust_i18n::t;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,11 +11,10 @@ use super::display::{TerminalProgress, print_ticket};
 use ferry::config::Config;
 use ferry::discovery::{Discovery, DiscoveryOptions};
 use ferry::node::{NodeEngine, NodeTicket};
-use ferry::protocol::messages::{ShareToken, TextDecision, TransferOffer};
-use ferry::transfer::sender::{PreparedFile, prepare_file};
-use ferry::transfer::service::{
-    self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
-};
+use ferry::protocol::messages::TextDecision;
+use ferry::transfer::sender::prepare_file;
+use ferry::transfer::service;
+use ferry::transfer::share::{Share, ShareOptions, ShareSink};
 
 /// How long to look for the receiver on the local network before sending.
 const NEARBY_LOOKUP: Duration = Duration::from_millis(1500);
@@ -30,11 +28,12 @@ const NEARBY_LOOKUP: Duration = Duration::from_millis(1500);
 ///
 /// Fails when the node cannot start, the receiver cannot be resolved or a transfer fails.
 pub async fn run_send(files: &[PathBuf], to: Option<&str>) -> Result<()> {
-    let engine = NodeEngine::with_persistent_identity().await?;
-    let result = match to {
-        Some(target) => send_to_peer(&engine, files, target).await,
-        None => share_by_ticket(&engine, files).await,
+    let Some(target) = to else {
+        // Sharing by TICKET uses a throw-away identity, not the device's own.
+        return share_by_ticket(files).await;
     };
+    let engine = NodeEngine::with_persistent_identity().await?;
+    let result = send_to_peer(&engine, files, target).await;
     engine.close().await;
     result
 }
@@ -107,61 +106,46 @@ pub async fn run_send_text(text: Option<String>, to: &str) -> Result<()> {
     }
 }
 
-/// Serves one file under a share token and rejects incoming offers.
-struct ShareHandler {
-    /// Token from the share TICKET.
-    token: ShareToken,
-    /// The shared file.
-    file: PreparedFile,
-    /// Transfer events, consumed by the progress display.
-    events: mpsc::UnboundedSender<TransferEvent>,
-}
-
-impl TransferHandler for ShareHandler {
-    async fn decide(&self, _: EndpointId, _: &str, _: &TransferOffer) -> OfferDecision {
-        OfferDecision::Reject {
-            reason: t!("cli.share_only").into_owned(),
-        }
-    }
-
-    fn shared_file(&self, token: &ShareToken) -> Option<PreparedFile> {
-        (token == &self.token).then(|| self.file.clone())
-    }
-
-    fn on_event(&self, event: TransferEvent) {
-        let _ = self.events.send(event);
-    }
-}
-
-/// Keeps serving after errors, so the receiver can resume an interrupted download.
-async fn share_by_ticket(engine: &NodeEngine, files: &[PathBuf]) -> Result<()> {
+/// Shares one file by a one-time TICKET: a node with a new identity serves it
+/// until it was downloaded once, and keeps serving after errors, so an
+/// interrupted download can be resumed.
+async fn share_by_ticket(files: &[PathBuf]) -> Result<()> {
     let [path] = files else {
         anyhow::bail!(t!("cli.share_single"));
     };
     println!("{}", t!("cli.hashing", name = path.display()));
     let file = prepare_file(path).await?;
-    let token = service::new_share_token();
-    let ticket = NodeTicket::with_share(engine.node_addr().await?, token).serialize_to_string()?;
-    print_ticket(&t!("cli.shared", name = &file.name), &ticket);
+    let mode = Config::load().unwrap_or_default().network_mode;
 
     let (tx, mut rx) = mpsc::unbounded_channel();
-    let handler = Arc::new(ShareHandler {
-        token,
-        file,
-        events: tx,
+    let sink: ShareSink = Arc::new(move |event| {
+        let _ = tx.send(event);
     });
-    let server = tokio::spawn(service::serve(engine.clone(), handler));
+    let mut share = Share::start(
+        file,
+        mode,
+        ShareOptions {
+            single_use: true,
+            lifetime: None,
+        },
+        sink,
+    )
+    .await?;
+    print_ticket(
+        &t!("cli.shared", name = share.file_name()),
+        &share.ticket()?,
+    );
+    println!(
+        "{}\n",
+        t!("cli.share_identity", id = share.node_id().fmt_short())
+    );
 
     let progress = TerminalProgress::default();
-    while let Some(ev) = rx.recv().await {
-        let delivered = ev.direction == Direction::Upload
-            && matches!(ev.status, TransferStatus::Completed { .. });
-        progress.handle(ev);
-        if delivered {
-            break;
-        }
+    // The channel closes when the share ends and drops its handler.
+    while let Some(event) = rx.recv().await {
+        progress.handle(event);
     }
-    server.abort();
+    share.finished().await;
     Ok(())
 }
 

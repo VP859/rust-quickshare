@@ -231,7 +231,7 @@ impl DiscoveryHealth {
                 return Some(
                     t!(
                         "discovery.firewalld",
-                        ports = format!("{DISCOVERY_PORT}-{}", crate::node::QUIC_PORT)
+                        ports = format!("{DISCOVERY_PORT}-{}", crate::node::SHARE_PORTS.end())
                     )
                     .into_owned(),
                 );

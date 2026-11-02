@@ -161,6 +161,21 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-safety" role="dialog" aria-modal="true" aria-labelledby="safety-title">
+  <div class="modal">
+    <div class="modal-head"><h3 id="safety-title"></h3><button class="ghost icon" data-close="modal-safety" data-i18n-aria="close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <p class="muted small" data-i18n="safety_how"></p>
+      <div class="safety-number" id="safety-number" aria-live="polite"></div>
+      <div class="toggle">
+        <div><div class="label" id="safety-verified-label" data-i18n="safety_verified"></div><div class="desc" data-i18n="safety_verified_hint"></div></div>
+        <label class="switch"><input type="checkbox" id="safety-verified" aria-labelledby="safety-verified-label"><span></span></label>
+      </div>
+      <div class="modal-actions"><button id="btn-safety-copy" data-i18n="copy"></button><button class="primary" data-close="modal-safety" data-i18n="close"></button></div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-offer" role="alertdialog" aria-modal="true" aria-labelledby="offer-title">
   <div class="modal">
     <div class="modal-head"><h3 id="offer-title" data-i18n="incoming_file"></h3></div>
@@ -170,6 +185,7 @@
         <div class="body"><div class="title" id="offer-file"></div><div class="sub" id="offer-meta"></div></div>
       </div>
       <div class="codebox textbox small" id="offer-names" hidden></div>
+      <p class="risk-warning" id="offer-risk" role="alert" hidden></p>
       <p class="muted small" id="offer-queue"></p>
       <div class="modal-actions"><button class="danger" id="btn-offer-reject" data-i18n="reject"></button><button class="primary" id="btn-offer-accept" data-i18n="accept"></button></div>
     </div>
@@ -274,6 +290,10 @@
         <div class="toggle">
           <div><div class="label" id="privacy-texts-label" data-i18n="privacy_texts"></div><div class="desc" data-i18n="privacy_texts_hint"></div></div>
           <label class="switch"><input type="checkbox" id="privacy-texts" aria-labelledby="privacy-texts-label"><span></span></label>
+        </div>
+        <div class="toggle">
+          <div><div class="label" id="privacy-exe-label" data-i18n="privacy_executables"></div><div class="desc" data-i18n="privacy_executables_hint"></div></div>
+          <label class="switch"><input type="checkbox" id="privacy-exe" aria-labelledby="privacy-exe-label"><span></span></label>
         </div>
         <details class="data-flow">
           <summary data-i18n="data_flow_title"></summary>

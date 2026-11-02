@@ -40,7 +40,7 @@ back (batches did exactly this). Anything else that changes existing bytes is a 
 
 * [iroh](https://github.com/n0-computer/iroh) endpoints: QUIC + TLS 1.3, authenticated by the
   Ed25519 **Node ID** (the 32-byte public key; text form is 64 hexadecimal characters). Preferred UDP
-  port 47824 (a random one when taken).
+  port 47824 (a random one when taken); one-time nodes of TICKET shares use 47825–47834.
 * Messages are [postcard](https://postcard.jamesmunns.com/wire-format) values: integers are
   variable-length (LEB128, zig-zag for signed ones), `String` and `Vec` have a length prefix, `[u8; N]`
   is `N` raw bytes, `Option` is a `0`/`1` tag byte, and an **enum is its variant index** (in
@@ -137,6 +137,21 @@ The responder verifies `commitment` against the revealed `n_a` (with `a` from th
 connection, not from the message) and ends the request without asking the user if they differ. Why
 this resists forged codes is in [SECURITY-MODEL.md](SECURITY-MODEL.md#pairing).
 
+## Safety number
+
+Two trusted devices can compare a **safety number** at any time; it is computed locally from the
+two Node IDs and is not sent over the network. With `lo ‖ hi` the two 32-byte Node IDs sorted
+bytewise (so both devices get the same number):
+
+```text
+stream = BLAKE3-derive-key-XOF("ferry safety number v1", lo ‖ hi)   first 96 bytes
+group  = (8 bytes of stream as little-endian u64) mod 100 000       for each of 12 chunks
+number = the 12 groups, each zero-padded to 5 digits, joined by single spaces
+```
+
+Equal numbers on both devices mean both see the same two keys. See
+[SECURITY-MODEL.md](SECURITY-MODEL.md#safety-number).
+
 ## Local network discovery
 
 UDP datagrams on port **47823**, at most 2048 bytes, sent every 5 seconds to the broadcast address of
@@ -199,6 +214,7 @@ times → Ed25519 secret key):
 
 * `frames` – the exact bytes of one frame of every message,
 * `pairing` – commitment and code for fixed nonces,
+* `safety_number` – the safety number of two fixed keys, in both orders,
 * `tickets` – TICKETs with and without address and share token,
 * `announcement` – a signed discovery datagram and its validity window,
 * `chunk_policy` – chunk size and window for example file sizes,
@@ -210,7 +226,7 @@ compare the values. For Ferry itself the test is `tests/protocol_vectors.rs`
 
 [`scripts/verify-vectors.py`](../scripts/verify-vectors.py) is a second, independent check: about a
 hundred lines of Python written only from this document (no Ferry code) reproduce the pairing
-commitment and code, the Node IDs, the frame lengths, the TICKET encoding, the chunk-size policy and
+commitment and code, the safety number, the Node IDs, the frame lengths, the TICKET encoding, the chunk-size policy and
 the signature of the announcement. CI runs it, so the document stays complete enough to implement.
 
 ## Changing the protocol

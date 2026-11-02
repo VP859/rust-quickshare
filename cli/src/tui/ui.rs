@@ -11,6 +11,7 @@ use rust_i18n::t;
 
 use super::app::{App, Focus, PendingKind, Popup, display_path};
 use crate::cli::display::{human_size, qr_terminal};
+use ferry::transfer::risk;
 use ferry::transfer::service::{Direction as TransferDirection, TransferStatus};
 
 /// Width of transfer progress bars in characters.
@@ -153,6 +154,9 @@ fn render_trusted(f: &mut Frame, app: &App, area: Rect) {
                     "  [Auto-Accept]",
                     Style::default().fg(Color::Green),
                 ));
+            }
+            if p.verified {
+                spans.push(Span::styled("  ✓", Style::default().fg(Color::Green)));
             }
             spans.push(Span::styled(
                 format!("  {}…", &id[..8.min(id.len())]),
@@ -394,7 +398,7 @@ fn render_pending(f: &mut Frame, app: &App) {
     } else {
         String::new()
     };
-    let (title, lines) = match &p.kind {
+    let (title, mut lines) = match &p.kind {
         PendingKind::File {
             peer_label,
             file_name,
@@ -493,10 +497,29 @@ fn render_pending(f: &mut Frame, app: &App) {
             ],
         ),
     };
-    let wrapped = match &p.kind {
+    let mut wrapped = match &p.kind {
         PendingKind::Text { preview, .. } => preview.chars().count() as u16 / 60,
         _ => 0,
     };
+    // Programs, scripts and documents with macros: a red warning above the keys.
+    let risk = match &p.kind {
+        PendingKind::File { file_name, .. } => risk::file_risk(file_name),
+        PendingKind::Batch { names, .. } => risk::worst_risk(names),
+        _ => None,
+    };
+    if let Some(risk) = risk {
+        let warning = risk.warning();
+        wrapped += warning.chars().count() as u16 / 60 + 1;
+        let at = lines.len().saturating_sub(1);
+        lines.insert(
+            at,
+            Line::styled(
+                warning,
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
+        );
+        lines.insert(at + 1, Line::raw(""));
+    }
     let area = centered(f.area(), 64, lines.len() as u16 + 2 + wrapped);
     f.render_widget(Clear, area);
     f.render_widget(
@@ -559,6 +582,53 @@ fn render_popup(f: &mut Frame, app: &App, popup: &Popup) {
     match popup {
         Popup::Ticket => render_ticket(f, app),
         Popup::Help => render_help(f),
+        Popup::SafetyNumber {
+            alias,
+            number,
+            verified,
+            ..
+        } => {
+            let groups: Vec<&str> = number.split(' ').collect();
+            let mut lines = vec![Line::raw(t!("tui.safety_how").into_owned()), Line::raw("")];
+            lines.extend(groups.chunks(4).map(|row| {
+                Line::styled(
+                    format!("  {}", row.join("  ")),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )
+            }));
+            lines.push(Line::raw(""));
+            lines.push(Line::styled(
+                if *verified {
+                    t!("tui.safety_verified").into_owned()
+                } else {
+                    t!("tui.safety_unverified").into_owned()
+                },
+                Style::default().fg(if *verified {
+                    Color::Green
+                } else {
+                    Color::Yellow
+                }),
+            ));
+            lines.push(Line::styled(
+                t!("tui.safety_keys").into_owned(),
+                Style::default().fg(Color::DarkGray),
+            ));
+            let area = centered(f.area(), 70, lines.len() as u16 + 4);
+            f.render_widget(Clear, area);
+            f.render_widget(
+                Paragraph::new(lines)
+                    .block(
+                        Block::default()
+                            .title(format!(" {} ", t!("tui.safety_title", alias = alias)))
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(Color::Cyan)),
+                    )
+                    .wrap(Wrap { trim: true }),
+                area,
+            );
+        }
         Popup::ConfirmRemove { alias, .. } => {
             let area = centered(f.area(), 56, 4);
             f.render_widget(Clear, area);
@@ -646,6 +716,7 @@ fn render_help(f: &mut Frame) {
         ("p", t!("tui.help_pair")),
         ("i / +", t!("tui.help_add")),
         ("e / a / x", t!("tui.help_manage")),
+        ("v", t!("tui.help_safety")),
         ("o / f", t!("tui.help_open")),
         ("x", t!("tui.help_cancel")),
         ("C", t!("tui.help_clear")),

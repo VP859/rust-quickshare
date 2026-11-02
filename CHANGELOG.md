@@ -19,6 +19,23 @@ compatibility).
 
 ### Added
 
+- **Warning about files that can run code**: programs and installers (`.exe`, `.msi`, `.apk`,
+  `.AppImage`, …), scripts and shortcuts (`.bat`, `.ps1`, `.sh`, `.desktop`, `.lnk`, …), Office files
+  with macros and names that hide their extension with direction-changing characters are marked
+  in red in the GUI and TUI before you accept. Such files are never accepted automatically – not
+  even from Auto-Accept devices and not as part of an accepted batch – unless you turn on
+  `auto-accept-executables` (off by default); a daemon without a terminal declines them. On Windows
+  received files get the Mark-of-the-Web (`Zone.Identifier`), so SmartScreen and Office warn
+  before they are opened. Received files are never executable on Unix.
+- **Safety number**: a 60-digit number shared by two trusted devices that can be compared at any
+  time to check that a device is still the one you paired (`ferry peer verify <device>`, the
+  *Safety number* item in the GUI device menu, `v` in the TUI). Mark the device as verified
+  after comparing; verified devices show ✓. Specified in `docs/PROTOCOL.md` with test vectors.
+- **One-time identity for TICKET sharing**: a file shared by TICKET (`ferry send`, *Share* in the
+  GUI) is served by a node with a random, throw-away key. The recipient never learns this device's
+  permanent Node ID, two shares cannot be linked, and an old TICKET is useless once the share ends.
+  The share declines offers sent to it and ends after the first download (CLI) or after 1 hour (GUI).
+  Shares listen on UDP 47825–47834, so the firewall rule now covers 47823–47834.
 - **Protocol versions are negotiated**: a device lists every version it speaks (`ferry/1` today) and
   the accepting side picks the best common one in the TLS handshake, so a future `ferry/2` can
   be introduced while devices of the previous release still connect. A device with no common version

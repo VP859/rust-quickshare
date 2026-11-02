@@ -13,12 +13,14 @@ use ferry::pairing::{PairOutcome, clean_device_name, request_pairing};
 use ferry::protocol::messages::TextDecision;
 use ferry::transfer::sender::prepare_file;
 use ferry::transfer::service;
+use ferry::transfer::share::{Share, ShareOptions, ShareSink};
 use qrcode::QrCode;
 use qrcode::render::svg;
 use rust_i18n::t;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -57,6 +59,8 @@ pub struct TrustedPeer {
     pub alias: String,
     /// Whether files are accepted without asking.
     pub auto_accept: bool,
+    /// The user compared the safety number with the other device.
+    pub verified: bool,
 }
 
 /// A file shared by TICKET.
@@ -212,6 +216,7 @@ pub async fn list_peers(state: State<'_, AppState>) -> CmdResult<Vec<TrustedPeer
             node_id: id.clone(),
             alias: p.alias.clone(),
             auto_accept: p.auto_accept,
+            verified: p.verified,
         })
         .collect();
     peers.sort_by_key(|p| p.alias.to_lowercase());
@@ -467,26 +472,45 @@ pub async fn send_text(text: String, target: String, state: State<'_, AppState>)
     }
 }
 
-/// Shares a file by a one-time TICKET (the receiver scans the QR code or runs `ferry receive`).
+/// How long a file shared by TICKET can be downloaded.
+const SHARE_LIFETIME: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+/// Shares a file by a TICKET (the receiver scans the QR code or runs `ferry receive`).
+///
+/// A node with a new, random identity serves the file for one hour, so the
+/// TICKET reveals nothing about this device's permanent Node ID.
 ///
 /// # Errors
 ///
-/// When the file cannot be read and hashed or the TICKET cannot be built.
+/// When the file cannot be read and hashed, the node cannot start or the TICKET
+/// cannot be built.
 #[tauri::command]
 pub async fn share_file(
     path: String,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> CmdResult<ShareInfo> {
-    let engine = state.engine().await?;
+    let mode = state.config.lock().await.network_mode;
     let local = crate::platform::local_path(&app, &path).await?;
     let file = prepare_file(&local).await.map_err(err)?;
-    let token = service::new_share_token();
-    let ticket = NodeTicket::with_share(engine.node_addr().await.map_err(err)?, token)
-        .serialize_to_string()
-        .map_err(err)?;
-    let file_name = file.name.clone();
-    state.shares.lock().map_err(err)?.insert(token, file);
+    let events = app.clone();
+    let sink: ShareSink = Arc::new(move |event| {
+        events.state::<AppState>().track_transfer(&event);
+        let _ = events.emit("transfer", event);
+    });
+    let options = ShareOptions {
+        lifetime: Some(SHARE_LIFETIME),
+        single_use: false,
+    };
+    let share = Share::start(file, mode, options, sink).await.map_err(err)?;
+    let ticket = share.ticket().map_err(err)?;
+    let file_name = share.file_name().to_string();
+    {
+        // Finished shares (expired) have released their node; forget them.
+        let mut shares = state.shares.lock().map_err(err)?;
+        shares.retain(|s| !s.is_finished());
+        shares.push(share);
+    }
     Ok(ShareInfo {
         file_name,
         qr_svg: qr_svg(&ticket)?,
@@ -731,6 +755,56 @@ pub fn open_app_settings() {
     crate::platform::open_app_settings();
 }
 
+/// The safety number shared with a trusted device and whether it was verified.
+#[derive(Serialize)]
+pub struct SafetyNumber {
+    /// 60 digits in 12 groups of 5, the same on both devices.
+    number: String,
+    /// The user compared it with the other device.
+    verified: bool,
+}
+
+/// The safety number of this device and the trusted device `node_id`
+/// ([`ferry::pairing::safety_number`]), to compare with the other device.
+///
+/// # Errors
+///
+/// When `node_id` is not a trusted device or the node cannot start.
+#[tauri::command]
+pub async fn safety_number(node_id: String, state: State<'_, AppState>) -> CmdResult<SafetyNumber> {
+    let peer = iroh::EndpointId::from_str(&node_id).map_err(err)?;
+    let me = state.engine().await?.node_id();
+    let verified = state
+        .config
+        .lock()
+        .await
+        .find_peer(&node_id)
+        .ok_or_else(|| t!("peer.not_found", target = &node_id).into_owned())?
+        .verified;
+    Ok(SafetyNumber {
+        number: ferry::pairing::safety_number(&me, &peer),
+        verified,
+    })
+}
+
+/// Records whether the user compared the safety number with `node_id`.
+///
+/// # Errors
+///
+/// When the device is unknown or the configuration cannot be saved.
+#[tauri::command]
+pub async fn set_verified(
+    node_id: String,
+    verified: bool,
+    state: State<'_, AppState>,
+) -> CmdResult<()> {
+    let mut config = state.config.lock().await;
+    if !config.set_verified(&node_id, verified) {
+        return Err(t!("peer.not_found", target = &node_id).into_owned());
+    }
+    config.save().map_err(err)
+}
+
 /// Cancels a running transfer by its ID; `false` when it has already ended.
 #[tauri::command]
 pub fn cancel_transfer(id: String) -> bool {
@@ -771,6 +845,9 @@ pub struct PrivacySettings {
     hidden: bool,
     /// Texts from Auto-Accept devices are copied without asking.
     auto_accept_texts: bool,
+    /// Programs, scripts and documents with macros from Auto-Accept devices are
+    /// saved without asking.
+    auto_accept_executables: bool,
 }
 
 /// Current privacy settings.
@@ -784,6 +861,7 @@ pub async fn get_privacy(state: State<'_, AppState>) -> CmdResult<PrivacySetting
     Ok(PrivacySettings {
         hidden: config.hidden,
         auto_accept_texts: config.auto_accept_texts,
+        auto_accept_executables: config.auto_accept_executables,
     })
 }
 
@@ -797,6 +875,7 @@ pub async fn set_privacy(settings: PrivacySettings, state: State<'_, AppState>) 
     let mut config = state.config.lock().await;
     config.hidden = settings.hidden;
     config.auto_accept_texts = settings.auto_accept_texts;
+    config.auto_accept_executables = settings.auto_accept_executables;
     config.save().map_err(err)?;
     state.sync_visibility(&config);
     Ok(())

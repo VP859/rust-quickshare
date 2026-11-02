@@ -707,6 +707,78 @@ async fn accepted_batch_is_confirmed_once() -> Result<()> {
     .await
 }
 
+/// A batch the user (or Auto-Accept) accepted does not cover files that can run
+/// code: those are decided one by one, the harmless ones are not.
+#[tokio::test(flavor = "multi_thread")]
+async fn risky_files_in_an_accepted_batch_are_asked_about() -> Result<()> {
+    with_timeout(async {
+        let (src, dst) = (tempdir()?, tempdir()?);
+        let mut paths = Vec::new();
+        for name in ["holiday.jpg", "notes.txt", "install.sh", "setup.exe"] {
+            let path = src.path().join(name);
+            tokio::fs::write(&path, pattern(2000)).await?;
+            paths.push(path);
+        }
+        // The whole batch is accepted, single risky files are then declined.
+        let mut handler = TestHandler::new(false, dst.path());
+        handler.batch = Some(true);
+        let handler = Arc::new(handler);
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        let sent = Mutex::new(Vec::new());
+        service::send_files(&sender, addr, &paths, &|e| sent.lock().unwrap().push(e)).await?;
+        let rejected: Vec<String> = sent
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|e| matches!(e.status, TransferStatus::Rejected { .. }))
+            .map(|e| e.file_name.clone())
+            .collect();
+        assert_eq!(
+            rejected,
+            ["install.sh", "setup.exe"],
+            "declined by the receiver"
+        );
+
+        assert_eq!(
+            handler.decisions.load(Ordering::SeqCst),
+            2,
+            "only install.sh and setup.exe were asked about"
+        );
+        for harmless in ["holiday.jpg", "notes.txt"] {
+            assert!(dst.path().join(harmless).exists(), "{harmless} saved");
+        }
+        for risky in ["install.sh", "setup.exe"] {
+            assert!(!dst.path().join(risky).exists(), "{risky} declined");
+        }
+        Ok(())
+    })
+    .await
+}
+
+/// A file received on Unix is never executable, whatever the sender's mode.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn received_files_are_not_executable() -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    with_timeout(async {
+        let (src, dst) = (tempdir()?, tempdir()?);
+        let path = src.path().join("tool.sh");
+        tokio::fs::write(&path, b"#!/bin/sh\necho hi\n").await?;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))?;
+        let handler = Arc::new(TestHandler::new(true, dst.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let sender = engine().await?;
+        service::send_files(&sender, addr, &[path], &|_| {}).await?;
+        let mode = std::fs::metadata(dst.path().join("tool.sh"))?
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o111, 0, "no execute bit, mode {mode:o}");
+        Ok(())
+    })
+    .await
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn rejected_batch_sends_nothing() -> Result<()> {
     with_timeout(async {

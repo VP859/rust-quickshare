@@ -108,7 +108,7 @@ impl TransferHandler for TuiHandler {
         let config = Config::load().unwrap_or_default();
         let dest_dir = config.download_dir();
         let peer_info = config.find_peer(&peer.to_string());
-        if peer_info.is_some_and(|p| p.auto_accept) {
+        if config.auto_accepts_file(&peer.to_string(), &offer.file_name) {
             return OfferDecision::Accept { dest_dir };
         }
 
@@ -154,7 +154,7 @@ impl TransferHandler for TuiHandler {
         let config = Config::load().unwrap_or_default();
         let dest_dir = config.download_dir();
         let peer_info = config.find_peer(&peer.to_string());
-        if peer_info.is_some_and(|p| p.auto_accept) {
+        if config.auto_accepts_batch(&peer.to_string(), &batch.names) {
             return Some(OfferDecision::Accept { dest_dir });
         }
         let peer_label = peer_info

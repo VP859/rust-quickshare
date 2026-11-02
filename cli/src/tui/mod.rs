@@ -172,6 +172,14 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
                     app.popup = Some(Popup::Ticket);
                 }
             }
+            Popup::SafetyNumber {
+                node_id, verified, ..
+            } => {
+                // `m` toggles the mark, anything else just closes the window.
+                if key.code == KeyCode::Char('m') {
+                    app.set_verified(&node_id, !verified);
+                }
+            }
             Popup::Help => {}
         }
         return false;
@@ -212,6 +220,7 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Char('M') => app.toggle_network_mode(),
         KeyCode::Char('H') => app.toggle_hidden(),
         KeyCode::Char('r') => app.refresh_nearby(),
+        KeyCode::Char('v') => app.show_safety_number(),
         KeyCode::Char('t') => app.popup = Some(Popup::Ticket),
         KeyCode::Char('c') => app.copy_ticket_to_clipboard(),
         KeyCode::Char('?') | KeyCode::F(1) => app.popup = Some(Popup::Help),

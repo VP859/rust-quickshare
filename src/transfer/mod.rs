@@ -3,9 +3,11 @@
 
 pub mod hash;
 pub mod receiver;
+pub mod risk;
 pub mod security;
 pub mod sender;
 pub mod service;
+pub mod share;
 
 use anyhow::{Context, Result};
 use iroh::endpoint::{Connection, ConnectionError, RecvStream, SendStream};

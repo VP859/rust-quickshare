@@ -14,7 +14,7 @@
 
 use ferry::discovery::{Announcement, sign_announcement, verify_announcement};
 use ferry::node::NodeTicket;
-use ferry::pairing::{pairing_code, pairing_commitment};
+use ferry::pairing::{pairing_code, pairing_commitment, safety_number};
 use ferry::protocol::codec::{decode_frame, encode_frame};
 use ferry::protocol::messages::{
     BatchDecision, BatchOffer, ChunkHeader, Hello, PairChallenge, PairResponse, PairReveal,
@@ -186,6 +186,16 @@ fn pairing() -> Value {
     })
 }
 
+fn safety() -> Value {
+    let (a, b) = (key(1).public(), key(2).public());
+    json!({
+        "node_id_a": a.to_string(),
+        "node_id_b": b.to_string(),
+        "number": safety_number(&a, &b),
+        "number_swapped": safety_number(&b, &a),
+    })
+}
+
 fn tickets() -> Vec<Value> {
     let id = key(1).public();
     let entry = |name: &str, ticket: NodeTicket| {
@@ -279,6 +289,7 @@ fn vectors() -> Value {
         },
         "frames": frames(),
         "pairing": pairing(),
+        "safety_number": safety(),
         "tickets": tickets(),
         "announcement": announcement(),
         "chunk_policy": chunk_policy(),

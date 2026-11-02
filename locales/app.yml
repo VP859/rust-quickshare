@@ -327,12 +327,12 @@ cli.failed:
 cli.connecting:
   en: "Connecting to %{id}..."
   pl: "Łączenie z %{id}..."
-cli.share_only:
-  en: "This node only shares a file (run `ferry daemon` to receive)"
-  pl: "Ten węzeł tylko udostępnia plik (użyj `ferry daemon`, aby odbierać)"
 cli.share_single:
   en: "Sharing by TICKET supports a single file – use --to for several files"
   pl: "Udostępnianie przez TICKET obsługuje jeden plik – użyj --to dla wielu plików"
+cli.share_identity:
+  en: "This TICKET uses a one-time identity (%{id}…), not this device's own, and stops working after one download."
+  pl: "Ten TICKET używa jednorazowej tożsamości (%{id}…), a nie stałej tego urządzenia, i przestaje działać po jednym pobraniu."
 cli.shared:
   en: "Shared '%{name}'. Receiver: ferry receive <TICKET>"
   pl: "Udostępniono '%{name}'. Odbiorca: ferry receive <TICKET>"
@@ -348,6 +348,24 @@ peer.title:
 peer.row:
   en: "Alias: %{alias} | Node ID: %{id} | Auto-Accept: %{auto} | Added: %{added}"
   pl: "Alias: %{alias} | Node ID: %{id} | Auto-Accept: %{auto} | Dodano: %{added}"
+peer.verify_title:
+  en: "Safety number with '%{alias}':"
+  pl: "Numer bezpieczeństwa z '%{alias}':"
+peer.verify_how:
+  en: "Open the same screen on the other device (`ferry peer verify` there, or Safety number in the app) and compare: the numbers must be identical. If they differ, someone may be between the devices – remove the device."
+  pl: "Otwórz ten sam ekran na drugim urządzeniu (tam `ferry peer verify` albo Numer bezpieczeństwa w aplikacji) i porównaj: numery muszą być identyczne. Jeśli się różnią, ktoś może znajdować się pomiędzy urządzeniami – usuń urządzenie."
+peer.verify_done:
+  en: "[SUCCESS] '%{alias}' is marked as verified."
+  pl: "[SUKCES] '%{alias}' oznaczono jako zweryfikowane."
+peer.verify_removed:
+  en: "'%{alias}' is no longer marked as verified."
+  pl: "'%{alias}' nie jest już oznaczone jako zweryfikowane."
+peer.verify_state_yes:
+  en: "Verified. (--unconfirm removes the mark.)"
+  pl: "Zweryfikowane. (--unconfirm usuwa oznaczenie.)"
+peer.verify_state_no:
+  en: "Not verified yet. If the numbers are identical, run again with --confirm."
+  pl: "Jeszcze niezweryfikowane. Jeśli numery są identyczne, uruchom ponownie z --confirm."
 peer.not_found:
   en: "Device not found: '%{target}'"
   pl: "Nie znaleziono urządzenia: '%{target}'"
@@ -458,6 +476,24 @@ daemon.unknown_device:
 daemon.no_auto_text:
   en: "Texts from '%{alias}' need confirmation, but the daemon runs without a terminal (set auto_accept_texts to copy texts from Auto-Accept devices automatically)"
   pl: "Teksty od '%{alias}' wymagają potwierdzenia, a demon działa bez terminala (ustaw auto_accept_texts, aby automatycznie kopiować teksty od urządzeń z Auto-Accept)"
+daemon.no_auto_executable:
+  en: "'%{alias}' sent a program or script; those are never saved without a question, and this daemon has no terminal (set auto_accept_executables to allow it)"
+  pl: "'%{alias}' wysyła program lub skrypt; takie pliki nigdy nie są zapisywane bez pytania, a ten demon nie ma terminala (ustaw auto_accept_executables, aby to dopuścić)"
+share.only:
+  en: "This TICKET only shares one file; it does not accept files"
+  pl: "Ten TICKET udostępnia tylko jeden plik; nie przyjmuje plików"
+risk.program:
+  en: "WARNING: this is a program or installer – it can run code when opened. Accept only if you expect it."
+  pl: "UWAGA: to program lub instalator – po otwarciu może uruchomić kod. Przyjmij tylko, jeśli go oczekujesz."
+risk.script:
+  en: "WARNING: this is a script or shortcut – it can run commands when opened. Accept only if you expect it."
+  pl: "UWAGA: to skrypt lub skrót – po otwarciu może wykonać polecenia. Przyjmij tylko, jeśli go oczekujesz."
+risk.macro:
+  en: "WARNING: this document can contain macros that run code. Accept only if you expect it."
+  pl: "UWAGA: ten dokument może zawierać makra uruchamiające kod. Przyjmij tylko, jeśli go oczekujesz."
+risk.disguised:
+  en: "WARNING: the name contains text-direction characters that can hide the real file type."
+  pl: "UWAGA: nazwa zawiera znaki zmieniające kierunek tekstu, które mogą ukrywać prawdziwy typ pliku."
 daemon.no_auto_accept:
   en: "Device %{alias} does not have Auto-Accept enabled"
   pl: "Urządzenie %{alias} nie ma włączonego Auto-Accept"
@@ -688,8 +724,8 @@ tui.st_failed:
   en: "error: %{error}"
   pl: "błąd: %{error}"
 tui.footer_trusted:
-  en: "Enter send file · T send text · e rename · a Auto-Accept · x remove · i add · Tab panel · g folder · N device name · L language"
-  pl: "Enter wyślij plik · T wyślij tekst · e nazwa · a Auto-Accept · x usuń · i dodaj · Tab panel · g katalog · N nazwa urządzenia · L język"
+  en: "Enter send file · T send text · e rename · a Auto-Accept · v safety number · x remove · i add · Tab panel · g folder · N device name · L language"
+  pl: "Enter wyślij plik · T wyślij tekst · e nazwa · a Auto-Accept · v numer bezp. · x usuń · i dodaj · Tab panel · g katalog · N nazwa urządzenia · L język"
 tui.footer_nearby:
   en: "p pair · Enter send file · T send text · r search · i add by TICKET · Tab panel"
   pl: "p sparuj · Enter wyślij plik · T wyślij tekst · r szukaj · i dodaj przez TICKET · Tab panel"
@@ -780,6 +816,33 @@ tui.st_retrying:
 tui.st_cancelled:
   en: "Cancelled – a partly received file is resumed next time"
   pl: "Anulowano – częściowo odebrany plik zostanie wznowiony następnym razem"
+tui.help_safety:
+  en: "safety number of the selected trusted device (compare it with the other device)"
+  pl: "numer bezpieczeństwa wybranego zaufanego urządzenia (porównaj go z drugim urządzeniem)"
+tui.safety_where:
+  en: "Select a trusted device in the first panel to see its safety number"
+  pl: "Wybierz zaufane urządzenie w pierwszym panelu, aby zobaczyć jego numer bezpieczeństwa"
+tui.safety_title:
+  en: "Safety number with %{alias}"
+  pl: "Numer bezpieczeństwa z %{alias}"
+tui.safety_how:
+  en: "Open the same screen on the other device; the numbers must be identical. If they differ, someone may be between the devices – remove the device."
+  pl: "Otwórz ten sam ekran na drugim urządzeniu; numery muszą być identyczne. Jeśli się różnią, ktoś może znajdować się pomiędzy urządzeniami – usuń urządzenie."
+tui.safety_verified:
+  en: "✓ Verified"
+  pl: "✓ Zweryfikowane"
+tui.safety_unverified:
+  en: "Not verified yet"
+  pl: "Jeszcze niezweryfikowane"
+tui.safety_keys:
+  en: "[m] they match / remove the mark · any other key – close"
+  pl: "[m] zgadzają się / usuń oznaczenie · dowolny klawisz – zamknij"
+tui.verified_on:
+  en: "Marked as verified"
+  pl: "Oznaczono jako zweryfikowane"
+tui.verified_off:
+  en: "Verified mark removed"
+  pl: "Usunięto oznaczenie zweryfikowania"
 tui.help_clear:
   en: "remove finished transfers from the list"
   pl: "usuń zakończone transfery z listy"

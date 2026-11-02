@@ -32,8 +32,13 @@ use crate::protocol::version::{self, ProtocolVersion};
 /// for code that needs one identifier, such as tests with their own endpoints.
 pub const ALPN: &[u8] = ProtocolVersion::CURRENT.alpn();
 
+/// UDP ports of the nodes that share one file by TICKET ([`NodeEngine::one_time`]):
+/// the ten after [`QUIC_PORT`]. The first free one is used, several shares at
+/// once take several.
+pub const SHARE_PORTS: std::ops::RangeInclusive<u16> = QUIC_PORT + 1..=QUIC_PORT + 10;
+
 /// Preferred UDP port of QUIC connections, next to the discovery port, so one
-/// firewall rule (`47823-47824/udp`) covers discovery and direct LAN transfers.
+/// firewall rule (`47823-47834/udp`, with [`SHARE_PORTS`]) covers discovery and direct LAN transfers.
 /// When it is taken (e.g. a second instance on the same computer) a random
 /// port is used.
 pub const QUIC_PORT: u16 = 47824;
@@ -171,6 +176,31 @@ impl NodeEngine {
     ///
     /// Fails when the endpoint cannot bind its UDP sockets.
     pub async fn with_mode(secret_key: SecretKey, mode: NetworkMode) -> Result<Self> {
+        Self::bind_in(secret_key, mode, QUIC_PORT..=QUIC_PORT).await
+    }
+
+    /// A node with a **new, random identity** for sharing one file by TICKET.
+    ///
+    /// Whoever gets the TICKET learns this Node ID instead of the device's
+    /// permanent one, so shares cannot be linked to each other or to the
+    /// device, and the TICKET cannot be used to contact the real node later. It
+    /// listens in [`SHARE_PORTS`], next to the main port, so one firewall rule
+    /// covers both.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the endpoint cannot bind its UDP sockets.
+    pub async fn one_time(mode: NetworkMode) -> Result<Self> {
+        Self::bind_in(SecretKey::generate(), mode, SHARE_PORTS).await
+    }
+
+    /// Binds on the first free IPv4 port of `ports`, or on a random one when all
+    /// are taken.
+    async fn bind_in(
+        secret_key: SecretKey,
+        mode: NetworkMode,
+        ports: std::ops::RangeInclusive<u16>,
+    ) -> Result<Self> {
         let builder = |key: SecretKey| {
             let builder = match mode {
                 NetworkMode::Local => {
@@ -183,16 +213,27 @@ impl NodeEngine {
                 .alpns(version::accept_alpns())
                 .transport_config(transport_config(mode))
         };
-        let preferred = match builder(secret_key.clone())
-            .bind_addr(SocketAddr::from((Ipv4Addr::UNSPECIFIED, QUIC_PORT)))
-        {
-            Ok(b) => b.bind().await.ok(),
-            Err(_) => None,
-        };
+        let mut preferred = None;
+        for port in ports.clone() {
+            let bound = match builder(secret_key.clone())
+                .bind_addr(SocketAddr::from((Ipv4Addr::UNSPECIFIED, port)))
+            {
+                Ok(b) => b.bind().await.ok(),
+                Err(_) => None,
+            };
+            if bound.is_some() {
+                preferred = bound;
+                break;
+            }
+        }
         let endpoint = match preferred {
             Some(endpoint) => endpoint,
             None => {
-                debug!("UDP {QUIC_PORT} is taken, binding QUIC to a random port");
+                debug!(
+                    "UDP {}-{} is taken, binding QUIC to a random port",
+                    ports.start(),
+                    ports.end()
+                );
                 builder(secret_key)
                     .bind()
                     .await

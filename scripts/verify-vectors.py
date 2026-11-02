@@ -65,6 +65,19 @@ def check_pairing(v: dict) -> None:
     assert f"{number // 1000:03d} {number % 1000:03d}" == p["code"], "pairing code"
 
 
+def check_safety_number(v: dict) -> None:
+    s = v["safety_number"]
+    a, b = bytes.fromhex(s["node_id_a"]), bytes.fromhex(s["node_id_b"])
+    lo, hi = sorted([a, b])
+    stream = blake3(lo + hi, derive_key_context="ferry safety number v1").digest(length=96)
+    groups = [
+        f"{int.from_bytes(stream[i:i + 8], 'little') % 100_000:05d}"
+        for i in range(0, 96, 8)
+    ]
+    assert " ".join(groups) == s["number"], "safety number"
+    assert s["number"] == s["number_swapped"], "symmetric"
+
+
 def check_tickets(v: dict) -> None:
     for ticket in v["tickets"]:
         text = ticket["ticket"]
@@ -100,7 +113,7 @@ def check_chunk_policy(v: dict) -> None:
 
 def main() -> int:
     vectors = json.loads(VECTORS.read_text(encoding="utf-8"))
-    checks = [check_keys, check_frames, check_pairing, check_tickets,
+    checks = [check_keys, check_frames, check_pairing, check_safety_number, check_tickets,
               check_announcement, check_chunk_policy]
     for check in checks:
         check(vectors)

@@ -25,6 +25,7 @@ use tracing::{debug, info, warn};
 
 use super::Channel;
 use super::receiver::{check_free_space, read_offer, receive_on_channel, reject};
+use super::risk;
 use super::sender::{
     PreparedFile, SendItem, SendOutcome, expand_paths, prepare_file, push_file, send_on_channel,
 };
@@ -700,9 +701,15 @@ async fn handle_push<H: TransferHandler>(
         &sink,
     )
     .with_connection(conn);
-    let accepted_before = gate
-        .take_file(peer, &offer.file_hash)
-        .or_else(|| approval.as_mut().and_then(|a| a.take(&offer)));
+    // A batch approval does not cover files that can run code: the user saw at
+    // most 20 names, and an Auto-Accept batch was never looked at. Those files
+    // go through `decide` like single files, where the interface warns about them.
+    let covered_by_batch = risk::file_risk(&offer.file_name).is_none();
+    let accepted_before = gate.take_file(peer, &offer.file_hash).or_else(|| {
+        covered_by_batch
+            .then(|| approval.as_mut().and_then(|a| a.take(&offer)))
+            .flatten()
+    });
     let decision = match accepted_before {
         Some(dest_dir) => OfferDecision::Accept { dest_dir },
         None => match gate.enter(peer) {

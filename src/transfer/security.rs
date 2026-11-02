@@ -44,7 +44,8 @@ const WINDOWS_RESERVED: &[&str] = &[
 /// Turns a file name received from a peer into a safe single file name.
 ///
 /// Rejects path traversal and absolute paths, replaces characters that are
-/// invalid on common file systems with `_`, strips dots and whitespace at both
+/// invalid on common file systems (and direction-changing characters that can
+/// disguise an extension) with `_`, strips dots and whitespace at both
 /// ends (no hidden files, no names Windows cannot open), and prefixes Windows
 /// reserved names with `_`. Sanitizing a sanitized name changes nothing.
 ///
@@ -89,7 +90,8 @@ pub fn sanitize_filename(raw_name: &str) -> Result<String, SecurityError> {
     let sanitized: String = trimmed
         .chars()
         .map(|c| {
-            if illegal_chars.contains(&c) || c.is_control() {
+            // Direction-changing characters would make `gnp.exe` look like `exe.png`.
+            if illegal_chars.contains(&c) || c.is_control() || super::risk::is_bidi_control(c) {
                 '_'
             } else {
                 c
@@ -235,6 +237,11 @@ mod tests {
             sanitize_filename(". A").unwrap(),
             "A",
             "found by tests/properties.rs"
+        );
+        assert_eq!(
+            sanitize_filename("photo\u{202e}gnp.exe").unwrap(),
+            "photo_gnp.exe",
+            "text direction overrides cannot hide the extension"
         );
     }
 

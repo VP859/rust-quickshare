@@ -224,6 +224,12 @@
     "responder_nonce": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"
   },
   "protocol": "ferry/1",
+  "safety_number": {
+    "node_id_a": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+    "node_id_b": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+    "number": "78635 30089 43985 92647 25216 40381 52614 76186 21107 92443 27175 68320",
+    "number_swapped": "78635 30089 43985 92647 25216 40381 52614 76186 21107 92443 27175 68320"
+  },
   "tickets": [
     {
       "name": "pairing, Node ID only",

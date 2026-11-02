@@ -20,6 +20,10 @@ pub struct PeerInfo {
     pub auto_accept: bool,
     /// When the device was first added.
     pub added_at: DateTime<Utc>,
+    /// The user compared the [safety number](crate::pairing::safety_number) with
+    /// the other device and found it equal.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub verified: bool,
     /// Last known TICKET (direct addresses); used when the device is not visible
     /// on the local network.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -51,6 +55,11 @@ pub struct Config {
     /// and could be pasted unknowingly (e.g. a changed account number).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub auto_accept_texts: bool,
+    /// Files that can run code (programs, scripts, documents with macros; see
+    /// [`risk`](crate::transfer::risk)) are accepted from Auto-Accept devices
+    /// without asking. Off by default: they always ask first.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub auto_accept_executables: bool,
     /// Desktop app: closing the window quits Ferry instead of keeping it
     /// running in the system tray.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -162,17 +171,17 @@ impl Config {
         auto_accept: bool,
         ticket: Option<String>,
     ) {
-        let added_at = self
-            .peers
-            .get(&node_id)
-            .map(|p| p.added_at)
-            .unwrap_or_else(Utc::now);
+        let existing = self.peers.get(&node_id);
+        let added_at = existing.map(|p| p.added_at).unwrap_or_else(Utc::now);
+        // Re-adding a device keeps what the user already verified.
+        let verified = existing.is_some_and(|p| p.verified);
         self.peers.insert(
             node_id,
             PeerInfo {
                 alias,
                 auto_accept,
                 added_at,
+                verified,
                 ticket,
             },
         );
@@ -221,11 +230,40 @@ impl Config {
         }
     }
 
+    /// Whether the file `file_name` from `node_id` is saved without asking: the
+    /// device has Auto-Accept, and the file is harmless or
+    /// [`Config::auto_accept_executables`] is on.
+    pub fn auto_accepts_file(&self, node_id: &str, file_name: &str) -> bool {
+        self.find_peer(node_id).is_some_and(|p| p.auto_accept)
+            && (self.auto_accept_executables
+                || crate::transfer::risk::file_risk(file_name).is_none())
+    }
+
+    /// Like [`Config::auto_accepts_file`] for a batch announced with these (at
+    /// most the first 20) `names`. Files of an accepted batch that are risky
+    /// are asked about one by one anyway.
+    pub fn auto_accepts_batch(&self, node_id: &str, names: &[String]) -> bool {
+        self.find_peer(node_id).is_some_and(|p| p.auto_accept)
+            && (self.auto_accept_executables || crate::transfer::risk::worst_risk(names).is_none())
+    }
+
     /// Whether a text from `node_id` is copied to the clipboard without asking:
     /// only when [`Config::auto_accept_texts`] is on and the device is trusted
     /// with Auto-Accept.
     pub fn auto_accepts_texts_from(&self, node_id: &str) -> bool {
         self.auto_accept_texts && self.find_peer(node_id).is_some_and(|p| p.auto_accept)
+    }
+
+    /// Records whether the user verified the safety number of a trusted device;
+    /// `false` when no device matches `id_or_alias`.
+    pub fn set_verified(&mut self, id_or_alias: &str, verified: bool) -> bool {
+        let Some(key) = self.find_key(id_or_alias) else {
+            return false;
+        };
+        self.peers.get_mut(&key).is_some_and(|p| {
+            p.verified = verified;
+            true
+        })
     }
 
     /// Node IDs of all trusted devices; malformed entries are skipped.
@@ -314,6 +352,58 @@ mod tests {
         let other = iroh::SecretKey::generate().public();
         c.add_paired(other, "X", Some(id.into()), false)?;
         assert!(c.peers[&other.to_string()].ticket.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn auto_accept_does_not_cover_programs_unless_allowed() {
+        let mut c = Config::default();
+        let id = iroh::SecretKey::generate().public().to_string();
+        let stranger = iroh::SecretKey::generate().public().to_string();
+        c.add_from_input(&id, "Phone", true).unwrap();
+        let names = |list: &[&str]| list.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+        assert!(c.auto_accepts_file(&id, "photo.jpg"));
+        assert!(!c.auto_accepts_file(&id, "setup.exe"));
+        assert!(!c.auto_accepts_file(&id, "invoice.pdf.exe"));
+        assert!(
+            !c.auto_accepts_file(&stranger, "photo.jpg"),
+            "no Auto-Accept"
+        );
+        assert!(c.auto_accepts_batch(&id, &names(&["a.jpg", "b.pdf"])));
+        assert!(!c.auto_accepts_batch(&id, &names(&["a.jpg", "run.sh"])));
+
+        c.auto_accept_executables = true;
+        assert!(c.auto_accepts_file(&id, "setup.exe"));
+        assert!(c.auto_accepts_batch(&id, &names(&["run.sh"])));
+        assert!(
+            !c.auto_accepts_file(&stranger, "setup.exe"),
+            "still needs Auto-Accept"
+        );
+
+        c.peers.get_mut(&id).unwrap().auto_accept = false;
+        assert!(!c.auto_accepts_file(&id, "photo.jpg"));
+    }
+
+    #[test]
+    fn verification_is_kept_and_saved() -> Result<()> {
+        let mut c = Config::default();
+        let id = iroh::SecretKey::generate().public().to_string();
+        c.add_from_input(&id, "Phone", false)?;
+        assert!(!c.peers[&id].verified);
+        assert!(c.set_verified("phone", true), "found by alias");
+        assert!(!c.set_verified("nobody", true));
+        assert!(c.peers[&id].verified);
+        // Adding the device again (e.g. a new TICKET) keeps the verification.
+        c.add_from_input(&id, "Phone", true)?;
+        assert!(c.peers[&id].verified);
+        // The flag survives saving; an unverified device writes nothing.
+        let text = toml::to_string_pretty(&c)?;
+        assert!(text.contains("verified = true"));
+        let back: Config = toml::from_str(&text)?;
+        assert!(back.peers[&id].verified);
+        assert!(c.set_verified(&id, false));
+        assert!(!toml::to_string_pretty(&c)?.contains("verified"));
         Ok(())
     }
 
