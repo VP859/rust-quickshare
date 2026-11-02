@@ -11,7 +11,7 @@
 //!   packets, but they see IP addresses and Node IDs.
 
 use anyhow::{Context, Result};
-use iroh::endpoint::{Connection, QuicTransportConfig, presets};
+use iroh::endpoint::{ConnectOptions, Connection, QuicTransportConfig, presets};
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, SecretKey, Watcher};
 use rust_i18n::t;
 use serde::{Deserialize, Serialize};
@@ -23,10 +23,14 @@ use std::time::Duration;
 use tracing::{debug, info};
 
 use super::NodeTicket;
+use crate::error::IncompatibleVersion;
+use crate::protocol::version::{self, ProtocolVersion};
 
-/// ALPN of the Ferry protocol; must change whenever the encoding of an existing
-/// message changes (new trailing enum variants keep it).
-pub const ALPN: &[u8] = b"ferry/1";
+/// ALPN of the newest Ferry protocol version
+/// ([`ProtocolVersion::CURRENT`]). Connections accept every supported version
+/// and offer all of them (see [`crate::protocol::version`]); this constant is
+/// for code that needs one identifier, such as tests with their own endpoints.
+pub const ALPN: &[u8] = ProtocolVersion::CURRENT.alpn();
 
 /// Preferred UDP port of QUIC connections, next to the discovery port, so one
 /// firewall rule (`47823-47824/udp`) covers discovery and direct LAN transfers.
@@ -104,6 +108,16 @@ pub struct NodeEngine {
     mode: NetworkMode,
 }
 
+/// Turns a failed connection attempt into the error shown to the user: a peer
+/// that speaks none of our protocol versions gets its own, actionable message.
+fn connect_error(error: anyhow::Error) -> anyhow::Error {
+    if crate::error::is_no_common_protocol(&error) {
+        tracing::debug!("No common protocol version: {error:#}");
+        return IncompatibleVersion(t!("engine.incompatible").into_owned()).into();
+    }
+    error.context(t!("engine.connect"))
+}
+
 /// QUIC settings of a node in `mode`: iroh's defaults with the congestion
 /// control that suits the network.
 ///
@@ -166,7 +180,7 @@ impl NodeEngine {
             };
             builder
                 .secret_key(key)
-                .alpns(vec![ALPN.to_vec()])
+                .alpns(version::accept_alpns())
                 .transport_config(transport_config(mode))
         };
         let preferred = match builder(secret_key.clone())
@@ -260,7 +274,11 @@ impl NodeEngine {
             return Ok(None);
         };
         let conn = incoming.await.with_context(|| t!("engine.incoming"))?;
-        info!("Incoming connection from {}", conn.remote_id());
+        info!(
+            "Incoming connection from {} ({})",
+            conn.remote_id(),
+            version::negotiated(&conn).map_or_else(|| "?".into(), |v| v.to_string())
+        );
         Ok(Some(conn))
     }
 
@@ -273,12 +291,26 @@ impl NodeEngine {
     pub async fn connect(&self, target: impl Into<EndpointAddr>) -> Result<Connection> {
         let target = target.into();
         debug!("Connecting to {}", target.id);
-        let conn = self
+        // The newest version is the main one, older ones are offered as well: the
+        // other side picks the best it knows, so it may be older than this device.
+        let (main, older) = version::offer_alpns();
+        let connecting = self
             .endpoint
-            .connect(target, ALPN)
+            .connect_with_opts(
+                target,
+                &main,
+                ConnectOptions::new().with_additional_alpns(older),
+            )
             .await
-            .with_context(|| t!("engine.connect"))?;
-        info!("Connected to {}", conn.remote_id());
+            .map_err(|e| connect_error(anyhow::Error::new(e)))?;
+        let conn = connecting
+            .await
+            .map_err(|e| connect_error(anyhow::Error::new(e)))?;
+        info!(
+            "Connected to {} ({})",
+            conn.remote_id(),
+            version::negotiated(&conn).map_or_else(|| "?".into(), |v| v.to_string())
+        );
         Ok(conn)
     }
 

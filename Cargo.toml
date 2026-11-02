@@ -123,6 +123,8 @@ libc = "0.2"
 tempfile = "3.27.0"
 # Property-based tests (tests/properties.rs and unit tests of limits).
 proptest = "1.12.0"
+# Test vectors (tests/protocol_vectors.rs) are JSON.
+serde_json = "1"
 # tests/network_conditions.rs pins connections to a lossy link with a custom
 # path selector; dev-dependency features never reach release builds.
 iroh = { workspace = true, features = ["unstable-custom-transports"] }

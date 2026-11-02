@@ -63,34 +63,36 @@ pub const MAX_BEACON_AGE: Duration = Duration::from_secs(300);
 /// Domain separation of the announcement signature.
 const SIGNATURE_CONTEXT: &[u8] = b"ferry discovery beacon v1";
 
-/// Datagram on the discovery port: a signed, serialized [`Beacon`].
+/// Datagram on the discovery port: a signed, serialized [`Announcement`].
 #[derive(Serialize, Deserialize)]
 struct SignedBeacon {
     /// Always [`MAGIC`].
     magic: [u8; 4],
-    /// The postcard-encoded [`Beacon`].
+    /// The postcard-encoded [`Announcement`].
     body: Vec<u8>,
     /// Ed25519 signature of [`SIGNATURE_CONTEXT`] followed by `body`, made
-    /// with the key of `Beacon::addr.id`.
+    /// with the key of `Announcement::addr.id`.
     signature: iroh::Signature,
 }
 
-/// Announcement sent to the local network and answered directly.
-#[derive(Serialize, Deserialize)]
-struct Beacon {
+/// Content of a discovery announcement, as sent to the local network and
+/// answered directly. Signed and decoded with [`sign_announcement`] and
+/// [`verify_announcement`]; `docs/PROTOCOL.md` specifies the encoding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Announcement {
     /// Seconds since the Unix epoch when the announcement was made.
-    timestamp: u64,
+    pub timestamp: u64,
     /// Device name of the sender.
-    name: String,
+    pub name: String,
     /// Operating system of the sender (`std::env::consts::OS`).
-    platform: String,
+    pub platform: String,
     /// iroh address of the sender (Node ID and direct addresses).
-    addr: EndpointAddr,
+    pub addr: EndpointAddr,
     /// IPv4 QUIC ports; combined with the packet's source address they give a
     /// LAN address even before iroh has discovered its own addresses.
-    quic_ports: Vec<u16>,
+    pub quic_ports: Vec<u16>,
     /// Unicast answer to someone else's announcement (answers are not answered).
-    reply: bool,
+    pub reply: bool,
 }
 
 /// A device visible on the local network.
@@ -551,7 +553,7 @@ fn unix_now() -> u64 {
 /// in one datagram.
 fn encode_beacon(engine: &NodeEngine, shared: &Shared, reply: bool) -> Option<Vec<u8>> {
     let endpoint = engine.endpoint();
-    let beacon = Beacon {
+    let beacon = Announcement {
         timestamp: unix_now(),
         name: shared.name.read().map(|n| n.clone()).unwrap_or_default(),
         platform: std::env::consts::OS.to_string(),
@@ -565,10 +567,15 @@ fn encode_beacon(engine: &NodeEngine, shared: &Shared, reply: bool) -> Option<Ve
             .collect(),
         reply,
     };
-    let body = postcard::to_allocvec(&beacon).ok()?;
-    let signature = endpoint
-        .secret_key()
-        .sign(&[SIGNATURE_CONTEXT, &body].concat());
+    sign_announcement(endpoint.secret_key(), &beacon)
+}
+
+/// Serializes `announcement` and signs it with `key`, which must be the key of
+/// `announcement.addr.id`: the datagram that goes on the wire. `None` if it would
+/// not fit in one datagram.
+pub fn sign_announcement(key: &iroh::SecretKey, announcement: &Announcement) -> Option<Vec<u8>> {
+    let body = postcard::to_allocvec(announcement).ok()?;
+    let signature = key.sign(&[SIGNATURE_CONTEXT, &body].concat());
     postcard::to_allocvec(&SignedBeacon {
         magic: MAGIC,
         body,
@@ -579,13 +586,20 @@ fn encode_beacon(engine: &NodeEngine, shared: &Shared, reply: bool) -> Option<Ve
 }
 
 /// Decodes a datagram and checks its signature and age; `None` for anything
-/// that is not a valid, fresh announcement.
-fn decode_beacon(data: &[u8], now: u64) -> Option<Beacon> {
+/// that is not a valid announcement made within [`MAX_BEACON_AGE`] of `now`
+/// (seconds since the Unix epoch). The signature must be by the key of the
+/// announced Node ID.
+pub fn verify_announcement(data: &[u8], now: u64) -> Option<Announcement> {
+    decode_beacon(data, now)
+}
+
+/// The decoding and checking behind [`verify_announcement`].
+fn decode_beacon(data: &[u8], now: u64) -> Option<Announcement> {
     let signed = postcard::from_bytes::<SignedBeacon>(data).ok()?;
     if signed.magic != MAGIC {
         return None;
     }
-    let beacon = postcard::from_bytes::<Beacon>(&signed.body).ok()?;
+    let beacon = postcard::from_bytes::<Announcement>(&signed.body).ok()?;
     beacon
         .addr
         .id
@@ -601,7 +615,7 @@ fn decode_beacon(data: &[u8], now: u64) -> Option<Beacon> {
 /// name is cleaned (or replaced by a short Node ID), the platform reduced to a
 /// short alphanumeric word and the QUIC ports combined with the sender's IP.
 /// Everything in it comes from the network, so nothing is trusted as is.
-fn nearby_device(beacon: Beacon, from: SocketAddr) -> NearbyDevice {
+fn nearby_device(beacon: Announcement, from: SocketAddr) -> NearbyDevice {
     let id = beacon.addr.id;
     let mut addr = beacon.addr;
     for port in beacon.quic_ports.iter().take(MAX_QUIC_PORTS) {
@@ -634,7 +648,7 @@ fn nearby_device(beacon: Beacon, from: SocketAddr) -> NearbyDevice {
 #[doc(hidden)]
 pub fn fuzz_announcement(data: &[u8]) {
     let _ = decode_beacon(data, unix_now());
-    if let Ok(beacon) = postcard::from_bytes::<Beacon>(data) {
+    if let Ok(beacon) = postcard::from_bytes::<Announcement>(data) {
         let listed = beacon.addr.addrs.len();
         let device = nearby_device(beacon, SocketAddr::from(([192, 168, 1, 2], DISCOVERY_PORT)));
         assert!(!device.name.is_empty());
@@ -1040,7 +1054,7 @@ mod tests {
                 40000 + i,
             ))));
         }
-        let beacon = Beacon {
+        let beacon = Announcement {
             timestamp: unix_now(),
             name: "x".repeat(64),
             platform: "android".into(),
@@ -1058,7 +1072,7 @@ mod tests {
     }
 
     /// Signs `beacon` with `key` the way [`encode_beacon`] does.
-    fn sign(key: &iroh::SecretKey, beacon: &Beacon) -> Vec<u8> {
+    fn sign(key: &iroh::SecretKey, beacon: &Announcement) -> Vec<u8> {
         let body = postcard::to_allocvec(beacon).unwrap();
         let signature = key.sign(&[SIGNATURE_CONTEXT, &body].concat());
         postcard::to_allocvec(&SignedBeacon {
@@ -1073,7 +1087,7 @@ mod tests {
     fn beacons_are_signed_and_fresh() {
         let key = iroh::SecretKey::generate();
         let now = 1_800_000_000;
-        let beacon = |id: EndpointId, timestamp| Beacon {
+        let beacon = |id: EndpointId, timestamp| Announcement {
             timestamp,
             name: "Laptop".into(),
             platform: "linux".into(),

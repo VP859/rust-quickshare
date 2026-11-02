@@ -35,6 +35,9 @@ pub enum ErrorKind {
     Protocol,
     /// Received data did not match its BLAKE3 hash ([`IntegrityError`]).
     Integrity,
+    /// The other device speaks none of the protocol versions of this one
+    /// ([`IncompatibleVersion`]); one of them needs an update.
+    Incompatible,
     /// A file or folder name from the other device was unsafe and refused
     /// ([`SecurityError`]).
     UnsafePath,
@@ -56,6 +59,11 @@ pub struct ProtocolViolation(pub String);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntegrityError(pub String);
 
+/// The other device and this one share no protocol version. The text is
+/// localized and tells the user to update.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncompatibleVersion(pub String);
+
 /// A file does not fit on the receiving disk. The text is localized.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotEnoughSpace(pub String);
@@ -73,7 +81,29 @@ macro_rules! message_error {
     )*};
 }
 
-message_error!(ProtocolViolation, IntegrityError, NotEnoughSpace);
+message_error!(
+    ProtocolViolation,
+    IntegrityError,
+    NotEnoughSpace,
+    IncompatibleVersion
+);
+
+/// TLS alert `no_application_protocol` (120) as a QUIC transport error code
+/// (`0x100` + alert): the peer supports none of the offered ALPN identifiers.
+const NO_APPLICATION_PROTOCOL: u64 = 0x100 + 120;
+
+/// Whether `error` is a connection that the peer refused because it speaks none
+/// of our protocol versions.
+pub fn is_no_common_protocol(error: &anyhow::Error) -> bool {
+    use iroh::endpoint::ConnectionError;
+    error.chain().any(|e| {
+        matches!(
+            e.downcast_ref::<ConnectionError>(),
+            Some(ConnectionError::ConnectionClosed(close))
+                if u64::from(close.error_code) == NO_APPLICATION_PROTOCOL
+        )
+    })
+}
 
 /// Category of `error`, decided by the first recognized error in its chain
 /// (outermost first).
@@ -89,6 +119,7 @@ fn classify(error: &(dyn std::error::Error + 'static)) -> Option<ErrorKind> {
 
     let typed = [
         (error.is::<Cancelled>(), ErrorKind::Cancelled),
+        (error.is::<IncompatibleVersion>(), ErrorKind::Incompatible),
         (error.is::<ProtocolViolation>(), ErrorKind::Protocol),
         (error.is::<IntegrityError>(), ErrorKind::Integrity),
         (error.is::<NotEnoughSpace>(), ErrorKind::DiskFull),

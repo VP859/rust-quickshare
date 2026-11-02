@@ -107,6 +107,9 @@ engine.bind:
 engine.incoming:
   en: "Incoming connection failed"
   pl: "Błąd nawiązywania połączenia przychodzącego"
+engine.incompatible:
+  en: "The other device uses an incompatible version of Ferry – update Ferry on both devices"
+  pl: "Drugie urządzenie używa niezgodnej wersji Ferry – zaktualizuj Ferry na obu urządzeniach"
 engine.connect:
   en: "Could not connect to the device"
   pl: "Nie udało się połączyć z urządzeniem"

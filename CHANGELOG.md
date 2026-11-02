@@ -19,6 +19,17 @@ compatibility).
 
 ### Added
 
+- **Protocol versions are negotiated**: a device lists every version it speaks (`ferry/1` today) and
+  the accepting side picks the best common one in the TLS handshake, so a future `ferry/2` can
+  be introduced while devices of the previous release still connect. A device with no common version
+  gets the clear message "the other device uses an incompatible version – update Ferry on both
+  devices" instead of "could not connect". Policy: a release speaks its own and the previous
+  version (`docs/PROTOCOL.md`).
+- **Protocol specification and test vectors**: `docs/PROTOCOL.md` describes every message,
+  the pairing formulas, the discovery datagram, TICKETs and limits;
+  `docs/protocol-vectors.json` has exact bytes for fixed keys. A test keeps them equal to the code,
+  and `scripts/verify-vectors.py` re-derives them independently from the document alone.
+
 - **Transfers survive broken connections**: when the connection breaks (a phone falling asleep,
   Wi-Fi dropping), the sender reconnects up to three times and the receiver resumes the partial
   file without asking the user again. Interfaces show "Connection lost – reconnecting (n/3)".

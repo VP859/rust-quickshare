@@ -1927,6 +1927,7 @@ dependencies = [
  "proptest",
  "rust-i18n",
  "serde",
+ "serde_json",
  "socket2",
  "tempfile",
  "tokio",

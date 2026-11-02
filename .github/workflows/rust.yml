@@ -232,6 +232,19 @@ jobs:
       - name: Compare (fails when a benchmark is clearly over 15 % slower)
         run: node scripts/bench-compare.mjs "$CARGO_TARGET_DIR/criterion" 15
 
+  vectors:
+    name: Protocol vectors (independent check)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Written only from docs/PROTOCOL.md, without Ferry code: when it passes, the
+      # specification is enough to build a compatible implementation.
+      - name: Verify docs/protocol-vectors.json with scripts/verify-vectors.py
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet blake3==1.0.11 cryptography==50.0.2
+          "$RUNNER_TEMP/venv/bin/python" scripts/verify-vectors.py
+
   dependencies:
     name: Licenses and advisories
     runs-on: ubuntu-24.04

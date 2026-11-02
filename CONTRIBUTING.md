@@ -64,8 +64,9 @@ Guidelines:
 - **Tests:** new behaviour comes with a test; protocol changes come with an end-to-end test in
   `tests/integration_tests.rs`, and new parsers of data from other devices with a property test
   and a fuzz target. [docs/TESTING.md](docs/TESTING.md) lists every kind of test.
-- **Protocol changes** follow [docs/PROTOCOL.md](docs/PROTOCOL.md): an incompatible change bumps
-  the ALPN.
+- **Protocol changes** follow [docs/PROTOCOL.md](docs/PROTOCOL.md#changing-the-protocol): an
+  incompatible change is a new `ProtocolVersion` (the previous one stays supported), the vectors in
+  `docs/protocol-vectors.json` are regenerated and the diff reviewed.
 
 ## Commit messages
 

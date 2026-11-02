@@ -111,7 +111,13 @@ fn new_nonce() -> Result<PairNonce> {
     Ok(nonce)
 }
 
-/// Commitment of the requester `initiator` to its nonce, sent in [`Hello::Pair`].
+/// Commitment of the requester `initiator` to its nonce, sent in [`Hello::Pair`]:
+/// `BLAKE3-derive-key("ferry pairing commitment v1", initiator ‖ nonce)`.
+pub fn pairing_commitment(initiator: &EndpointId, nonce: &PairNonce) -> [u8; 32] {
+    *commitment(initiator, nonce).as_bytes()
+}
+
+/// [`pairing_commitment`] as a hash, which compares in constant time.
 fn commitment(initiator: &EndpointId, nonce: &PairNonce) -> blake3::Hash {
     let mut hasher = blake3::Hasher::new_derive_key("ferry pairing commitment v1");
     hasher.update(initiator.as_bytes());
