@@ -47,8 +47,9 @@ mod imp {
 
     use super::BackgroundStatus;
     use crate::node::AppState;
-    use jni::objects::{JClass, JObject, JString, JValue};
-    use jni::{JNIEnv, JavaVM};
+    use jni::objects::{JClass, JClassLoader, JObject, JObjectArray, JString, LoaderContext};
+    use jni::strings::JNIStr;
+    use jni::{Env, JValue, JavaVM, jni_sig, jni_str};
 
     /// Shared files older than a day are deleted at startup.
     const SHARE_RETENTION: Duration = Duration::from_secs(24 * 3600);
@@ -152,45 +153,51 @@ mod imp {
         }
     }
 
-    /// Calls `MediaScannerConnection.scanFile`, so the file shows up in the
-    /// gallery and file managers right away (Android 10 and older do not index
-    /// files written through paths by themselves).
+    /// Runs `call` on a thread attached to the JVM, with the application
+    /// context. A Java exception thrown by `call` is cleared and returned as
+    /// an error by `attach_current_thread`.
     ///
-    /// The other place that needs `unsafe` (JNI); every block is justified.
+    /// The only place that needs `unsafe` for JNI; every block is justified.
     #[allow(unsafe_code)]
-    fn media_scan(path: &Path) -> jni::errors::Result<()> {
-        use jni::objects::{JObject, JValue};
-
+    fn with_context<R>(
+        call: impl FnOnce(&mut Env<'_>, &JObject<'_>) -> jni::errors::Result<R>,
+    ) -> jni::errors::Result<R> {
         let ctx = ndk_context::android_context();
         // SAFETY: tao initializes the ndk context with a valid JavaVM pointer
         // before the app starts and never releases it.
-        let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }?;
-        let mut env = vm.attach_current_thread()?;
-        // SAFETY: the context is the application context, kept alive by tao in
-        // a global reference for the whole process lifetime.
-        let context = unsafe { JObject::from_raw(ctx.context().cast()) };
-        let mut scan = || -> jni::errors::Result<()> {
+        let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) };
+        vm.attach_current_thread(|env| {
+            // SAFETY: the context is the application context, held by tao in
+            // a global reference for the whole process lifetime, so it is
+            // valid on every thread; `JObject` never deletes the reference.
+            let context = unsafe { JObject::from_raw(env, ctx.context().cast()) };
+            call(env, &context)
+        })
+    }
+
+    /// Calls `MediaScannerConnection.scanFile`, so the file shows up in the
+    /// gallery and file managers right away (Android 10 and older do not index
+    /// files written through paths by themselves).
+    fn media_scan(path: &Path) -> jni::errors::Result<()> {
+        with_context(|env, context| {
             let file = env.new_string(path.to_string_lossy())?;
-            let paths = env.new_object_array(1, "java/lang/String", &file)?;
+            let paths = JObjectArray::<JString>::new(env, 1, &file)?;
             env.call_static_method(
-                "android/media/MediaScannerConnection",
-                "scanFile",
-                "(Landroid/content/Context;[Ljava/lang/String;[Ljava/lang/String;\
-                 Landroid/media/MediaScannerConnection$OnScanCompletedListener;)V",
+                jni_str!("android/media/MediaScannerConnection"),
+                jni_str!("scanFile"),
+                jni_sig!(
+                    "(Landroid/content/Context;[Ljava/lang/String;[Ljava/lang/String;\
+                     Landroid/media/MediaScannerConnection$OnScanCompletedListener;)V"
+                ),
                 &[
-                    JValue::Object(&context),
+                    JValue::Object(context),
                     JValue::Object(&paths),
                     JValue::Object(&JObject::null()),
                     JValue::Object(&JObject::null()),
                 ],
             )?;
             Ok(())
-        };
-        let result = scan();
-        if env.exception_check().unwrap_or(false) {
-            let _ = env.exception_clear();
-        }
-        result
+        })
     }
 
     /// Runs `call` with a JNI environment, the application context and the app
@@ -198,55 +205,39 @@ mod imp {
     ///
     /// App classes are loaded through the context's class loader: `FindClass`
     /// on a thread started by Rust only sees the classes of the system.
-    #[allow(unsafe_code)]
     fn with_app_class<R>(
-        name: &str,
-        call: impl FnOnce(&mut JNIEnv<'_>, &JObject<'_>, &JClass<'_>) -> jni::errors::Result<R>,
+        name: &JNIStr,
+        call: impl FnOnce(&mut Env<'_>, &JObject<'_>, &JClass<'_>) -> jni::errors::Result<R>,
     ) -> jni::errors::Result<R> {
-        let ctx = ndk_context::android_context();
-        // SAFETY: tao initializes the ndk context with a valid JavaVM pointer
-        // before the app starts and never releases it.
-        let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }?;
-        let mut env = vm.attach_current_thread()?;
-        // SAFETY: the context is the application context, kept alive by tao in
-        // a global reference for the whole process lifetime.
-        let context = unsafe { JObject::from_raw(ctx.context().cast()) };
-        let run = || {
+        with_context(|env, context| {
             let loader = env
-                .call_method(&context, "getClassLoader", "()Ljava/lang/ClassLoader;", &[])?
-                .l()?;
-            let class_name = env.new_string(name)?;
-            let class = env
                 .call_method(
-                    &loader,
-                    "loadClass",
-                    "(Ljava/lang/String;)Ljava/lang/Class;",
-                    &[JValue::Object(&class_name)],
+                    context,
+                    jni_str!("getClassLoader"),
+                    jni_sig!("()Ljava/lang/ClassLoader;"),
+                    &[],
                 )?
                 .l()?;
-            call(&mut env, &context, &JClass::from(class))
-        };
-        let result = run();
-        if env.exception_check().unwrap_or(false) {
-            let _ = env.exception_clear();
-        }
-        result
+            let loader = env.cast_local::<JClassLoader>(loader)?;
+            let class = LoaderContext::Loader(&loader).load_class(env, name, false)?;
+            call(env, context, &class)
+        })
     }
 
     /// Background limits reported by `PowerHelper.status`.
     pub fn background_status() -> Option<BackgroundStatus> {
         let json = with_app_class(
-            "io.github.vp859.ferry.PowerHelper",
+            jni_str!("io.github.vp859.ferry.PowerHelper"),
             |env, context, class| {
                 let value = env
                     .call_static_method(
                         class,
-                        "status",
-                        "(Landroid/content/Context;)Ljava/lang/String;",
+                        jni_str!("status"),
+                        jni_sig!("(Landroid/content/Context;)Ljava/lang/String;"),
                         &[JValue::Object(context)],
                     )?
                     .l()?;
-                env.get_string(&JString::from(value)).map(String::from)
+                env.cast_local::<JString>(value)?.try_to_string(env)
             },
         )
         .inspect_err(|e| warn!("Could not read the background limits: {e}"))
@@ -257,12 +248,12 @@ mod imp {
     /// Opens the system app info screen (battery usage, permissions).
     pub fn open_app_settings() {
         let result = with_app_class(
-            "io.github.vp859.ferry.PowerHelper",
+            jni_str!("io.github.vp859.ferry.PowerHelper"),
             |env, context, class| {
                 env.call_static_method(
                     class,
-                    "openAppSettings",
-                    "(Landroid/content/Context;)V",
+                    jni_str!("openAppSettings"),
+                    jni_sig!("(Landroid/content/Context;)V"),
                     &[JValue::Object(context)],
                 )
                 .map(|_| ())
@@ -276,13 +267,13 @@ mod imp {
     /// Holds or releases the wake and Wi-Fi locks of `FerryService`.
     pub fn set_transfers_active(active: bool) {
         let result = with_app_class(
-            "io.github.vp859.ferry.FerryService",
+            jni_str!("io.github.vp859.ferry.FerryService"),
             |env, context, class| {
                 env.call_static_method(
                     class,
-                    "setTransfersActive",
-                    "(Landroid/content/Context;Z)V",
-                    &[JValue::Object(context), JValue::Bool(u8::from(active))],
+                    jni_str!("setTransfersActive"),
+                    jni_sig!("(Landroid/content/Context;Z)V"),
+                    &[JValue::Object(context), JValue::Bool(active)],
                 )
                 .map(|_| ())
             },

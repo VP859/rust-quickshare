@@ -2002,6 +2002,7 @@ dependencies = [
  "tokio-util",
  "toml 1.1.8+spec-1.1.0",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
@@ -2034,7 +2035,7 @@ dependencies = [
  "anyhow",
  "ferry",
  "iroh",
- "jni 0.21.1",
+ "jni 0.22.4",
  "ndk-context",
  "qrcode",
  "rust-i18n",

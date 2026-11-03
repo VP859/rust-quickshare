@@ -138,6 +138,16 @@ compatibility).
   file per language; the Content-Security-Policy no longer allows inline scripts. CI lints it with
   Biome and runs Playwright tests against a mocked Tauri API.
 - The terminal UI's state module is split by topic; `rustfmt.toml` documents the formatting.
+- The GUI script `app.js` (830 lines) is split into modules by part of the interface (trusted
+  devices, nearby devices and pairing, sending, texts, transfers, settings) with shared state in
+  `state.js`; behaviour is unchanged.
+- Android: `jni` 0.22 (from 0.21). The calls into the Kotlin helpers run inside the new scoped
+  thread attachment, which also clears Java exceptions; iroh already used 0.22, so one version less
+  is built.
+- `tests/network_conditions.rs` prints a progress timeline (bytes sent, packets forwarded, drops,
+  ICMP resets, I/O errors) when a test times out, and the QUIC logs with `RUST_LOG`. CI runs the
+  outage and network-change tests on Windows in a step allowed to fail, to find why they stop
+  there.
 - Senders no longer wait for each chunk's acknowledgement; peers must not send chunks smaller than
   16 KiB.
 

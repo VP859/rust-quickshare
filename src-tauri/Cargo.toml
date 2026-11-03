@@ -57,7 +57,7 @@ tauri-plugin-fs = "2.4.0"
 # Rust logs in `adb logcat` (stdout of an Android app is discarded).
 tracing-android = "0.2.0"
 # Calling MediaScannerConnection so received photos appear in the gallery.
-jni = "0.21.1"
+jni = "0.22.4"
 # Background limits reported by PowerHelper.kt as JSON.
 serde_json = "1"
 ndk-context = "0.1.1"

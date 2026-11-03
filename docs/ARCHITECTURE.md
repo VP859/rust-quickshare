@@ -111,9 +111,12 @@ Logs: `adb logcat -s FerryCore FerryService FerryShare FerryPower`.
   services or permissions (except Android 17's local network permission).
 * **No servers by default** – iroh runs with relays and DNS lookup disabled; internet mode is an
   explicit opt-in.
-* **No frontend build step** – the GUI is plain HTML, CSS and ES modules (`src-tauri/ui/js/`:
-  `app.js` with the features, `dom.js`, `i18n.js` with `locales/`, `tauri.js` as the bridge to the
-  native side). Scripts are separate files, so the Content-Security-Policy forbids inline
+* **No frontend build step** – the GUI is plain HTML, CSS and ES modules in `src-tauri/ui/js/`,
+  one per part of the interface: `node.js`, `peers.js` (trusted devices), `nearby.js` (discovery
+  and pairing), `send.js`, `texts.js`, `transfers.js` (with incoming offers) and `settings.js`.
+  They share state through `state.js`, and `app.js` starts the page and subscribes to backend
+  events. Helpers are in `dom.js`, `i18n.js` (with `locales/`) and `tauri.js`, the bridge to the
+  native side. Scripts are separate files, so the Content-Security-Policy forbids inline
   scripts. CI checks syntax and translation keys (`scripts/check-frontend.mjs`), lints with Biome
   and runs Playwright tests against a mocked Tauri API (`tests/gui/`).
 * **Errors** – the library returns `anyhow` errors with a localized context chain;

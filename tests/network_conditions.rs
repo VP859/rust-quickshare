@@ -10,9 +10,12 @@
 //! [`ThroughLinkOnly`] path selector that never picks it. Tests that wait for
 //! the QUIC idle timeout (30 s) are `#[ignore]`d and run in CI's network job:
 //! `cargo test --test network_conditions -- --include-ignored`. The outage and
-//! network-change tests are also ignored on Windows, where they time out on
-//! slow CI runners; they check QUIC behaviour that does not depend on the
-//! system and run on Linux in every CI build.
+//! network-change tests are also ignored on Windows: on GitHub's Windows
+//! runners they stopped within the 120 s limit for a reason not found yet
+//! (they pass in about 10 s on Linux, also with Windows-like 15.6 ms timers
+//! and 8 KiB receive buffers in the forwarder). CI runs them on Windows in a
+//! step that may fail and prints a progress timeline on timeout (and the
+//! QUIC logs with `RUST_LOG`), to find the cause; see docs/TESTING.md.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -45,6 +48,41 @@ struct Conditions {
     down: AtomicBool,
     /// Bytes forwarded from the sender to the receiver.
     forwarded: AtomicU64,
+    /// Datagrams forwarded towards the receiver and towards the sender.
+    packets_to_receiver: AtomicU64,
+    /// See `packets_to_receiver`.
+    packets_to_sender: AtomicU64,
+    /// Datagrams dropped by the loss setting or an outage.
+    dropped: AtomicU64,
+    /// Failed sends and receives other than a skipped ICMP reset.
+    io_errors: AtomicU64,
+    /// Receives that reported an ICMP reset (Windows), skipped.
+    resets: AtomicU64,
+    /// The last I/O error, for the report.
+    last_error: Mutex<Option<String>>,
+}
+
+impl Conditions {
+    /// Records an I/O error of the forwarder.
+    fn io_error(&self, error: &std::io::Error) {
+        self.io_errors.fetch_add(1, Ordering::Relaxed);
+        *self.last_error.lock().unwrap() = Some(error.to_string());
+    }
+
+    /// One line with the counters, for the progress timeline.
+    fn summary(&self) -> String {
+        format!(
+            "fwd {:.1} MiB, packets to receiver {}, to sender {}, dropped {}, \
+             resets {}, I/O errors {} (last: {})",
+            self.forwarded.load(Ordering::Relaxed) as f64 / 1048576.0,
+            self.packets_to_receiver.load(Ordering::Relaxed),
+            self.packets_to_sender.load(Ordering::Relaxed),
+            self.dropped.load(Ordering::Relaxed),
+            self.resets.load(Ordering::Relaxed),
+            self.io_errors.load(Ordering::Relaxed),
+            self.last_error.lock().unwrap().as_deref().unwrap_or("none"),
+        )
+    }
 }
 
 /// A UDP forwarder between a sender and a receiver with adjustable loss,
@@ -70,7 +108,11 @@ struct LossyLink {
 /// Windows reports an ICMP "port unreachable" for an earlier send as a
 /// `ConnectionReset` error on the next receive (e.g. after a network change
 /// closed the old port); that says nothing about this socket, so it is skipped.
-async fn receive(socket: &UdpSocket, buf: &mut [u8]) -> Option<(usize, SocketAddr)> {
+async fn receive(
+    socket: &UdpSocket,
+    buf: &mut [u8],
+    conditions: &Conditions,
+) -> Option<(usize, SocketAddr)> {
     loop {
         match socket.recv_from(buf).await {
             Ok(received) => return Some(received),
@@ -78,8 +120,14 @@ async fn receive(socket: &UdpSocket, buf: &mut [u8]) -> Option<(usize, SocketAdd
                 if matches!(
                     e.kind(),
                     std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionAborted
-                ) => {}
-            Err(_) => return None,
+                ) =>
+            {
+                conditions.resets.fetch_add(1, Ordering::Relaxed);
+            }
+            Err(e) => {
+                conditions.io_error(&e);
+                return None;
+            }
         }
     }
 }
@@ -114,18 +162,30 @@ impl LossyLink {
 
     /// Whether a packet passes, decided by the current conditions.
     fn passes(conditions: &Conditions, dice: &mut Dice) -> bool {
-        !conditions.down.load(Ordering::Relaxed)
-            && dice.roll_permille() >= conditions.loss_permille.load(Ordering::Relaxed)
+        let passes = !conditions.down.load(Ordering::Relaxed)
+            && dice.roll_permille() >= conditions.loss_permille.load(Ordering::Relaxed);
+        if !passes {
+            conditions.dropped.fetch_add(1, Ordering::Relaxed);
+        }
+        passes
     }
 
     /// Sends `data` to `to` from `socket` after the configured delay.
-    fn deliver(conditions: &Conditions, socket: Arc<UdpSocket>, data: Vec<u8>, to: SocketAddr) {
+    fn deliver(
+        conditions: &Arc<Conditions>,
+        socket: Arc<UdpSocket>,
+        data: Vec<u8>,
+        to: SocketAddr,
+    ) {
         let delay = Duration::from_millis(conditions.delay_ms.load(Ordering::Relaxed));
+        let conditions = conditions.clone();
         tokio::spawn(async move {
             if !delay.is_zero() {
                 tokio::time::sleep(delay).await;
             }
-            let _ = socket.send_to(&data, to).await;
+            if let Err(e) = socket.send_to(&data, to).await {
+                conditions.io_error(&e);
+            }
         });
     }
 
@@ -139,12 +199,15 @@ impl LossyLink {
         tokio::spawn(async move {
             let mut dice = Dice(0x5eed_1234);
             let mut buf = vec![0u8; 65536];
-            while let Some((len, from)) = receive(&front, &mut buf).await {
+            while let Some((len, from)) = receive(&front, &mut buf, &conditions).await {
                 *client.lock().unwrap() = Some(from);
                 if Self::passes(&conditions, &mut dice) {
                     conditions
                         .forwarded
                         .fetch_add(len as u64, Ordering::Relaxed);
+                    conditions
+                        .packets_to_receiver
+                        .fetch_add(1, Ordering::Relaxed);
                     let socket = upstream.lock().unwrap().clone();
                     Self::deliver(&conditions, socket, buf[..len].to_vec(), receiver);
                 }
@@ -162,7 +225,7 @@ impl LossyLink {
         tokio::spawn(async move {
             let mut dice = Dice(0x00c0_ffee);
             let mut buf = vec![0u8; 65536];
-            while let Some((len, _)) = receive(&upstream, &mut buf).await {
+            while let Some((len, _)) = receive(&upstream, &mut buf, &conditions).await {
                 // Packets to an old address are lost, as after a real network change.
                 if !Arc::ptr_eq(&upstream, &current.lock().unwrap()) {
                     break;
@@ -171,6 +234,7 @@ impl LossyLink {
                 if let Some(to) = to
                     && Self::passes(&conditions, &mut dice)
                 {
+                    conditions.packets_to_sender.fetch_add(1, Ordering::Relaxed);
                     Self::deliver(&conditions, front.clone(), buf[..len].to_vec(), to);
                 }
             }
@@ -286,6 +350,18 @@ struct Setup {
     receiver: NodeEngine,
     sender: NodeEngine,
     link: LossyLink,
+    /// Highest progress reported by the sender, in bytes.
+    done: Arc<AtomicU64>,
+    /// Progress and link counters every 2 s, printed when a test times out.
+    timeline: Arc<Mutex<Vec<String>>>,
+    /// Records `timeline`; stopped with the setup.
+    recorder: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for Setup {
+    fn drop(&mut self) {
+        self.recorder.abort();
+    }
 }
 
 impl Setup {
@@ -310,14 +386,38 @@ impl Setup {
             .find(SocketAddr::is_ipv4)
             .context("receiver has no IPv4 socket")?;
         tokio::spawn(service::serve(receiver.clone(), handler.clone()));
+        let link = LossyLink::start(receiver_ip).await?;
+        let (done, timeline) = (
+            Arc::<AtomicU64>::default(),
+            Arc::<Mutex<Vec<String>>>::default(),
+        );
+        let recorder = {
+            let (done, timeline, conditions) =
+                (done.clone(), timeline.clone(), link.conditions.clone());
+            tokio::spawn(async move {
+                let started = Instant::now();
+                loop {
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    timeline.lock().unwrap().push(format!(
+                        "{:>6.1} s: sent {:.1} MiB; {}",
+                        started.elapsed().as_secs_f64(),
+                        done.load(Ordering::Relaxed) as f64 / 1048576.0,
+                        conditions.summary()
+                    ));
+                }
+            })
+        };
         Ok(Self {
             src: src.path().to_path_buf(),
             dst: dst.path().to_path_buf(),
             _dirs: (src, dst),
             handler,
-            link: LossyLink::start(receiver_ip).await?,
+            link,
             receiver,
             sender,
+            done,
+            timeline,
+            recorder,
         })
     }
 
@@ -343,6 +443,7 @@ impl Setup {
             files,
             &|e| {
                 if e.status == TransferStatus::Running {
+                    self.done.fetch_max(e.done, Ordering::Relaxed);
                     on_progress(e.done);
                 }
                 events.lock().unwrap().push(e);
@@ -359,14 +460,32 @@ impl Setup {
     }
 }
 
-/// Runs `test` with a time limit long enough for the slow scenarios.
+/// Runs `test` with a time limit long enough for the slow scenarios; on a
+/// timeout the error contains the progress timeline of `setup`, which tells a
+/// stalled transfer from a slow one.
 async fn within<T>(
     limit: Duration,
+    setup: &Setup,
     test: impl std::future::Future<Output = Result<T>>,
 ) -> Result<T> {
-    tokio::time::timeout(limit, test)
-        .await
-        .context("test timed out")?
+    match tokio::time::timeout(limit, test).await {
+        Ok(result) => result,
+        Err(_) => anyhow::bail!(
+            "test timed out after {limit:?}; progress every 2 s:\n{}",
+            setup.timeline.lock().unwrap().join("\n")
+        ),
+    }
+}
+
+/// QUIC and iroh logs in the test output when `RUST_LOG` is set (shown only
+/// for failing tests), e.g. `RUST_LOG=info,noq_proto=debug`.
+fn init_logs() {
+    if std::env::var_os("RUST_LOG").is_some() {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_test_writer()
+            .try_init();
+    }
 }
 
 /// The final status of every transfer in `events`.
@@ -380,8 +499,9 @@ fn final_statuses(events: &[TransferEvent]) -> HashMap<String, TransferStatus> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn transfer_survives_packet_loss_and_delay() -> Result<()> {
-    within(Duration::from_secs(120), async {
-        let setup = Setup::new().await?;
+    init_logs();
+    let setup = Setup::new().await?;
+    within(Duration::from_secs(120), &setup, async {
         setup.link.set(30, 20); // 3 % loss, 20 ms each way
         let (path, data) = setup.file("lossy.bin", 3 * 1024 * 1024)?;
         let started = Instant::now();
@@ -415,8 +535,9 @@ async fn transfer_survives_packet_loss_and_delay() -> Result<()> {
     ignore = "timing-sensitive on slow Windows runners; covered on Linux, where the same QUIC code runs"
 )]
 async fn transfer_survives_a_network_change() -> Result<()> {
-    within(Duration::from_secs(120), async {
-        let setup = Setup::new().await?;
+    init_logs();
+    let setup = Setup::new().await?;
+    within(Duration::from_secs(120), &setup, async {
         setup.link.set(0, 5);
         let (path, data) = setup.file("roaming.bin", 12 * 1024 * 1024)?;
         let changed = AtomicBool::new(false);
@@ -455,8 +576,9 @@ async fn transfer_survives_a_network_change() -> Result<()> {
     ignore = "timing-sensitive on slow Windows runners; covered on Linux, where the same QUIC code runs"
 )]
 async fn transfer_survives_a_short_outage() -> Result<()> {
-    within(Duration::from_secs(120), async {
-        let setup = Setup::new().await?;
+    init_logs();
+    let setup = Setup::new().await?;
+    within(Duration::from_secs(120), &setup, async {
         setup.link.set(0, 5);
         let (path, data) = setup.file("outage.bin", 12 * 1024 * 1024)?;
         let fired = AtomicBool::new(false);
@@ -492,8 +614,9 @@ async fn transfer_survives_a_short_outage() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "waits for the 30 s QUIC idle timeout; run with --include-ignored"]
 async fn transfer_resumes_after_the_connection_breaks() -> Result<()> {
-    within(Duration::from_secs(240), async {
-        let setup = Setup::new().await?;
+    init_logs();
+    let setup = Setup::new().await?;
+    within(Duration::from_secs(240), &setup, async {
         setup.link.set(0, 5);
         // Large enough that the outage hits it even with 8 MiB in flight.
         let (first, first_data) = setup.file("first.bin", 32 * 1024 * 1024)?;

@@ -64,9 +64,22 @@ transfers arrive intact:
   the sender reconnects by itself, the receiver resumes the partial file and does not ask the
   user again. This test takes about 40 s and is `#[ignore]`d locally.
 
-The outage and network-change tests are skipped on Windows: they depend on timing, time out on
-slow Windows CI runners, and the QUIC behaviour they check is the same on every system, so the
-Linux jobs cover them.
+The outage and network-change tests are skipped on Windows. On GitHub's Windows runners both stopped
+at the 120 s limit, while they take about 10 s on Linux. The cause is not known yet. Ruled out so far:
+
+- **ICMP "port unreachable" errors on UDP sockets** (Windows reports them on the next receive): iroh's
+  QUIC sockets switch them off (`SIO_UDP_CONNRESET`), and the test forwarder skips them.
+- **Timer resolution** (15.6 ms on Windows): the tests pass on Linux with every forwarded packet
+  delayed to a 15.6 ms tick.
+- **Small UDP receive buffers** (64 KiB by default on Windows): the tests pass on Linux with 8 KiB
+  forwarder buffers (15 s instead of 10 s).
+
+To find it, the CI step *Network-condition tests on Windows* runs them on Windows without failing
+the build. On a timeout a test prints its progress every 2 s: bytes sent, packets forwarded in each
+direction, dropped packets, ICMP resets and I/O errors. It also prints the QUIC logs (`RUST_LOG`). A
+timeline that stops growing points to a stalled connection, and one that grows slowly points to
+throughput. The same run locally: `RUST_LOG=info,noq_proto::connection=debug cargo test --test
+network_conditions -- --include-ignored transfer_survives`.
 
 No root rights are needed. To repeat the end-to-end tests with the kernel losing packets (as CI
 does):

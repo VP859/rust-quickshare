@@ -183,3 +183,19 @@ test('the LocalSend compatibility mode is switched on in the privacy settings', 
     settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: true },
   }]);
 });
+
+test('a text goes through the recipient list and appears among the transfers', async ({ app }) => {
+  await app.locator('#btn-send-text').click();
+  await app.locator('#text-input').fill('https://example.org/x');
+  await app.locator('#btn-text-next').click();
+  const recipients = app.locator('#modal-recipient');
+  await expect(recipients).toHaveClass(/active/);
+  await expect(app.locator('#btn-share-ticket')).toBeHidden();
+  await recipients.getByRole('button', { name: /Laptop/ }).click();
+  await expect(recipients).not.toHaveClass(/active/);
+  expect(await calls(app)).toContainEqual(['send_text', { text: 'https://example.org/x', target: PEER }]);
+  const row = app.locator('#transfers .row.transfer').first();
+  await expect(row).toContainText('https://example.org/x');
+  await expect(row).toContainText('Laptop');
+  await expect(app.locator('#btn-clear')).toBeVisible();
+});

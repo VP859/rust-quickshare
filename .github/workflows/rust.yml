@@ -60,6 +60,16 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
+      # The outage and network-change tests are ignored on Windows, where they
+      # stopped on CI runners for a reason not found yet (they pass on Linux).
+      # This step runs them anyway without failing the build; on a timeout
+      # they print a progress timeline and the QUIC logs (docs/TESTING.md).
+      - name: Network-condition tests on Windows (diagnostics, allowed to fail)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        env:
+          RUST_LOG: info,iroh::socket=debug,noq_proto::connection=debug
+        run: cargo test -p ferry --locked --test network_conditions -- --include-ignored --test-threads 1 transfer_survives
       # LocalSend compatibility mode against an independent client written
       # from the LocalSend specification (scripts/localsend-client.py).
       - name: LocalSend client (Python, from the specification)
