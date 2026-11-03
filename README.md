@@ -33,6 +33,9 @@ its authors. In the default mode it does not contact any server at all.
 - **Cancel any transfer** – a partly received file is resumed next time.
 - **Every interface** – desktop and Android app (Tauri), terminal UI, command line and a
   background daemon; English and Polish.
+- **Receive from iPhone and Mac** – an optional [LocalSend](https://localsend.org) compatibility
+  mode lets the LocalSend app (iOS, macOS, Android, Windows, Linux) send files to Ferry
+  ([below](#localsend-compatibility-mode)).
 
 ## Install
 
@@ -82,6 +85,7 @@ ferry doctor                            # network and discovery diagnostics
 | Auto-accept programs and scripts from Auto-Accept devices | `auto-accept-executables true` | `false` (they ask) |
 | Copy texts from Auto-Accept devices without asking | `auto-accept-texts true` | `false` |
 | Desktop app quits when its window is closed | `quit-on-close true` | `false` (keeps running in the tray) |
+| Receive from LocalSend apps (iPhone, Mac) | `localsend true` | `false` |
 
 Settings are stored in `~/.config/ferry/config.toml` (Linux), `%APPDATA%\ferry\config.toml`
 (Windows) or the app's private storage (Android). Environment variables:
@@ -148,6 +152,28 @@ it applies after a restart. The desktop app always shows the active mode in the 
   on random values from both devices, so an impostor cannot predict it.
 - When the device list stays empty, every interface explains why (blocked sending, no network,
   nothing received).
+
+## LocalSend compatibility mode
+
+Ferry has no app for iOS and macOS. With this mode on, iPhones, iPads and Macs – or any device
+with the free [LocalSend](https://localsend.org) app – can **send files to Ferry**: Ferry appears in
+LocalSend's list of nearby devices like another LocalSend device.
+
+- Turn it on in *Settings → Privacy → Receive from LocalSend apps*, or
+  `ferry config set localsend true` (the daemon and the TUI pick it up at their next start).
+- It is **off by default** because LocalSend has a weaker security model than Ferry: there is no
+  pairing and the sender is not verified – its name can be anything, and anyone on the local network
+  can offer files. Ferry therefore **always asks** (never Auto-Accept, a daemon without a terminal
+  declines), marks the offer as *LocalSend · not verified* with the sender's IP address, warns about
+  programs and scripts, and makes a declined sender wait before it can offer again. The transfer is
+  encrypted with TLS, but the sender is not authenticated.
+- Only receiving is supported. Sending to LocalSend devices is not.
+- It uses port **53317** (TCP for the transfers, UDP multicast `224.0.0.167` for discovery); allow
+  both in the firewall: `sudo firewall-cmd --permanent --add-port=53317/tcp --add-port=53317/udp &&
+  sudo firewall-cmd --reload`. The LocalSend app itself cannot run on the same computer at the same
+  time, as both need the port.
+- In hidden mode Ferry does not announce itself to LocalSend devices either; a LocalSend app
+  can still reach it by IP address.
 
 ## Android
 

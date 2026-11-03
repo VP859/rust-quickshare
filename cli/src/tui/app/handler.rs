@@ -23,6 +23,10 @@ pub enum PendingKind {
         total_size: u64,
         /// Names of the first files.
         names: Vec<String>,
+        /// The most serious risk among all files (not only the listed ones).
+        risk: Option<ferry::transfer::risk::Risk>,
+        /// Offered by a LocalSend app: the sender is not verified.
+        localsend: bool,
     },
     /// An incoming text for the clipboard.
     Text {
@@ -164,7 +168,9 @@ impl TransferHandler for TuiHandler {
             peer_label,
             count: batch.count,
             total_size: batch.total_size,
+            risk: ferry::transfer::risk::worst_risk(&batch.names),
             names: batch.names.clone(),
+            localsend: false,
         };
         Some(if self.ask(kind).await {
             OfferDecision::Accept { dest_dir }
@@ -173,6 +179,26 @@ impl TransferHandler for TuiHandler {
                 reason: t!("transfer.user_rejected").into_owned(),
             }
         })
+    }
+
+    /// LocalSend senders are not authenticated: always asked, never Auto-Accept.
+    async fn decide_localsend(&self, offer: &ferry::localsend::LocalSendOffer) -> OfferDecision {
+        let dest_dir = Config::load().unwrap_or_default().download_dir();
+        let kind = PendingKind::Batch {
+            peer_label: format!("{} ({})", offer.sender.label(), offer.sender.address),
+            count: offer.count,
+            total_size: offer.total_size,
+            names: offer.names.clone(),
+            risk: offer.risk,
+            localsend: true,
+        };
+        if self.ask(kind).await {
+            OfferDecision::Accept { dest_dir }
+        } else {
+            OfferDecision::Reject {
+                reason: t!("transfer.user_rejected").into_owned(),
+            }
+        }
     }
 
     async fn receive_text(&self, peer: EndpointId, text: String) -> TextDecision {

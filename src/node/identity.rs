@@ -136,7 +136,7 @@ pub fn replace_secret_key(path: &Path, key: &SecretKey) -> Result<Option<PathBuf
 }
 
 /// Creates a new file readable only by the owner (`0600` on Unix) and syncs it to disk.
-fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut opts = std::fs::OpenOptions::new();
     opts.write(true).create_new(true);
     #[cfg(unix)]

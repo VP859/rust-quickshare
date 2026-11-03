@@ -16,6 +16,7 @@ use tracing::{info, warn};
 use crate::cli::display::human_size;
 use ferry::config::Config;
 use ferry::discovery::{Discovery, DiscoveryOptions};
+use ferry::localsend::{LocalSend, LocalSendOffer, LocalSendOptions};
 use ferry::node::NodeEngine;
 use ferry::pairing::PairRequest;
 use ferry::protocol::messages::{BatchOffer, TextDecision, TransferOffer};
@@ -116,6 +117,38 @@ impl TransferHandler for DaemonHandler {
         );
         if self
             .ask_user(format!("\n{}{question}", risk_warning(risk)))
+            .await
+        {
+            OfferDecision::Accept { dest_dir }
+        } else {
+            OfferDecision::Reject {
+                reason: t!("transfer.user_rejected").into_owned(),
+            }
+        }
+    }
+
+    /// LocalSend senders are not authenticated: always asked, never Auto-Accept.
+    async fn decide_localsend(&self, offer: &LocalSendOffer) -> OfferDecision {
+        let config = Config::load().unwrap_or_default();
+        let dest_dir = self
+            .downloads_dir
+            .clone()
+            .unwrap_or_else(|| config.download_dir());
+        if !self.interactive {
+            return OfferDecision::Reject {
+                reason: t!("daemon.no_localsend").into_owned(),
+            };
+        }
+        let question = t!(
+            "localsend.offer",
+            sender = offer.sender.label(),
+            address = offer.sender.address,
+            count = offer.count,
+            size = human_size(offer.total_size),
+            names = offer.names_preview()
+        );
+        if self
+            .ask_user(format!("\n{}{question}", risk_warning(offer.risk)))
             .await
         {
             OfferDecision::Accept { dest_dir }
@@ -328,6 +361,28 @@ pub async fn run_daemon(downloads_dir: Option<PathBuf>) -> Result<()> {
     )
     .inspect_err(|e| warn!("Local network discovery disabled: {e:#}"))
     .ok();
+
+    // Kept alive until the daemon stops.
+    let _localsend = if config.localsend {
+        match LocalSend::start(
+            &engine,
+            LocalSendOptions::from_config(&config),
+            handler.clone(),
+        )
+        .await
+        {
+            Ok(localsend) => {
+                println!(" {}", t!("localsend.on", port = localsend.port()));
+                Some(localsend)
+            }
+            Err(e) => {
+                warn!("{e:#}");
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     tokio::select! {
         _ = service::serve(engine.clone(), handler) => {}

@@ -207,6 +207,33 @@ timeout or stop). The share serves one file and declines offers. Not hidden: the
 recipient's IP addresses (visible to each other, and the relay in internet mode), and anyone
 who gets the TICKET while the share is open can download the file once or until it expires.
 
+### LocalSend compatibility mode
+
+An optional mode (`localsend` setting, off by default; `src/localsend/`) speaks LocalSend protocol
+v2 as a receiver so that devices without Ferry – above all iPhones and Macs – can send files. It
+deliberately runs with **LocalSend's** security model, which is weaker than Ferry's:
+
+* **No authentication of the sender.** LocalSend has no pairing; a sender identifies itself only by
+  a self-chosen alias. Anyone on the local network can offer files, under any name. Ferry does not
+  request client certificates, so it cannot tell two LocalSend devices with the same name apart.
+* **What is protected:** the connection uses TLS (HTTPS with a self-signed ECDSA certificate kept in
+  the configuration folder); LocalSend apps pin its SHA-256 fingerprint, learned from the multicast
+  announcement, so on a network where the announcement arrives unmodified a passive listener cannot
+  read the files. An active attacker on the local network can announce its own certificate.
+* **Mitigations in Ferry:** every offer is asked about (never Auto-Accept, not even for files from
+  a paired device's address; a daemon without a terminal declines), the dialog says *LocalSend · not
+  verified* and shows the sender's IP address, the risky-file warning covers every offered file (not
+  only the listed names), one session at a time, an address must wait 15 s after a declined offer,
+  at most 10 000 files and 64 connections, request bodies are size-limited, every path component is
+  sanitized like Ferry file names (folders are kept, `..` and absolute paths are refused), a file
+  must arrive with exactly its announced size and, when the sender gives one, its SHA-256 – otherwise
+  nothing is kept – and saved files get the Mark-of-the-Web on Windows.
+* **Separate identity:** the LocalSend certificate is not derived from the Ferry key; LocalSend
+  devices never see the Node ID and cannot link the device to its Ferry identity (except through
+  the announced name and the IP address).
+* Only receiving is implemented: Ferry never sends files to LocalSend devices, and the LocalSend
+  download API (sharing through a browser) is not offered.
+
 ## Known limitations
 
 * **Announced names are not authenticated.** A stranger can announce the name "Kate's Laptop".
@@ -242,6 +269,8 @@ Ferry relies on, and is only as secure as:
 * [iroh](https://github.com/n0-computer/iroh) and its QUIC implementation for connections, TLS
   and key handling,
 * [rustls](https://github.com/rustls/rustls) and its crypto provider, `ed25519-dalek`, `blake3`,
+* with the LocalSend mode on: [hyper](https://hyper.rs) (HTTP/1.1 server), `rcgen` (certificate)
+  and `sha2`,
 * [Tauri](https://tauri.app) and the system web view (WebKitGTK, WebView2, Android WebView) for
   the GUI,
 * in internet mode, the availability and honesty of n0's relay and lookup servers (they can deny

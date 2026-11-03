@@ -295,6 +295,7 @@ fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
                         .find(|d| d.node_id == ev.peer)
                         .map(|d| d.name.clone())
                 })
+                .or_else(|| ev.peer_name.clone())
                 .unwrap_or_else(|| format!("{}…", &ev.peer[..8.min(ev.peer.len())]));
             let (detail, color) = match &ev.status {
                 TransferStatus::Preparing => (t!("tui.st_hashing").into_owned(), Color::Blue),
@@ -430,11 +431,21 @@ fn render_pending(f: &mut Frame, app: &App) {
             count,
             total_size,
             names,
+            localsend,
+            ..
         } => {
             let mut lines = vec![Line::styled(
                 t!("tui.batch_files", count = count).into_owned(),
                 Style::default().add_modifier(Modifier::BOLD),
             )];
+            if *localsend {
+                lines.push(Line::styled(
+                    t!("localsend.tag").into_owned(),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ));
+            }
             lines.push(Line::raw(
                 t!(
                     "tui.offer_from",
@@ -504,7 +515,7 @@ fn render_pending(f: &mut Frame, app: &App) {
     // Programs, scripts and documents with macros: a red warning above the keys.
     let risk = match &p.kind {
         PendingKind::File { file_name, .. } => risk::file_risk(file_name),
-        PendingKind::Batch { names, .. } => risk::worst_risk(names),
+        PendingKind::Batch { risk, .. } => *risk,
         _ => None,
     };
     if let Some(risk) = risk {

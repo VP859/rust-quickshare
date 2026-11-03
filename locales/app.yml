@@ -479,6 +479,21 @@ daemon.no_auto_text:
 daemon.no_auto_executable:
   en: "'%{alias}' sent a program or script; those are never saved without a question, and this daemon has no terminal (set auto_accept_executables to allow it)"
   pl: "'%{alias}' wysyła program lub skrypt; takie pliki nigdy nie są zapisywane bez pytania, a ten demon nie ma terminala (ustaw auto_accept_executables, aby to dopuścić)"
+localsend.port_taken:
+  en: "LocalSend compatibility mode cannot use TCP port %{port} – is the LocalSend app running on this computer?"
+  pl: "Tryb zgodności z LocalSend nie może użyć portu TCP %{port} – czy na tym komputerze działa aplikacja LocalSend?"
+localsend.offer:
+  en: "LocalSend (compatibility mode, sender not verified): '%{sender}' at %{address} wants to send %{count} file(s), %{size}: %{names}. Accept?"
+  pl: "LocalSend (tryb zgodności, nadawca niezweryfikowany): '%{sender}' z adresu %{address} chce wysłać plików: %{count}, %{size}: %{names}. Przyjąć?"
+localsend.on:
+  en: "LocalSend compatibility mode: on (TCP/UDP %{port}) – LocalSend apps can send files here"
+  pl: "Tryb zgodności z LocalSend: włączony (TCP/UDP %{port}) – aplikacje LocalSend mogą tu wysyłać pliki"
+localsend.tag:
+  en: "LocalSend · not verified"
+  pl: "LocalSend · niezweryfikowane"
+daemon.no_localsend:
+  en: "offers from LocalSend apps always need a question, and this daemon has no terminal"
+  pl: "oferty z aplikacji LocalSend zawsze wymagają pytania, a ten demon nie ma terminala"
 share.only:
   en: "This TICKET only shares one file; it does not accept files"
   pl: "Ten TICKET udostępnia tylko jeden plik; nie przyjmuje plików"

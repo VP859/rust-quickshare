@@ -528,7 +528,7 @@ function renderTransfer(ev) {
     $('sr-status').textContent = `${ev.file_name}: ${t('st_' + kind)}`;
   }
   const pct = ev.total ? Math.min(100, Math.round(ev.done / ev.total * 100)) : (kind === 'completed' ? 100 : 0);
-  const peer = peers.find(p => p.node_id === ev.peer)?.alias ?? shortId(ev.peer);
+  const peer = peers.find(p => p.node_id === ev.peer)?.alias ?? ev.peer_name ?? shortId(ev.peer);
   // How the data travels; a relay explains a slow transfer in internet mode.
   const route = ev.route ? ' · ' + t('route_' + ev.route) : '';
   const detail = kind === 'running' ? (ev.total ? `${pct}% · ${fmtSize(ev.done)} / ${fmtSize(ev.total)}${route}` : fmtSize(ev.done) + route)
@@ -583,6 +583,9 @@ function showNextOffer() {
   $('offer-names').textContent = batch ? o.names.join('\n') + (more > 0 ? '\n' + t('and_more', { n: more }) : '') : '';
   $('offer-names').hidden = !batch;
   $('offer-meta').textContent = t('from', { size: fmtSize(o.size), name: o.alias ?? t('unknown_device', { id: shortId(o.peer) }) });
+  // LocalSend compatibility mode: the sender is not verified.
+  $('offer-localsend').hidden = !o.localsend;
+  $('offer-localsend').textContent = o.localsend ? t('localsend_offer', { address: o.localsend }) : '';
   // Programs, scripts and documents with macros: say so before the user decides.
   $('offer-risk').hidden = !o.risk;
   $('offer-risk').textContent = o.risk ? t(`risk_${o.risk}`) : '';
@@ -645,12 +648,13 @@ $('btn-restart-later').onclick = () => close('modal-restart');
 $('btn-restart-ok').onclick = () => invoke('restart_app').catch(fail);
 $('btn-restart').onclick = () => invoke('restart_app').catch(fail);
 
-let privacy = { hidden: false, auto_accept_texts: false, auto_accept_executables: false };
+let privacy = { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false };
 async function loadPrivacy() {
   try { privacy = await invoke('get_privacy'); } catch (e) { console.warn('Privacy:', e); }
   $('privacy-hidden').checked = privacy.hidden;
   $('privacy-texts').checked = privacy.auto_accept_texts;
   $('privacy-exe').checked = privacy.auto_accept_executables;
+  $('privacy-localsend').checked = privacy.localsend;
   renderModePill();
 }
 async function savePrivacy(change) {
@@ -664,10 +668,12 @@ async function savePrivacy(change) {
   $('privacy-hidden').checked = privacy.hidden;
   $('privacy-texts').checked = privacy.auto_accept_texts;
   $('privacy-exe').checked = privacy.auto_accept_executables;
+  $('privacy-localsend').checked = privacy.localsend;
 }
 $('privacy-hidden').onchange = (e) => savePrivacy({ hidden: e.target.checked });
 $('privacy-texts').onchange = (e) => savePrivacy({ auto_accept_texts: e.target.checked });
 $('privacy-exe').onchange = (e) => savePrivacy({ auto_accept_executables: e.target.checked });
+$('privacy-localsend').onchange = (e) => savePrivacy({ localsend: e.target.checked });
 
 async function loadLanguage() {
   try {

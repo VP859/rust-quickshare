@@ -498,7 +498,7 @@ fn blocking_firewall(_port: u16) -> Option<String> {
 
 /// Opens the discovery socket: shared port (several apps on one computer),
 /// broadcast allowed, non-blocking. Port `0` picks a random port.
-fn bind(port: u16) -> std::io::Result<std::net::UdpSocket> {
+pub(crate) fn bind(port: u16) -> std::io::Result<std::net::UdpSocket> {
     use socket2::{Domain, Protocol, Socket, Type};
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_reuse_address(true)?;
@@ -882,7 +882,7 @@ fn expire(shared: &Shared) {
 }
 
 /// IPv4 addresses of this device on local networks, with each network's broadcast address.
-fn local_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
+pub(crate) fn local_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
     let mut networks = platform_networks(engine);
     networks.sort();
     networks.dedup();

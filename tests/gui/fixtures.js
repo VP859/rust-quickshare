@@ -22,7 +22,7 @@ const RESPONSES = {
   set_verified: null,
   app_info: { name: 'Ferry', version: '0.0.0-test' },
   get_network_mode: { active: 'local', saved: 'local' },
-  get_privacy: { hidden: false, auto_accept_texts: false, auto_accept_executables: false },
+  get_privacy: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false },
   get_quit_on_close: false,
   take_shared_files: [],
   take_shared_text: null,

@@ -29,6 +29,7 @@ use super::risk;
 use super::sender::{
     PreparedFile, SendItem, SendOutcome, expand_paths, prepare_file, push_file, send_on_channel,
 };
+use crate::localsend::LocalSendOffer;
 use crate::node::{NodeEngine, NodeTicket};
 use crate::pairing::{PAIR_DECISION_TIMEOUT, PairRequest, answer_pairing, clean_device_name};
 use crate::protocol::codec::{read_msg, write_msg};
@@ -41,7 +42,7 @@ use crate::protocol::messages::{
 const CLOSE_UNKNOWN_SHARE: u32 = 2;
 /// Upper bound for a handler to answer a question (a received text or a batch
 /// of files); no answer counts as a rejection.
-const QUESTION_TIMEOUT: Duration = Duration::from_secs(150);
+pub(crate) const QUESTION_TIMEOUT: Duration = Duration::from_secs(150);
 /// Questions one device may have waiting for the user at the same time.
 const MAX_OPEN_QUESTIONS_PER_PEER: usize = 2;
 /// Questions all devices together may have waiting for the user. Node IDs are
@@ -156,8 +157,12 @@ pub fn cancel_transfer(id: &str) -> bool {
 pub struct TransferEvent {
     /// Unique transfer ID (UUID v4).
     pub id: String,
-    /// Node ID of the other device.
+    /// Node ID of the other device (`localsend:<IP address>` for a LocalSend app).
     pub peer: String,
+    /// Name of the other device when it is not a Ferry device with a Node ID
+    /// (a LocalSend app); `None` for Ferry devices, whose names the
+    /// interfaces look up by `peer`.
+    pub peer_name: Option<String>,
     /// Name of the transferred file.
     pub file_name: String,
     /// Upload or download.
@@ -287,6 +292,24 @@ pub trait TransferHandler: Send + Sync + 'static {
         _batch: &BatchOffer,
     ) -> impl Future<Output = Option<OfferDecision>> + Send {
         async { None }
+    }
+
+    /// Decides about files offered by a LocalSend app ([`crate::localsend`]).
+    ///
+    /// The sender is not authenticated: its name is whatever it announces and
+    /// anyone on the local network can send such an offer. Implementations
+    /// must therefore always ask the user (never Auto-Accept), show that the
+    /// offer comes through the LocalSend compatibility mode and warn about
+    /// [`LocalSendOffer::risk`]. The default declines.
+    fn decide_localsend(
+        &self,
+        _offer: &LocalSendOffer,
+    ) -> impl Future<Output = OfferDecision> + Send {
+        async {
+            OfferDecision::Reject {
+                reason: t!("transfer.user_rejected").into_owned(),
+            }
+        }
     }
 }
 
@@ -499,6 +522,19 @@ impl<'a> Tracker<'a> {
         direction: Direction,
         sink: EventSink<'a>,
     ) -> Self {
+        Self::for_device(peer.to_string(), None, file_name, total, direction, sink)
+    }
+
+    /// Starts tracking a transfer with a device identified by `peer` and
+    /// shown as `peer_name` (see [`TransferEvent::peer_name`]).
+    pub(crate) fn for_device(
+        peer: String,
+        peer_name: Option<String>,
+        file_name: &str,
+        total: u64,
+        direction: Direction,
+        sink: EventSink<'a>,
+    ) -> Self {
         let id = uuid::Uuid::new_v4().to_string();
         let cancel = CancellationToken::new();
         if let Ok(mut active) = ACTIVE_TRANSFERS.lock() {
@@ -507,7 +543,8 @@ impl<'a> Tracker<'a> {
         Self {
             base: TransferEvent {
                 id,
-                peer: peer.to_string(),
+                peer,
+                peer_name,
                 file_name: file_name.to_string(),
                 direction,
                 total,
@@ -578,7 +615,7 @@ impl<'a> Tracker<'a> {
     /// Emits [`TransferStatus::Completed`], [`TransferStatus::Cancelled`] or
     /// [`TransferStatus::Failed`] for `result`; `path` extracts the saved file
     /// path from a success.
-    fn finish<T>(&self, result: &Result<T>, path: impl FnOnce(&T) -> Option<String>) {
+    pub(crate) fn finish<T>(&self, result: &Result<T>, path: impl FnOnce(&T) -> Option<String>) {
         match result {
             Ok(v) => self.emit(self.base.total, TransferStatus::Completed { path: path(v) }),
             Err(e) if e.is::<Cancelled>() => self.emit(0, TransferStatus::Cancelled),

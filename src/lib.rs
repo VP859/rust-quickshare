@@ -50,6 +50,7 @@ pub mod config;
 pub mod discovery;
 pub mod error;
 pub mod i18n;
+pub mod localsend;
 pub mod node;
 pub mod pairing;
 pub mod protocol;

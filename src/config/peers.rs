@@ -64,6 +64,11 @@ pub struct Config {
     /// running in the system tray.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub quit_on_close: bool,
+    /// LocalSend compatibility mode ([`crate::localsend`]): receive files from
+    /// LocalSend apps (iPhone, Mac, …). Off by default: senders are not
+    /// authenticated.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub localsend: bool,
 }
 
 impl Config {

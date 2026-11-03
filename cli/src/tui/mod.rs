@@ -51,6 +51,19 @@ pub async fn run_tui() -> Result<()> {
         })
     });
     let handler = Arc::new(TuiHandler { tx });
+    // LocalSend compatibility mode, when enabled; stops with the TUI.
+    let _localsend = if app.config.localsend {
+        ferry::localsend::LocalSend::start(
+            &app.engine,
+            ferry::localsend::LocalSendOptions::from_config(&app.config),
+            handler.clone(),
+        )
+        .await
+        .inspect_err(|e| tracing::warn!("{e:#}"))
+        .ok()
+    } else {
+        None
+    };
     let server = tokio::spawn(service::serve(app.engine.clone(), handler));
 
     enable_raw_mode()?;

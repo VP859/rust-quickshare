@@ -10,11 +10,47 @@
 | Sharing by TICKET (one-time identity) | `tests/share.rs` | `cargo test --test share` | every push |
 | Protocol versions | `tests/version_negotiation.rs` | `cargo test --test version_negotiation` | every push |
 | Protocol vectors | `tests/protocol_vectors.rs`, `scripts/verify-vectors.py` (independent, from the spec) | `cargo test --test protocol_vectors`; `python3 scripts/verify-vectors.py` | every push |
+| LocalSend compatibility mode | `tests/localsend.rs` (client written from the LocalSend spec, pins the certificate like the official one) | `cargo test --test localsend` (also multicast and the Python client: `-- --include-ignored`) | every push; the Python client on Linux |
+| LocalSend, independent client | `scripts/localsend-client.py` (Python standard library only) | see [below](#localsend-without-apple-devices) | every push (through `tests/localsend.rs`) |
 | Fuzzing | `fuzz/` | `cargo +nightly fuzz run frame` ([fuzz/README.md](../fuzz/README.md)) | 1 min per target on pull requests that touch `src/`, 15 min weekly |
 | Coverage | `cargo llvm-cov` | `cargo llvm-cov -p ferry --fail-under-lines 78` | every push |
 | Benchmarks | `benches/transfer_benchmarks.rs` | `cargo bench --bench transfer_benchmarks` | pull requests, compared with the base branch |
 | GUI frontend | `tests/gui/` (Playwright, mocked Tauri API) | `npm ci && npm run test:ui` | every push |
 | Android app (Kotlin, Gradle, Rust for arm64) | `src-tauri/gen/android/` | `cd src-tauri && cargo tauri android build --debug --apk --target aarch64` | every push; the debug APK is kept for 7 days as an artifact |
+
+## LocalSend without Apple devices
+
+The LocalSend app is one Flutter code base for iOS, macOS, Android, Windows and Linux, and its
+network protocol is one Rust crate (`packages/core` in github.com/localsend/localsend). An iPhone
+therefore talks to Ferry exactly like LocalSend on an Android phone or a Linux PC; nothing in the
+protocol depends on the platform (`deviceType` only chooses an icon). What is tested, from the
+cheapest to the most realistic:
+
+1. **`tests/localsend.rs`** – a client written from the specification that behaves like the
+   official one (HTTPS, certificate pinned to the announced fingerprint, `register`,
+   `prepare-upload`, one `upload` per file, `cancel`): files and folders, declining and the 15 s
+   wait, tokens, checksums, wrong sizes, path traversal, risky files, cancelling, a stable
+   certificate, and with `--include-ignored` the multicast exchange with a fake LocalSend app on
+   the same computer.
+2. **`scripts/localsend-client.py`** – an independent client in Python (no Ferry code), run by
+   the same test file in CI. It also works by hand from any other computer on the network:
+
+   ```bash
+   python3 scripts/localsend-client.py discover            # Ferry must appear in the list
+   python3 scripts/localsend-client.py send 192.168.1.20 photo.jpg Folder/
+   ```
+
+3. **The real LocalSend app on an Android phone** (Google Play or F-Droid) or on another
+   Windows/Linux computer: with `localsend true` in Ferry, open LocalSend → *Send*; Ferry must be
+   listed under its device name; send a photo, a folder and a text message. On the same computer
+   the two cannot run at once (both need port 53317).
+4. **The official command-line client** `localsend-cli` (`cli/` in the LocalSend repository, the
+   same Rust core as the apps): `localsend-cli --port 53318 send --to <Ferry's IP> file.jpg`.
+
+Checklist for the real app: Ferry appears within a few seconds of opening LocalSend; the offer
+dialog says *LocalSend · not verified* with the phone's IP address; declining shows *Declined* on
+the phone; files keep their folder structure; a second phone sending at the same time is told the
+receiver is busy; cancelling on the phone stops the transfer in Ferry.
 
 ## Bad network conditions
 

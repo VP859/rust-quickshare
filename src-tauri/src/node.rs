@@ -9,6 +9,7 @@
 
 use ferry::config::Config;
 use ferry::discovery::{Discovery, DiscoveryOptions, Visibility};
+use ferry::localsend::{LocalSend, LocalSendOffer, LocalSendOptions};
 use ferry::node::NodeEngine;
 use ferry::pairing::PairRequest;
 use ferry::protocol::messages::{BatchOffer, TextDecision, TransferOffer};
@@ -63,6 +64,8 @@ pub struct AppState {
     /// IDs of transfers that have not ended; while there are any, Android keeps
     /// the phone awake.
     active_transfers: std::sync::Mutex<HashSet<String>>,
+    /// The LocalSend compatibility mode while it is on; see [`sync_localsend`].
+    localsend: Mutex<Option<LocalSend>>,
 }
 
 impl AppState {
@@ -80,6 +83,7 @@ impl AppState {
             quit_on_close: std::sync::atomic::AtomicBool::new(false),
             tray_hint_shown: std::sync::atomic::AtomicBool::new(false),
             active_transfers: std::sync::Mutex::new(HashSet::new()),
+            localsend: Mutex::new(None),
         }
     }
 
@@ -178,6 +182,9 @@ pub struct IncomingOffer {
     /// Why the file(s) can be dangerous (`program`, `script`, `macro` or
     /// `disguised`, see [`ferry::transfer::risk::Risk::code`]), if they can.
     pub risk: Option<&'static str>,
+    /// Address of a LocalSend app that sent the offer (compatibility mode,
+    /// the sender is not verified); `None` for Ferry devices.
+    pub localsend: Option<String>,
 }
 
 /// Payload of the `incoming-text` event.
@@ -307,6 +314,7 @@ impl TransferHandler for GuiHandler {
                         count: 1,
                         names: Vec::new(),
                         risk: risk::file_risk(&offer.file_name).map(risk::Risk::code),
+                        localsend: None,
                     },
                     DECISION_TIMEOUT,
                     (
@@ -346,6 +354,7 @@ impl TransferHandler for GuiHandler {
             count: batch.count,
             names: batch.names.clone(),
             risk: risk::worst_risk(&batch.names).map(risk::Risk::code),
+            localsend: None,
         };
         let notification = (
             &*t!("gui.notify_offer_title"),
@@ -368,6 +377,51 @@ impl TransferHandler for GuiHandler {
                 reason: t!("transfer.user_rejected").into_owned(),
             }
         })
+    }
+
+    /// LocalSend senders are not authenticated: always asked, never Auto-Accept.
+    async fn decide_localsend(&self, offer: &LocalSendOffer) -> OfferDecision {
+        let dest_dir = self.state().download_dir().await;
+        let id = format!("localsend-{}", offer.id);
+        let request = IncomingOffer {
+            id: id.clone(),
+            peer: offer.sender.peer_id(),
+            alias: Some(offer.sender.label()),
+            file_name: offer.names.first().cloned().unwrap_or_default(),
+            size: offer.total_size,
+            count: offer.count,
+            names: if offer.count > 1 {
+                offer.names.clone()
+            } else {
+                Vec::new()
+            },
+            risk: offer.risk.map(risk::Risk::code),
+            localsend: Some(offer.sender.address.to_string()),
+        };
+        let notification = (
+            &*t!("gui.notify_offer_title"),
+            &*t!(
+                "gui.notify_batch",
+                sender = offer.sender.label(),
+                count = offer.count
+            ),
+        );
+        if self
+            .ask(
+                &id,
+                "incoming-offer",
+                request,
+                DECISION_TIMEOUT,
+                notification,
+            )
+            .await
+        {
+            OfferDecision::Accept { dest_dir }
+        } else {
+            OfferDecision::Reject {
+                reason: t!("transfer.user_rejected").into_owned(),
+            }
+        }
     }
 
     /// Called from async code, so it never blocks on a busy configuration lock.
@@ -522,6 +576,32 @@ fn start_discovery(app: &AppHandle, engine: &NodeEngine, config: &Config) {
     });
 }
 
+/// Starts or stops the LocalSend compatibility mode to match the
+/// configuration; restarts it so a changed hidden mode applies.
+///
+/// # Errors
+///
+/// The localized reason when the mode should run but cannot start (e.g. the
+/// port is taken by the LocalSend app).
+pub async fn sync_localsend(app: &AppHandle) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut running = state.localsend.lock().await;
+    if let Some(old) = running.take() {
+        old.stopped().await;
+    }
+    let config = state.config.lock().await.clone();
+    if !config.localsend {
+        return Ok(());
+    }
+    let engine = state.engine().await?;
+    let handler = Arc::new(GuiHandler { app: app.clone() });
+    let localsend = LocalSend::start(engine, LocalSendOptions::from_config(&config), handler)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    *running = Some(localsend);
+    Ok(())
+}
+
 /// Starts the node, discovery and the accept loop in the background (called from `setup`).
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -531,6 +611,9 @@ pub fn start(app: AppHandle) {
                 let _ = app.emit("node-ready", engine.node_id().to_string());
                 let config = state.config.lock().await.clone();
                 start_discovery(&app, engine, &config);
+                if let Err(e) = sync_localsend(&app).await {
+                    warn!("{e}");
+                }
                 let handler = Arc::new(GuiHandler { app: app.clone() });
                 service::serve(engine.clone(), handler).await;
             }

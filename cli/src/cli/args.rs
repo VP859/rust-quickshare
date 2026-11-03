@@ -128,6 +128,8 @@ pub enum SettingKey {
     AutoAcceptExecutables,
     /// Desktop app: quit when the window is closed instead of staying in the tray (`true`/`false`).
     QuitOnClose,
+    /// Receive files from LocalSend apps – iPhone, Mac – without pairing (`true`/`false`).
+    Localsend,
 }
 
 /// Subcommands of `ferry config`.

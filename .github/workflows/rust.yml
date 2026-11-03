@@ -60,6 +60,11 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests
         run: cargo test --workspace --locked
+      # LocalSend compatibility mode against an independent client written
+      # from the LocalSend specification (scripts/localsend-client.py).
+      - name: LocalSend client (Python, from the specification)
+        if: runner.os == 'Linux'
+        run: cargo test -p ferry --locked --test localsend -- --include-ignored the_independent_python_client
 
   msrv:
     name: Minimum supported Rust

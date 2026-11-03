@@ -184,6 +184,7 @@
         <div class="avatar"><svg class="i"><use href="#i-file"/></svg></div>
         <div class="body"><div class="title" id="offer-file"></div><div class="sub" id="offer-meta"></div></div>
       </div>
+      <p class="compat-warning" id="offer-localsend" hidden></p>
       <div class="codebox textbox small" id="offer-names" hidden></div>
       <p class="risk-warning" id="offer-risk" role="alert" hidden></p>
       <p class="muted small" id="offer-queue"></p>
@@ -294,6 +295,10 @@
         <div class="toggle">
           <div><div class="label" id="privacy-exe-label" data-i18n="privacy_executables"></div><div class="desc" data-i18n="privacy_executables_hint"></div></div>
           <label class="switch"><input type="checkbox" id="privacy-exe" aria-labelledby="privacy-exe-label"><span></span></label>
+        </div>
+        <div class="toggle">
+          <div><div class="label" id="privacy-localsend-label" data-i18n="privacy_localsend"></div><div class="desc" data-i18n="privacy_localsend_hint"></div></div>
+          <label class="switch"><input type="checkbox" id="privacy-localsend" aria-labelledby="privacy-localsend-label"><span></span></label>
         </div>
         <details class="data-flow">
           <summary data-i18n="data_flow_title"></summary>

@@ -154,3 +154,32 @@ test('the safety number of a trusted device can be compared and confirmed', asyn
   await expect(app.locator('#safety-verified')).toBeChecked();
   expect(await calls(app)).toContainEqual(['set_verified', { nodeId: PEER, verified: true }]);
 });
+
+test('an offer from a LocalSend app says the sender is not verified', async ({ app }) => {
+  await emit(app, 'incoming-offer', {
+    id: 'localsend-1', peer: 'localsend:192.168.1.20', alias: "Kate's iPhone (iPhone)", file_name: 'IMG_0001.HEIC',
+    size: 2_000_000, count: 1, names: [], risk: null, localsend: '192.168.1.20',
+  });
+  await expect(app.locator('#modal-offer')).toHaveClass(/active/);
+  await expect(app.locator('#offer-localsend')).toBeVisible();
+  await expect(app.locator('#offer-localsend')).toContainText('192.168.1.20');
+  await expect(app.locator('#offer-localsend')).toContainText('not verified');
+  await expect(app.locator('#offer-meta')).toContainText("Kate's iPhone");
+
+  await app.locator('#btn-offer-reject').click();
+  await emit(app, 'incoming-offer', {
+    id: 'o-2', peer: PEER, alias: 'Laptop', file_name: 'a.jpg', size: 1, count: 1, names: [], risk: null, localsend: null,
+  });
+  await expect(app.locator('#offer-localsend')).toBeHidden();
+});
+
+test('the LocalSend compatibility mode is switched on in the privacy settings', async ({ app }) => {
+  await app.locator('#btn-settings').click();
+  const toggle = app.locator('#privacy-localsend');
+  await expect(toggle).not.toBeChecked();
+  await app.locator('label.switch:has(#privacy-localsend)').click();
+  await expect(toggle).toBeChecked();
+  expect(await calls(app)).toContainEqual(['set_privacy', {
+    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: true },
+  }]);
+});

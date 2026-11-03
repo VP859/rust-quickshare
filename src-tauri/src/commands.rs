@@ -848,6 +848,9 @@ pub struct PrivacySettings {
     /// Programs, scripts and documents with macros from Auto-Accept devices are
     /// saved without asking.
     auto_accept_executables: bool,
+    /// LocalSend compatibility mode: LocalSend apps can send files here.
+    #[serde(default)]
+    localsend: bool,
 }
 
 /// Current privacy settings.
@@ -862,22 +865,38 @@ pub async fn get_privacy(state: State<'_, AppState>) -> CmdResult<PrivacySetting
         hidden: config.hidden,
         auto_accept_texts: config.auto_accept_texts,
         auto_accept_executables: config.auto_accept_executables,
+        localsend: config.localsend,
     })
 }
 
-/// Saves the privacy settings; visibility applies immediately.
+/// Saves the privacy settings; visibility and the LocalSend compatibility
+/// mode apply immediately.
 ///
 /// # Errors
 ///
-/// When the configuration cannot be saved.
+/// When the configuration cannot be saved, or the LocalSend mode cannot start
+/// (it is then switched off again).
 #[tauri::command]
-pub async fn set_privacy(settings: PrivacySettings, state: State<'_, AppState>) -> CmdResult<()> {
-    let mut config = state.config.lock().await;
-    config.hidden = settings.hidden;
-    config.auto_accept_texts = settings.auto_accept_texts;
-    config.auto_accept_executables = settings.auto_accept_executables;
-    config.save().map_err(err)?;
-    state.sync_visibility(&config);
+pub async fn set_privacy(
+    settings: PrivacySettings,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<()> {
+    {
+        let mut config = state.config.lock().await;
+        config.hidden = settings.hidden;
+        config.auto_accept_texts = settings.auto_accept_texts;
+        config.auto_accept_executables = settings.auto_accept_executables;
+        config.localsend = settings.localsend;
+        config.save().map_err(err)?;
+        state.sync_visibility(&config);
+    }
+    if let Err(e) = crate::node::sync_localsend(&app).await {
+        let mut config = state.config.lock().await;
+        config.localsend = false;
+        config.save().map_err(err)?;
+        return Err(e);
+    }
     Ok(())
 }
 

@@ -91,7 +91,7 @@ pub fn run_network(mode: Option<&str>) -> Result<()> {
 }
 
 /// Every key of `ferry config`, in display order.
-const SETTING_KEYS: [SettingKey; 8] = [
+const SETTING_KEYS: [SettingKey; 9] = [
     SettingKey::DeviceName,
     SettingKey::Language,
     SettingKey::NetworkMode,
@@ -100,6 +100,7 @@ const SETTING_KEYS: [SettingKey; 8] = [
     SettingKey::AutoAcceptTexts,
     SettingKey::AutoAcceptExecutables,
     SettingKey::QuitOnClose,
+    SettingKey::Localsend,
 ];
 
 /// Name of a setting as typed on the command line (`device-name`, …).
@@ -124,6 +125,7 @@ fn get_setting(config: &Config, key: SettingKey) -> String {
         SettingKey::AutoAcceptTexts => config.auto_accept_texts.to_string(),
         SettingKey::AutoAcceptExecutables => config.auto_accept_executables.to_string(),
         SettingKey::QuitOnClose => config.quit_on_close.to_string(),
+        SettingKey::Localsend => config.localsend.to_string(),
     }
 }
 
@@ -162,6 +164,7 @@ fn set_setting(config: &mut Config, key: SettingKey, value: &str) -> Result<()> 
         SettingKey::AutoAcceptTexts => config.auto_accept_texts = parse_bool(value)?,
         SettingKey::AutoAcceptExecutables => config.auto_accept_executables = parse_bool(value)?,
         SettingKey::QuitOnClose => config.quit_on_close = parse_bool(value)?,
+        SettingKey::Localsend => config.localsend = parse_bool(value)?,
     }
     Ok(())
 }
@@ -177,6 +180,7 @@ fn unset_setting(config: &mut Config, key: SettingKey) {
         SettingKey::AutoAcceptTexts => config.auto_accept_texts = false,
         SettingKey::AutoAcceptExecutables => config.auto_accept_executables = false,
         SettingKey::QuitOnClose => config.quit_on_close = false,
+        SettingKey::Localsend => config.localsend = false,
     }
 }
 

@@ -19,6 +19,13 @@ compatibility).
 
 ### Added
 
+- **LocalSend compatibility mode** (off by default): iPhones, Macs and every other device with the
+  LocalSend app can send files and folders to Ferry, which appears in LocalSend's device list.
+  Senders are not verified (LocalSend has no pairing), so every offer is asked about, labelled
+  *LocalSend · not verified* with the sender's address, and never accepted automatically. Uses
+  TCP/UDP port 53317. *Settings → Privacy*, `ferry config set localsend true`. Tested against a
+  client written from the LocalSend specification and an independent Python client
+  (`scripts/localsend-client.py`).
 - **Warning about files that can run code**: programs and installers (`.exe`, `.msi`, `.apk`,
   `.AppImage`, …), scripts and shortcuts (`.bat`, `.ps1`, `.sh`, `.desktop`, `.lnk`, …), Office files
   with macros and names that hide their extension with direction-changing characters are marked
