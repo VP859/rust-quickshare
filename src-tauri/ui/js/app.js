@@ -7,6 +7,7 @@
 //   texts.js      sending and receiving texts and links
 //   transfers.js  the transfers list and incoming offers
 //   settings.js   the settings dialog
+//   web.js        sessions with a web browser (link and QR code)
 //   state.js      state shared by them
 import { fail, toast } from './dom.js';
 import { applyStaticText, t } from './i18n.js';

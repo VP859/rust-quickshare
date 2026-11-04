@@ -37,6 +37,7 @@ use crate::protocol::messages::{
     BatchDecision, BatchOffer, Hello, MAX_BATCH_NAMES, MAX_FILE_NAME_LEN, MAX_TEXT_LEN,
     PairResponse, ShareToken, TextDecision, TransferOffer,
 };
+use crate::web::BrowserOffer;
 
 /// Application close code sent when a download asks for an unknown share token.
 const CLOSE_UNKNOWN_SHARE: u32 = 2;
@@ -305,6 +306,20 @@ pub trait TransferHandler: Send + Sync + 'static {
         &self,
         _offer: &LocalSendOffer,
     ) -> impl Future<Output = OfferDecision> + Send {
+        async {
+            OfferDecision::Reject {
+                reason: t!("transfer.user_rejected").into_owned(),
+            }
+        }
+    }
+
+    /// Decides about files a web browser wants to send ([`crate::web`]).
+    ///
+    /// Only the device that opened the session's link can offer them, but the
+    /// link travels over plain HTTP, so implementations always ask the user
+    /// (never Auto-Accept) and warn about [`BrowserOffer::risk`]. The default
+    /// declines.
+    fn decide_browser(&self, _offer: &BrowserOffer) -> impl Future<Output = OfferDecision> + Send {
         async {
             OfferDecision::Reject {
                 reason: t!("transfer.user_rejected").into_owned(),

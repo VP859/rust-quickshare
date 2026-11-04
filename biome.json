@@ -3,6 +3,7 @@
   "files": {
     "includes": [
       "src-tauri/ui/**/*.js",
+      "src/web/page/*.js",
       "scripts/**/*.mjs",
       "tests/gui/**",
       "playwright.config.js"

@@ -199,3 +199,41 @@ test('a text goes through the recipient list and appears among the transfers', a
   await expect(row).toContainText('Laptop');
   await expect(app.locator('#btn-clear')).toBeVisible();
 });
+
+test('receiving from a browser shows the link, its lifetime and a stop button', async ({ app }) => {
+  await app.locator('#btn-web-receive').click();
+  const dialog = app.locator('#modal-web');
+  await expect(dialog).toHaveClass(/active/);
+  expect(await calls(app)).toContainEqual(['start_web_share', { paths: [] }]);
+  await expect(app.locator('#web-title')).toHaveText('Receive from a browser');
+  await expect(app.locator('#web-url')).toHaveText('http://192.168.1.10:47835/0123456789abcdef0123456789abcdef/');
+  await expect(app.locator('#web-other')).toContainText('10.5.0.2');
+  await expect(app.locator('#web-expires')).toContainText('30 more minute');
+  await expect(dialog).toContainText('not encrypted');
+
+  await app.locator('#btn-web-stop').click();
+  await expect(dialog).not.toHaveClass(/active/);
+  expect(await calls(app)).toContainEqual(['stop_web_share', {}]);
+});
+
+test('chosen files can be shared with a browser instead of a device', async ({ app }) => {
+  await app.evaluate(() => window.__respond('plugin:dialog|open', ['/home/me/a.jpg', '/home/me/b.pdf']));
+  await app.evaluate(() => window.__respond('start_web_share', { url: 'http://192.168.1.10:47835/ab/', urls: ['http://192.168.1.10:47835/ab/'], qr_svg: '<svg xmlns="http://www.w3.org/2000/svg"/>', expires_in: 1800, files: 2 }));
+  await app.locator('#btn-select-file').click();
+  await expect(app.locator('#modal-recipient')).toHaveClass(/active/);
+  await app.locator('#btn-share-web').click();
+  expect(await calls(app)).toContainEqual(['start_web_share', { paths: ['/home/me/a.jpg', '/home/me/b.pdf'] }]);
+  await expect(app.locator('#web-title')).toHaveText('Share 2 file(s) with a browser');
+  await expect(app.locator('#web-other')).toBeHidden();
+});
+
+test('files from a browser are marked in the offer', async ({ app }) => {
+  await emit(app, 'incoming-offer', {
+    id: 'browser-1', peer: 'browser:192.168.1.20', alias: 'Web browser (Safari, iPhone) at 192.168.1.20',
+    file_name: 'IMG_1.HEIC', size: 1000, count: 1, names: [], risk: null, localsend: null, browser: 'Web browser (Safari, iPhone) at 192.168.1.20',
+  });
+  await expect(app.locator('#offer-browser')).toBeVisible();
+  await expect(app.locator('#offer-browser')).toContainText('web browser');
+  await expect(app.locator('#offer-localsend')).toBeHidden();
+  await expect(app.locator('#offer-meta')).toContainText('Safari, iPhone');
+});

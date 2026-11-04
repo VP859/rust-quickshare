@@ -19,6 +19,12 @@ compatibility).
 
 ### Added
 
+- **Browser sessions** (like PairDrop, without a server): `ferry web [files]` or *Receive from a
+  browser* / *Open in a browser* in the GUI shows a link and QR code. Any phone or computer on the
+  same network can download the shared files and send files to Ferry in its web browser, with no
+  app. The link has a one-time token, works only for the first device that opens it, expires after
+  30 minutes, and every batch from the browser is asked about. Plain HTTP on TCP 47835, so it is
+  meant for trusted networks (`docs/SECURITY-MODEL.md`).
 - **LocalSend compatibility mode** (off by default): iPhones, Macs and every other device with the
   LocalSend app can send files and folders to Ferry, which appears in LocalSend's device list.
   Senders are not verified (LocalSend has no pairing), so every offer is asked about, labelled

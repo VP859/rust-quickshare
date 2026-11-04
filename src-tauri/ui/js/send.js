@@ -7,6 +7,7 @@ import { openPeerModal } from './peers.js';
 import { isTrusted, platformIcon, platformLabel, state } from './state.js';
 import { invoke, pickFiles, pickFolder, scanQr, T } from './tauri.js';
 import { sendText } from './texts.js';
+import { startWebShare } from './web.js';
 
 export async function sendFiles(paths, target, label) {
   if (!paths.length) return;
@@ -62,8 +63,14 @@ export function chooseRecipient(paths, text = null, isFolder = false) {
   $('btn-share-ticket').style.display = text !== null || pendingIsFolder ? 'none' : '';
   $('btn-share-ticket').disabled = paths.length !== 1;
   $('btn-share-ticket').title = paths.length !== 1 ? t('ticket_one_file') : '';
+  // A browser session shares files (any number), not texts or folders.
+  $('btn-share-web').style.display = text !== null || pendingIsFolder ? 'none' : '';
   open('modal-recipient');
 }
+$('btn-share-web').onclick = () => {
+  close('modal-recipient');
+  startWebShare(pendingFiles);
+};
 $('btn-share-ticket').onclick = async () => {
   close('modal-recipient');
   try {

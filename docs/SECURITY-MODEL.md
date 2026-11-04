@@ -234,6 +234,28 @@ deliberately runs with **LocalSend's** security model, which is weaker than Ferr
 * Only receiving is implemented: Ferry never sends files to LocalSend devices, and the LocalSend
   download API (sharing through a browser) is not offered.
 
+### Browser sessions
+
+`ferry web` and *Receive from a browser* (`src/web/`) start an HTTP server on TCP 47835 for one
+session, so a device without Ferry can download chosen files and send files with a web browser.
+
+* **No encryption.** Browsers reject self-signed certificates without a warning page, and teaching
+  users to click through it is worse. A passive attacker on the local network can read the files and
+  the token. Use sessions only on trusted networks; Ferry says so in the CLI, the GUI and on the page.
+* **Access:** a 128-bit random token in the path (compared in constant time); every other path is
+  `404` and says nothing about Ferry. The first address that uses the token owns the session, and
+  other addresses are refused, so a token seen later (network capture, photo of the QR code) is
+  useless. An attacker who forges that address on the local network is not stopped by this.
+* **Lifetime:** 30 minutes by default, or until stopped; the server closes with the session.
+* **Receiving:** every batch is asked about in Ferry, never accepted automatically. The same
+  file-name sanitizing, free-space and size checks, risky-file warnings and Mark-of-the-Web apply as
+  for other transfers. One batch at a time, at most 1000 files, and a 15 s wait after a declined
+  batch.
+* **Sending:** only the files chosen for the session can be downloaded, always as `attachment`
+  with `application/octet-stream`, so a shared HTML file never runs in the browser.
+* **Page:** served with a strict Content-Security-Policy (`default-src 'none'`, scripts and styles
+  only from the page itself, no frames), `no-store`, `nosniff` and `no-referrer`.
+
 ## Known limitations
 
 * **Announced names are not authenticated.** A stranger can announce the name "Kate's Laptop".

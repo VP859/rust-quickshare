@@ -10,6 +10,7 @@
 | Sharing by TICKET (one-time identity) | `tests/share.rs` | `cargo test --test share` | every push |
 | Protocol versions | `tests/version_negotiation.rs` | `cargo test --test version_negotiation` | every push |
 | Protocol vectors | `tests/protocol_vectors.rs`, `scripts/verify-vectors.py` (independent, from the spec) | `cargo test --test protocol_vectors`; `python3 scripts/verify-vectors.py` | every push |
+| Browser sessions | `tests/web.rs` (token, first device owns it, expiry, downloads, uploads, names and sizes); `tests/gui/web-page.spec.js` (the page in Chromium) | `cargo test --test web`; `npm run test:ui` | every push |
 | LocalSend compatibility mode | `tests/localsend.rs` (client written from the LocalSend spec, pins the certificate like the official one) | `cargo test --test localsend` (also multicast and the Python client: `-- --include-ignored`) | every push; the Python client on Linux |
 | LocalSend, independent client | `scripts/localsend-client.py` (Python standard library only) | see [below](#localsend-without-apple-devices) | every push (through `tests/localsend.rs`) |
 | Fuzzing | `fuzz/` | `cargo +nightly fuzz run frame` ([fuzz/README.md](../fuzz/README.md)) | 1 min per target on pull requests that touch `src/`, 15 min weekly |

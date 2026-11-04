@@ -66,6 +66,8 @@ pub struct AppState {
     active_transfers: std::sync::Mutex<HashSet<String>>,
     /// The LocalSend compatibility mode while it is on; see [`sync_localsend`].
     localsend: Mutex<Option<LocalSend>>,
+    /// The browser session (`start_web_share`), at most one at a time.
+    pub web: Mutex<Option<ferry::web::WebShare>>,
 }
 
 impl AppState {
@@ -84,6 +86,7 @@ impl AppState {
             tray_hint_shown: std::sync::atomic::AtomicBool::new(false),
             active_transfers: std::sync::Mutex::new(HashSet::new()),
             localsend: Mutex::new(None),
+            web: Mutex::new(None),
         }
     }
 
@@ -185,6 +188,9 @@ pub struct IncomingOffer {
     /// Address of a LocalSend app that sent the offer (compatibility mode,
     /// the sender is not verified); `None` for Ferry devices.
     pub localsend: Option<String>,
+    /// The web browser that sent the offer (`Safari, iPhone` at an address)
+    /// through a browser session; `None` otherwise.
+    pub browser: Option<String>,
 }
 
 /// Payload of the `incoming-text` event.
@@ -315,6 +321,7 @@ impl TransferHandler for GuiHandler {
                         names: Vec::new(),
                         risk: risk::file_risk(&offer.file_name).map(risk::Risk::code),
                         localsend: None,
+                        browser: None,
                     },
                     DECISION_TIMEOUT,
                     (
@@ -355,6 +362,7 @@ impl TransferHandler for GuiHandler {
             names: batch.names.clone(),
             risk: risk::worst_risk(&batch.names).map(risk::Risk::code),
             localsend: None,
+            browser: None,
         };
         let notification = (
             &*t!("gui.notify_offer_title"),
@@ -397,12 +405,59 @@ impl TransferHandler for GuiHandler {
             },
             risk: offer.risk.map(risk::Risk::code),
             localsend: Some(offer.sender.address.to_string()),
+            browser: None,
         };
         let notification = (
             &*t!("gui.notify_offer_title"),
             &*t!(
                 "gui.notify_batch",
                 sender = offer.sender.label(),
+                count = offer.count
+            ),
+        );
+        if self
+            .ask(
+                &id,
+                "incoming-offer",
+                request,
+                DECISION_TIMEOUT,
+                notification,
+            )
+            .await
+        {
+            OfferDecision::Accept { dest_dir }
+        } else {
+            OfferDecision::Reject {
+                reason: t!("transfer.user_rejected").into_owned(),
+            }
+        }
+    }
+
+    /// Files from the browser of a session the user started: always asked.
+    async fn decide_browser(&self, offer: &ferry::web::BrowserOffer) -> OfferDecision {
+        let dest_dir = self.state().download_dir().await;
+        let id = format!("browser-{}", offer.id);
+        let request = IncomingOffer {
+            id: id.clone(),
+            peer: format!("{}{}", ferry::web::PEER_PREFIX, offer.address),
+            alias: Some(offer.label()),
+            file_name: offer.names.first().cloned().unwrap_or_default(),
+            size: offer.total_size,
+            count: offer.count,
+            names: if offer.count > 1 {
+                offer.names.clone()
+            } else {
+                Vec::new()
+            },
+            risk: offer.risk.map(risk::Risk::code),
+            localsend: None,
+            browser: Some(offer.label()),
+        };
+        let notification = (
+            &*t!("gui.notify_offer_title"),
+            &*t!(
+                "gui.notify_batch",
+                sender = offer.label(),
                 count = offer.count
             ),
         );

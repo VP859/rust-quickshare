@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Ferry</title>
+  <link rel="stylesheet" href="page.css">
+  <script type="module" src="page.js"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="brand">Ferry</div>
+      <h1 id="title"></h1>
+      <p id="subtitle" class="muted"></p>
+    </header>
+
+    <section id="download" hidden>
+      <h2 data-t="download_title"></h2>
+      <ul id="files" class="list"></ul>
+    </section>
+
+    <section id="upload" hidden>
+      <h2 id="upload-title"></h2>
+      <label class="drop" id="drop">
+        <input type="file" id="picker" multiple>
+        <span class="drop-main" data-t="choose"></span>
+        <span class="muted small" data-t="drop_hint"></span>
+      </label>
+      <ul id="uploads" class="list"></ul>
+    </section>
+
+    <p id="status" role="status" aria-live="polite"></p>
+
+    <footer class="muted small">
+      <p id="expires"></p>
+      <p data-t="security_note"></p>
+    </footer>
+  </main>
+</body>
+</html>

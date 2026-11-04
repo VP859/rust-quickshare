@@ -112,6 +112,8 @@ pub fn run() {
             peer_online,
             send_files,
             share_file,
+            start_web_share,
+            stop_web_share,
             inspect_ticket,
             receive_from_ticket,
             respond_to_offer,

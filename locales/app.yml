@@ -333,6 +333,27 @@ cli.share_single:
 cli.share_identity:
   en: "This TICKET uses a one-time identity (%{id}…), not this device's own, and stops working after one download."
   pl: "Ten TICKET używa jednorazowej tożsamości (%{id}…), a nie stałej tego urządzenia, i przestaje działać po jednym pobraniu."
+cli.web_title:
+  en: "Open this link in a browser on the same network (valid for %{minutes} min):"
+  pl: "Otwórz ten link w przeglądarce w tej samej sieci (ważny przez %{minutes} min):"
+cli.web_receive:
+  en: "Files sent from the browser are asked about and saved to %{path}."
+  pl: "O pliki wysłane z przeglądarki zostaniesz zapytany; trafią do %{path}."
+cli.web_security:
+  en: "The link is not encrypted (HTTP): use it only on a network you trust. The first device that opens it owns it."
+  pl: "Link nie jest szyfrowany (HTTP): używaj go tylko w zaufanej sieci. Należy do pierwszego urządzenia, które go otworzy."
+cli.web_stop:
+  en: "Press Ctrl+C to stop."
+  pl: "Naciśnij Ctrl+C, aby zakończyć."
+cli.web_offer:
+  en: "%{from} wants to send %{count} file(s), %{size}: %{names}. Accept?"
+  pl: "%{from} chce wysłać plików: %{count}, %{size}: %{names}. Przyjąć?"
+cli.web_expired:
+  en: "The link has expired."
+  pl: "Link wygasł."
+cli.web_stopped:
+  en: "Stopped; the link no longer works."
+  pl: "Zatrzymano; link już nie działa."
 cli.shared:
   en: "Shared '%{name}'. Receiver: ferry receive <TICKET>"
   pl: "Udostępniono '%{name}'. Odbiorca: ferry receive <TICKET>"
@@ -494,6 +515,39 @@ localsend.tag:
 daemon.no_localsend:
   en: "offers from LocalSend apps always need a question, and this daemon has no terminal"
   pl: "oferty z aplikacji LocalSend zawsze wymagają pytania, a ten demon nie ma terminala"
+web.firewalld:
+  en: "firewalld blocks the link for other devices. Allow it: sudo firewall-cmd --permanent --add-port=%{port}/tcp && sudo firewall-cmd --reload"
+  pl: "firewalld blokuje link dla innych urządzeń. Odblokuj go: sudo firewall-cmd --permanent --add-port=%{port}/tcp && sudo firewall-cmd --reload"
+web.browser_label:
+  en: "Web browser (%{browser}) at %{address}"
+  pl: "Przeglądarka (%{browser}) z adresu %{address}"
+web.not_a_file:
+  en: "%{path} is not a file; only files can be shared with a browser"
+  pl: "%{path} nie jest plikiem; z przeglądarką można udostępniać tylko pliki"
+web.taken:
+  en: "This link is already used by another device. Start a new session in Ferry."
+  pl: "Tego linku używa już inne urządzenie. Rozpocznij nową sesję w Ferry."
+web.receive_off:
+  en: "This session does not accept files."
+  pl: "Ta sesja nie przyjmuje plików."
+web.wait:
+  en: "The files were declined. Wait a moment before trying again."
+  pl: "Pliki zostały odrzucone. Odczekaj chwilę przed ponowną próbą."
+web.bad_name:
+  en: "The name %{name} cannot be used."
+  pl: "Nazwy %{name} nie można użyć."
+web.busy:
+  en: "Another transfer is in progress. Try again when it has finished."
+  pl: "Trwa inny transfer. Spróbuj ponownie, gdy się zakończy."
+web.declined:
+  en: "The files were declined."
+  pl: "Pliki zostały odrzucone."
+web.not_accepted:
+  en: "This file was not accepted."
+  pl: "Ten plik nie został przyjęty."
+web.download_closed:
+  en: "the browser stopped the download"
+  pl: "przeglądarka przerwała pobieranie"
 share.only:
   en: "This TICKET only shares one file; it does not accept files"
   pl: "Ten TICKET udostępnia tylko jeden plik; nie przyjmuje plików"

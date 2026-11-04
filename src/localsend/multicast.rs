@@ -100,7 +100,7 @@ async fn send_to_group(socket: &UdpSocket, bytes: &[u8], interfaces: &BTreeSet<I
 /// returns whether a new one was joined.
 fn join(engine: &NodeEngine, socket: &UdpSocket, joined: &mut BTreeSet<Ipv4Addr>) -> bool {
     let mut new = false;
-    let current: Vec<Ipv4Addr> = crate::discovery::local_networks(engine)
+    let current: Vec<Ipv4Addr> = crate::discovery::local_networks(Some(engine))
         .into_iter()
         .map(|(ip, _)| ip)
         .collect();

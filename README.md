@@ -66,6 +66,7 @@ ferry peer add <TICKET> --alias Laptop --auto-accept
 ferry peer verify Laptop             # safety number to compare with the other device
 ferry peer list | ferry peer edit Laptop --auto-accept false | ferry peer remove Laptop
 ferry send film.mkv                     # share one file through a one-time TICKET
+ferry web photo.jpg                     # link + QR code for a browser: download it, send files back
 ferry receive <TICKET> ~/Downloads      # download a shared file
 ferry config                            # all settings (also: get, set, unset, path)
 ferry config set hidden true            # hide this device from unpaired devices
@@ -152,6 +153,20 @@ it applies after a restart. The desktop app always shows the active mode in the 
   on random values from both devices, so an impostor cannot predict it.
 - When the device list stays empty, every interface explains why (blocked sending, no network,
   nothing received).
+
+## Browser sessions (no app on the other device)
+
+A phone or computer without Ferry can exchange files with it through any web browser on the same
+network: *Receive from a browser* (or *Open in a browser* after choosing files) in the GUI, or
+`ferry web [files]`, shows a link and a QR code. The browser can download the shared files and
+send files to Ferry; every batch from the browser is asked about before it is saved.
+
+- The link contains a one-time token, works only for the first device that opens it, and stops
+  after 30 minutes (`--minutes`) or when the session is stopped.
+- It uses plain **HTTP** on TCP port **47835**: browsers do not accept the self-signed
+  certificates a local server would need. Someone watching the local network could see the
+  files, so use it only on networks you trust. With firewalld, Ferry shows the command that opens
+  the port.
 
 ## LocalSend compatibility mode
 

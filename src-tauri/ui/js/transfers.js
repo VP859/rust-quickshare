@@ -96,6 +96,9 @@ export function showNextOffer() {
   // LocalSend compatibility mode: the sender is not verified.
   $('offer-localsend').hidden = !o.localsend;
   $('offer-localsend').textContent = o.localsend ? t('localsend_offer', { address: o.localsend }) : '';
+  // From the web browser of a session this device started.
+  $('offer-browser').hidden = !o.browser;
+  $('offer-browser').textContent = o.browser ? t('browser_offer') : '';
   // Programs, scripts and documents with macros: say so before the user decides.
   $('offer-risk').hidden = !o.risk;
   $('offer-risk').textContent = o.risk ? t(`risk_${o.risk}`) : '';

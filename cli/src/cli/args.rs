@@ -30,6 +30,18 @@ pub enum Commands {
         #[arg(short, long)]
         to: Option<String>,
     },
+    /// Share files with a web browser on the local network and receive files from it, through a
+    /// one-time link and QR code (the other device needs no app).
+    Web {
+        /// Files the browser can download (none: only receive).
+        files: Vec<PathBuf>,
+        /// Do not let the browser send files here.
+        #[arg(long)]
+        no_receive: bool,
+        /// Minutes until the link stops working.
+        #[arg(long, default_value_t = 30)]
+        minutes: u64,
+    },
     /// Send text or a link; the receiver copies it to the clipboard after accepting.
     Text {
         /// Text to send (default: read from standard input).

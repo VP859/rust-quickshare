@@ -32,6 +32,7 @@
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"/></symbol>
   <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><path d="M11 9h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol>
   <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
 </svg>
 
@@ -61,6 +62,7 @@
       <button id="btn-send-text"><svg class="i sm"><use href="#i-text"/></svg><span data-i18n="send_text"></span></button>
       <button class="mobile-only" id="btn-scan"><svg class="i sm"><use href="#i-scan"/></svg><span data-i18n="scan_qr"></span></button>
       <button id="btn-receive-ticket"><svg class="i sm"><use href="#i-ticket"/></svg><span data-i18n="receive_ticket"></span></button>
+      <button id="btn-web-receive"><svg class="i sm"><use href="#i-globe"/></svg><span data-i18n="receive_browser"></span></button>
     </div>
   </section>
 
@@ -132,6 +134,7 @@
       <p class="muted small" id="recipient-files"></p>
       <div class="recipients" id="recipients"></div>
       <button id="btn-share-ticket"><svg class="i sm"><use href="#i-link"/></svg><span data-i18n="share_by_ticket"></span></button>
+      <button id="btn-share-web"><svg class="i sm"><use href="#i-globe"/></svg><span data-i18n="share_in_browser"></span></button>
     </div>
   </div>
 </div>
@@ -146,6 +149,25 @@
       <div class="modal-actions">
         <button id="btn-ticket-close" data-i18n="close"></button>
         <button class="primary" id="btn-ticket-copy" data-i18n="copy"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-web" role="dialog" aria-modal="true" aria-labelledby="web-title">
+  <div class="modal">
+    <div class="modal-head"><h3 id="web-title"></h3><button class="ghost icon" data-close="modal-web" data-i18n-aria="close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <p class="muted small" data-i18n="web_desc"></p>
+      <div class="qr" id="web-qr"></div>
+      <div class="codebox mono" id="web-url"></div>
+      <div class="muted small" id="web-other" hidden></div>
+      <p class="muted small" id="web-expires"></p>
+      <p class="hint warn small" id="web-firewall" hidden></p>
+      <p class="compat-warning" data-i18n="web_security"></p>
+      <div class="modal-actions">
+        <button class="danger" id="btn-web-stop" data-i18n="web_stop"></button>
+        <button class="primary" id="btn-web-copy" data-i18n="copy"></button>
       </div>
     </div>
   </div>
@@ -185,6 +207,7 @@
         <div class="body"><div class="title" id="offer-file"></div><div class="sub" id="offer-meta"></div></div>
       </div>
       <p class="compat-warning" id="offer-localsend" hidden></p>
+      <p class="compat-warning" id="offer-browser" hidden></p>
       <div class="codebox textbox small" id="offer-names" hidden></div>
       <p class="risk-warning" id="offer-risk" role="alert" hidden></p>
       <p class="muted small" id="offer-queue"></p>

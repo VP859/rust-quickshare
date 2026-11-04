@@ -468,11 +468,18 @@ fn spawn_firewall_check(shared: Arc<Shared>, port: u16) {
 }
 
 /// Name of an active firewall that does not allow incoming UDP on `port`.
+fn blocking_firewall(port: u16) -> Option<String> {
+    blocking_firewall_for(port, "udp")
+}
+
+/// Name of an active firewall that does not allow incoming `protocol`
+/// (`udp`, `tcp`) on `port`. Runs external programs: call it off the async
+/// threads.
 ///
 /// Only firewalld (default on Fedora and openSUSE) can be queried without root:
 /// `firewall-cmd --query-port` also takes port ranges into account.
 #[cfg(target_os = "linux")]
-fn blocking_firewall(port: u16) -> Option<String> {
+pub(crate) fn blocking_firewall_for(port: u16, protocol: &str) -> Option<String> {
     use std::process::{Command, Stdio};
     let running = Command::new("firewall-cmd")
         .arg("--state")
@@ -483,7 +490,7 @@ fn blocking_firewall(port: u16) -> Option<String> {
         return None;
     }
     let open = Command::new("firewall-cmd")
-        .arg(format!("--query-port={port}/udp"))
+        .arg(format!("--query-port={port}/{protocol}"))
         .stderr(Stdio::null())
         .output()
         .is_ok_and(|o| o.status.success());
@@ -492,7 +499,7 @@ fn blocking_firewall(port: u16) -> Option<String> {
 
 /// Other platforms: no firewall that can be queried without administrator rights.
 #[cfg(not(target_os = "linux"))]
-fn blocking_firewall(_port: u16) -> Option<String> {
+pub(crate) fn blocking_firewall_for(_port: u16, _protocol: &str) -> Option<String> {
     None
 }
 
@@ -683,7 +690,7 @@ async fn announce(
             1
         }
         None => {
-            let networks = local_networks(engine);
+            let networks = local_networks(Some(engine));
             if let Ok(mut own) = shared.own_addrs.lock() {
                 *own = networks.iter().map(|(ip, _)| *ip).collect();
             }
@@ -779,7 +786,7 @@ async fn send(socket: &UdpSocket, bytes: &[u8], target: SocketAddr) -> std::io::
 fn join_multicast(engine: &NodeEngine, socket: &UdpSocket, joined: &mut BTreeSet<Ipv4Addr>) {
     let interfaces = [Ipv4Addr::UNSPECIFIED, Ipv4Addr::LOCALHOST]
         .into_iter()
-        .chain(local_networks(engine).into_iter().map(|(ip, _)| ip));
+        .chain(local_networks(Some(engine)).into_iter().map(|(ip, _)| ip));
     for iface in interfaces {
         if !joined.contains(&iface) {
             match socket.join_multicast_v4(MULTICAST_GROUP, iface) {
@@ -882,7 +889,10 @@ fn expire(shared: &Shared) {
 }
 
 /// IPv4 addresses of this device on local networks, with each network's broadcast address.
-pub(crate) fn local_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
+///
+/// `engine` is only used on Android, as a fallback when the system lists no
+/// interface.
+pub(crate) fn local_networks(engine: Option<&NodeEngine>) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
     let mut networks = platform_networks(engine);
     networks.sort();
     networks.dedup();
@@ -892,7 +902,7 @@ pub(crate) fn local_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4A
 /// Desktop variant using the `network-interface` crate; the broadcast
 /// address is computed from the netmask when the system does not report it.
 #[cfg(not(target_os = "android"))]
-fn platform_networks(_engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
+fn platform_networks(_engine: Option<&NodeEngine>) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
     use network_interface::{Addr, NetworkInterface, NetworkInterfaceConfig};
     let mut networks = Vec::new();
     for iface in NetworkInterface::show().unwrap_or_default() {
@@ -914,11 +924,14 @@ fn platform_networks(_engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> 
 /// Android variant; falls back to a `/24` guess from iroh's addresses when
 /// `getifaddrs` returns nothing.
 #[cfg(target_os = "android")]
-fn platform_networks(engine: &NodeEngine) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
+fn platform_networks(engine: Option<&NodeEngine>) -> Vec<(Ipv4Addr, Option<Ipv4Addr>)> {
     let networks = android::interfaces();
     if !networks.is_empty() {
         return networks;
     }
+    let Some(engine) = engine else {
+        return networks;
+    };
     engine
         .endpoint()
         .addr()

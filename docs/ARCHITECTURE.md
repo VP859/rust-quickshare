@@ -20,6 +20,8 @@ Both interfaces use only the library's public API.
    transfer/   service (accept loop, events), sender, receiver, path security,
                risk (dangerous file types, Mark-of-the-Web), share (one-time identity)
    localsend/  LocalSend compatibility mode: HTTPS server, multicast, offers (receiving)
+   web/        browser sessions: one-time link, page (web/page/), downloads and uploads
+   httpd.rs    HTTP/1.1 server and safe uploads shared by localsend/ and web/
    pairing.rs  commit-reveal pairing code
    discovery/  signed UDP announcements on the local network
    node/       iroh endpoint, persistent identity, TICKET

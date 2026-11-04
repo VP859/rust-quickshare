@@ -24,6 +24,8 @@ const RESPONSES = {
   get_network_mode: { active: 'local', saved: 'local' },
   get_privacy: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false },
   get_quit_on_close: false,
+  start_web_share: { url: 'http://192.168.1.10:47835/0123456789abcdef0123456789abcdef/', urls: ['http://192.168.1.10:47835/0123456789abcdef0123456789abcdef/', 'http://10.5.0.2:47835/0123456789abcdef0123456789abcdef/'], qr_svg: '<svg xmlns="http://www.w3.org/2000/svg"/>', expires_in: 1800, files: 0 },
+  stop_web_share: null,
   take_shared_files: [],
   take_shared_text: null,
   'plugin:autostart|is_enabled': false,

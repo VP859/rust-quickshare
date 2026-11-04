@@ -17,6 +17,7 @@ use crate::cli::nearby_cmd::{run_discover, run_pair};
 use crate::cli::peer_cmd::handle_peer_cmd;
 use crate::cli::settings_cmd::{run_config, run_language, run_name, run_network};
 use crate::cli::transfer_cmd::{run_receive, run_send, run_send_text, run_show_ticket};
+use crate::cli::web_cmd::run_web;
 use crate::daemon::run_daemon;
 use crate::doctor::run_doctor;
 use crate::tui::run_tui;
@@ -44,6 +45,11 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Send { files, to } => run_send(&files, to.as_deref()).await?,
+        Commands::Web {
+            files,
+            no_receive,
+            minutes,
+        } => run_web(files, no_receive, minutes).await?,
         Commands::Text { text, to } => run_send_text(text, &to).await?,
         Commands::Receive { ticket, output_dir } => {
             run_receive(&ticket, output_dir.as_deref()).await?

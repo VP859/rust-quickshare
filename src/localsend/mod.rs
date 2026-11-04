@@ -196,9 +196,9 @@ impl LocalSend {
             port: addr.port(),
         };
         let server = Arc::new(server::Server::new(handler.clone(), info.clone()));
-        let mut tasks = vec![tokio::spawn(server::run(
+        let mut tasks = vec![tokio::spawn(crate::httpd::serve(
             listener,
-            identity.acceptor()?,
+            Some(identity.acceptor()?),
             server,
             stop.clone(),
         ))];
