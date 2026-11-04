@@ -866,7 +866,11 @@ async fn handle_packet(
         changed
     };
 
-    if changed
+    // A visible device answers new devices only (it announces itself anyway).
+    // A hidden one never announces, so it answers every announcement of a
+    // device it trusts: one lost answer must not hide it until the next start.
+    let hidden = shared.visibility.read().is_ok_and(|v| v.hidden);
+    if (changed || hidden)
         && !reply
         && shared.visibility.read().is_ok_and(|v| v.answers(&id))
         && let Some(bytes) = encode_beacon(engine, shared, true)
