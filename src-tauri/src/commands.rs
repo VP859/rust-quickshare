@@ -490,7 +490,8 @@ pub async fn share_file(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> CmdResult<ShareInfo> {
-    let mode = state.config.lock().await.network_mode;
+    let mode = ferry::node::Network::from_config(&*state.config.lock().await)
+        .map_err(|e| format!("{e:#}"))?;
     let local = crate::platform::local_path(&app, &path).await?;
     let file = prepare_file(&local).await.map_err(err)?;
     let events = app.clone();
@@ -797,6 +798,8 @@ pub struct NetworkModeInfo {
     pub active: &'static str,
     /// Mode saved in the configuration; applies after a restart.
     pub saved: &'static str,
+    /// Saved relays of the `relay` mode.
+    pub relays: Vec<String>,
 }
 
 /// The network mode of the running node and the one saved for the next start.
@@ -807,21 +810,44 @@ pub struct NetworkModeInfo {
 #[tauri::command]
 pub async fn get_network_mode(state: State<'_, AppState>) -> CmdResult<NetworkModeInfo> {
     let active = state.engine().await?.mode().code();
-    let saved = state.config.lock().await.network_mode.code();
-    Ok(NetworkModeInfo { active, saved })
+    let config = state.config.lock().await;
+    Ok(NetworkModeInfo {
+        active,
+        saved: config.network_mode.code(),
+        relays: config.relay_urls.clone(),
+    })
 }
 
-/// Saves the network mode (`local` or `internet`); it applies after a restart.
+/// Saves the network mode (`local`, `internet` or `relay`) and, when given,
+/// the relays of the `relay` mode; it applies after a restart.
 ///
 /// # Errors
 ///
-/// When the mode is unknown or the configuration cannot be saved.
+/// When the mode is unknown, a relay URL is invalid, the `relay` mode has no
+/// relay, or the configuration cannot be saved. Nothing is saved then.
 #[tauri::command]
-pub async fn set_network_mode(mode: String, state: State<'_, AppState>) -> CmdResult<()> {
+pub async fn set_network_mode(
+    mode: String,
+    relays: Option<Vec<String>>,
+    state: State<'_, AppState>,
+) -> CmdResult<()> {
     let mode: ferry::node::NetworkMode = mode.parse().map_err(|e| format!("{e:#}"))?;
     let mut config = state.config.lock().await;
-    config.network_mode = mode;
-    config.save().map_err(err)
+    let mut next = config.clone();
+    next.network_mode = mode;
+    if let Some(relays) = relays {
+        next.relay_urls = relays
+            .iter()
+            .map(|u| u.trim())
+            .filter(|u| !u.is_empty())
+            .map(|u| ferry::node::parse_relay_url(u).map(|r| r.to_string()))
+            .collect::<Result<_, _>>()
+            .map_err(|e| format!("{e:#}"))?;
+    }
+    ferry::node::Network::from_config(&next).map_err(|e| format!("{e:#}"))?;
+    next.save().map_err(err)?;
+    *config = next;
+    Ok(())
 }
 
 /// What limits Ferry in the background on Android; `null` on desktop.

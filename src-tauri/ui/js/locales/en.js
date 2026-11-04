@@ -3,7 +3,7 @@
 
 export default {
   node_starting: 'Starting…', node_active: 'Online · {id}', node_unavailable: 'Offline',
-  mode_local: 'Local only', mode_internet: 'Local + internet', mode_hidden: 'hidden', mode_pending: 'after restart',
+  mode_local: 'Local only', mode_internet: 'Local + internet', mode_relay: 'Local + own relay', mode_hidden: 'hidden', mode_pending: 'after restart',
   mode_hint: 'Network mode and visibility – click to change',
   my_ticket: 'My TICKET', settings: 'Settings',
   drop_here: 'Drop files to send', send_files: 'Send files',
@@ -59,6 +59,12 @@ export default {
   data_flow_telemetry: 'No telemetry, analytics, accounts or crash reports – Ferry never contacts its authors.',
   network_mode: 'Network', network_local: 'Local network only', network_internet: 'Local network and internet',
   network_local_desc: 'Direct connections only – nothing is sent to external servers. Devices must be on the same network.',
+  network_relay: 'Local network and own relay',
+  network_relay_desc: 'Direct when possible, otherwise only through the relays you set – no n0 server is contacted. Paired devices are reached at the address saved when pairing, so pair the devices after choosing this mode. The relay sees IP addresses and Node IDs, never content.',
+  relay_urls: 'Relay addresses (one per line)',
+  relay_urls_ph: 'https://relay.example.org',
+  relay_save: 'Save relay',
+  relay_missing: 'Enter the address of a relay.',
   network_internet_desc: 'Direct when possible, otherwise through the free public iroh relays, so paired devices can connect from different networks. Data stays end-to-end encrypted; the relays see IP addresses and Node IDs.',
   network_restart: 'Applies after restarting Ferry.', restart_now: 'Restart now',
   restart_title: 'Restart required', ok: 'OK', restart_later: 'Later',

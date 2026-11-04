@@ -42,10 +42,21 @@ pub async fn run_doctor() -> Result<DoctorReport> {
         }
     };
 
-    let mode = ferry::config::Config::load()
-        .map(|c| c.network_mode)
-        .unwrap_or_default();
-    println!("[i] {}", t!("doctor.network_mode", mode = mode));
+    let config = ferry::config::Config::load().unwrap_or_default();
+    println!(
+        "[i] {}",
+        t!("doctor.network_mode", mode = config.network_mode)
+    );
+    if config.network_mode == ferry::node::NetworkMode::Relay {
+        match ferry::node::Network::from_config(&config) {
+            Ok(network) => {
+                for relay in &network.relays {
+                    println!("[i] {}", t!("doctor.relay", url = relay));
+                }
+            }
+            Err(e) => println!("[✗] {e:#}"),
+        }
+    }
 
     let vpn_detected = check_vpn_interfaces();
     if vpn_detected {

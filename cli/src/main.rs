@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
         } => run_pair(&target, auto_accept).await?,
         Commands::Name { name } => run_name(name.as_deref())?,
         Commands::Language { code } => run_language(code.as_deref())?,
-        Commands::Network { mode } => run_network(mode.as_deref())?,
+        Commands::Network { mode, relays } => run_network(mode.as_deref(), &relays)?,
         Commands::Peer { command } => handle_peer_cmd(command).await?,
         Commands::Config { command } => run_config(command)?,
         Commands::Identity { command } => run_identity(command)?,

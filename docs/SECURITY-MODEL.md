@@ -36,8 +36,15 @@ fits your needs without reading the code. Report problems privately as described
 | **Your internet provider / mobile carrier** | nothing (traffic stays in the local network) | That you talk to the n0 relay and DNS servers, and to other IP addresses for direct connections. |
 | **Ferry's authors** | nothing | nothing |
 
+In the **own relay mode** (`relay`) the n0 rows are replaced by your relay: it sees what the n0
+relay would (IP addresses, Node IDs, amounts and timing, never content), and nothing is published to
+or looked up from n0's DNS. Paired devices are reached at the address saved when pairing (which
+contains their relay URL), so a device whose relay changed must be paired again. Plain `http://`
+relay URLs are refused except for IP addresses on this computer or the local network, because they
+would show the Node IDs to everyone on the way.
+
 A **TICKET** (text or QR code) contains your Node ID and your current IP addresses and ports
-(local and, when known, public), and in internet mode your relay URL. Treat it like a phone number:
+(local and, when known, public), and in internet or relay mode your relay URL. Treat it like a phone number:
 whoever has it can reach your device and ask for something. A share TICKET additionally lets its
 holder download the one shared file while sharing is active.
 

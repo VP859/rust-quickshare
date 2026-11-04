@@ -237,3 +237,27 @@ test('files from a browser are marked in the offer', async ({ app }) => {
   await expect(app.locator('#offer-localsend')).toBeHidden();
   await expect(app.locator('#offer-meta')).toContainText('Safari, iPhone');
 });
+
+test('the own-relay mode is saved together with the relay address', async ({ app }) => {
+  await app.locator('#btn-settings').click();
+  await app.locator('#network-mode').selectOption('relay');
+  // Nothing is saved before there is a relay.
+  await expect(app.locator('#relay-field')).toBeVisible();
+  expect((await calls(app)).some(([cmd]) => cmd === 'set_network_mode')).toBe(false);
+  await expect(app.locator('#network-desc')).toContainText('no n0 server');
+
+  await app.locator('#btn-relay-save').click();
+  await expect(app.locator('#toast')).toContainText('Enter the address of a relay');
+
+  await app.locator('#relay-urls').fill('https://relay.example.org\nhttp://192.168.1.5:3340');
+  await app.locator('#btn-relay-save').click();
+  expect(await calls(app)).toContainEqual(['set_network_mode', { mode: 'relay', relays: ['https://relay.example.org', 'http://192.168.1.5:3340'] }]);
+  await expect(app.locator('#modal-restart')).toHaveClass(/active/);
+  await app.locator('#btn-restart-later').click();
+  await expect(app.locator('#mode-pill')).toContainText('Local + own relay');
+
+  // Back to local: the relay field hides and the relays stay saved.
+  await app.locator('#network-mode').selectOption('local');
+  await expect(app.locator('#relay-field')).toBeHidden();
+  expect(await calls(app)).toContainEqual(['set_network_mode', { mode: 'local', relays: null }]);
+});

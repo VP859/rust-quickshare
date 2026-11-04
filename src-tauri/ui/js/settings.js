@@ -13,32 +13,50 @@ import { invoke, isMobile, T } from './tauri.js';
 function renderModePill() {
   const { network, privacy } = state;
   const pill = $('mode-pill');
-  const parts = [t(network.saved === 'internet' ? 'mode_internet' : 'mode_local')];
+  const parts = [t(`mode_${network.saved}`)];
   if (network.saved !== network.active) parts.push(t('mode_pending'));
   if (privacy.hidden) parts.push(t('mode_hidden'));
   pill.textContent = parts.join(' · ');
   pill.title = t('mode_hint');
-  pill.classList.toggle('internet', network.saved === 'internet');
+  pill.classList.toggle('internet', network.saved !== 'local');
   pill.hidden = false;
 }
-export function renderNetwork() {
+/** Shows the mode (`mode`, or the saved one) and, for `relay`, the relay field. */
+export function renderNetwork(mode = state.network.saved) {
   const { network } = state;
   renderModePill();
-  $('network-mode').value = network.saved;
-  $('network-desc').textContent = t(network.saved === 'internet' ? 'network_internet_desc' : 'network_local_desc');
+  $('network-mode').value = mode;
+  $('network-desc').textContent = t(`network_${mode}_desc`);
   $('network-pending').hidden = network.saved === network.active;
+  $('relay-field').hidden = mode !== 'relay';
+  if (document.activeElement !== $('relay-urls')) $('relay-urls').value = (network.relays ?? []).join('\n');
 }
 export async function loadNetwork() {
   try { state.network = await invoke('get_network_mode'); } catch (e) { console.warn('Network mode:', e); }
   renderNetwork();
 }
-$('network-mode').onchange = async (e) => {
+async function saveNetwork(mode, relays = null) {
   try {
-    await invoke('set_network_mode', { mode: e.target.value });
-    state.network.saved = e.target.value;
-  } catch (err) { fail(err); }
+    await invoke('set_network_mode', { mode, relays });
+    state.network.saved = mode;
+    if (relays) state.network.relays = relays;
+  } catch (err) { fail(err); renderNetwork(); return; }
   renderNetwork();
   if (state.network.saved !== state.network.active) open('modal-restart');
+}
+$('network-mode').onchange = (e) => {
+  // The relay mode needs a relay first: it is saved with the address.
+  if (e.target.value === 'relay' && !(state.network.relays ?? []).length) {
+    renderNetwork('relay');
+    $('relay-urls').focus();
+    return;
+  }
+  saveNetwork(e.target.value);
+};
+$('btn-relay-save').onclick = () => {
+  const relays = $('relay-urls').value.split(/[\s,]+/).filter(Boolean);
+  if (!relays.length) { toast(t('relay_missing'), true); return; }
+  saveNetwork('relay', relays);
 };
 $('btn-restart-later').onclick = () => close('modal-restart');
 $('btn-restart-ok').onclick = () => invoke('restart_app').catch(fail);

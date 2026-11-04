@@ -11,7 +11,7 @@ resolver = "2"
 # Shared by all crates; the version is the single source for the CLI, the GUI
 # and (through scripts/set-version.sh) tauri.conf.json.
 [workspace.package]
-version = "0.2.5"
+version = "0.2.6"
 edition = "2024"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"
@@ -140,6 +140,8 @@ hyper = { version = "1.12.0", features = ["client", "http1"] }
 # path selector; dev-dependency features never reach release builds.
 iroh = { workspace = true, features = ["unstable-custom-transports"] }
 criterion = { version = "0.8.2", features = ["async_tokio"] }
+# A real relay server in tests/relay.rs (the version iroh uses).
+iroh-relay = { version = "1.4.1", features = ["server"] }
 # QUIC logs in tests/network_conditions.rs when RUST_LOG is set.
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 

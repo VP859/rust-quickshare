@@ -27,7 +27,7 @@ use super::sender::PreparedFile;
 use super::service::{
     self, Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
-use crate::node::{NetworkMode, NodeEngine, NodeTicket};
+use crate::node::{Network, NodeEngine, NodeTicket};
 use crate::protocol::messages::{ShareToken, TransferOffer};
 
 /// How long and how often a [`Share`] can be downloaded.
@@ -67,11 +67,11 @@ impl Share {
     /// Fails when the node cannot start or its address cannot be determined.
     pub async fn start(
         file: PreparedFile,
-        mode: NetworkMode,
+        network: impl Into<Network>,
         options: ShareOptions,
         sink: ShareSink,
     ) -> Result<Self> {
-        let engine = NodeEngine::one_time(mode).await?;
+        let engine = NodeEngine::one_time(network).await?;
         let token = service::new_share_token();
         let ticket = NodeTicket::with_share(engine.node_addr().await?, token);
         let stop = CancellationToken::new();

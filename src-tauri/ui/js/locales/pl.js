@@ -6,7 +6,7 @@ const filesPl = (n) => n === 1 ? 'plik' : [2, 3, 4].includes(n % 10) && ![12, 13
 
 export default {
   node_starting: 'Uruchamianie…', node_active: 'Online · {id}', node_unavailable: 'Offline',
-  mode_local: 'Tylko lokalnie', mode_internet: 'Lokalnie + internet', mode_hidden: 'ukryte', mode_pending: 'po restarcie',
+  mode_local: 'Tylko lokalnie', mode_relay: 'Lokalnie + własny przekaźnik', mode_internet: 'Lokalnie + internet', mode_hidden: 'ukryte', mode_pending: 'po restarcie',
   mode_hint: 'Tryb sieci i widoczność – kliknij, aby zmienić',
   my_ticket: 'Mój TICKET', settings: 'Ustawienia',
   drop_here: 'Upuść pliki, aby wysłać', send_files: 'Wyślij pliki',
@@ -62,6 +62,12 @@ export default {
   data_flow_telemetry: 'Brak telemetrii, analityki, kont i raportów błędów – Ferry nigdy nie łączy się z autorami.',
   network_mode: 'Sieć', network_local: 'Tylko sieć lokalna', network_internet: 'Sieć lokalna i internet',
   network_local_desc: 'Tylko połączenia bezpośrednie – nic nie trafia na zewnętrzne serwery. Urządzenia muszą być w tej samej sieci.',
+  network_relay: 'Sieć lokalna i własny przekaźnik',
+  network_relay_desc: 'Bezpośrednio, gdy to możliwe, w przeciwnym razie tylko przez podane przekaźniki – żaden serwer n0 nie jest używany. Sparowane urządzenia są odnajdywane po adresie zapisanym przy parowaniu, więc sparuj je po wybraniu tego trybu. Przekaźnik widzi adresy IP i Node ID, nigdy treści.',
+  relay_urls: 'Adresy przekaźników (jeden w wierszu)',
+  relay_urls_ph: 'https://relay.example.org',
+  relay_save: 'Zapisz przekaźnik',
+  relay_missing: 'Podaj adres przekaźnika.',
   network_internet_desc: 'Bezpośrednio, gdy to możliwe, w przeciwnym razie przez darmowe publiczne przekaźniki iroh, więc sparowane urządzenia połączą się z różnych sieci. Dane pozostają szyfrowane end-to-end; przekaźniki widzą adresy IP i Node ID.',
   network_restart: 'Zacznie działać po ponownym uruchomieniu Ferry.', restart_now: 'Uruchom ponownie',
   restart_title: 'Wymagany restart', ok: 'OK', restart_later: 'Później',

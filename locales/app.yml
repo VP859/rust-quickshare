@@ -1101,8 +1101,17 @@ tui.batch_more:
 
 # ---------------------------------------------------------------- network mode
 engine.bad_mode:
-  en: "Unknown network mode '%{mode}' (use: local, internet)"
-  pl: "Nieznany tryb sieci '%{mode}' (dostępne: local, internet)"
+  en: "Unknown network mode '%{mode}' (use: local, internet, relay)"
+  pl: "Nieznany tryb sieci '%{mode}' (dostępne: local, internet, relay)"
+engine.no_relay:
+  en: "The relay mode needs the address of a relay: ferry config set relay-urls https://relay.example.org"
+  pl: "Tryb własnego przekaźnika wymaga adresu przekaźnika: ferry config set relay-urls https://relay.example.org"
+engine.bad_relay:
+  en: "'%{url}' is not a relay address (expected https://host[:port])"
+  pl: "'%{url}' nie jest adresem przekaźnika (oczekiwano https://host[:port])"
+engine.relay_http:
+  en: "'%{url}' uses plain HTTP: allowed only for IP addresses on this computer or the local network (use https://)"
+  pl: "'%{url}' używa zwykłego HTTP: dozwolone tylko dla adresów IP tego komputera lub sieci lokalnej (użyj https://)"
 settings.network:
   en: "Network mode: %{mode} – %{description}"
   pl: "Tryb sieci: %{mode} – %{description}"
@@ -1112,9 +1121,15 @@ settings.network_local:
 settings.network_internet:
   en: "direct connections when possible, otherwise through the free public iroh relays (encrypted end-to-end; the relays see IP addresses and Node IDs)"
   pl: "połączenia bezpośrednie, gdy to możliwe, w przeciwnym razie przez darmowe publiczne przekaźniki iroh (szyfrowanie end-to-end; przekaźniki widzą adresy IP i Node ID)"
+settings.network_relay:
+  en: "direct connections when possible, otherwise only through your relays (%{relays}); no n0 servers, devices are found through the local network and the address saved at pairing"
+  pl: "połączenia bezpośrednie, gdy to możliwe, w przeciwnym razie tylko przez Twoje przekaźniki (%{relays}); bez serwerów n0, urządzenia są odnajdywane w sieci lokalnej i po adresie zapisanym przy parowaniu"
 settings.network_restart:
   en: "The new mode applies after restarting Ferry (GUI, TUI or daemon)."
   pl: "Nowy tryb zacznie działać po ponownym uruchomieniu Ferry (GUI, TUI lub demona)."
+doctor.relay:
+  en: "Relay: %{url}"
+  pl: "Przekaźnik: %{url}"
 doctor.network_mode:
   en: "Network mode: %{mode}"
   pl: "Tryb sieci: %{mode}"

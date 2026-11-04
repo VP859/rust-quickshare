@@ -341,8 +341,14 @@
           <select id="network-mode">
             <option value="local" data-i18n="network_local"></option>
             <option value="internet" data-i18n="network_internet"></option>
+            <option value="relay" data-i18n="network_relay"></option>
           </select>
           <div class="muted small" id="network-desc"></div>
+          <div class="relay-field" id="relay-field" hidden>
+            <label for="relay-urls" class="small" data-i18n="relay_urls"></label>
+            <textarea id="relay-urls" rows="2" spellcheck="false" autocomplete="off" data-i18n-ph="relay_urls_ph"></textarea>
+            <button id="btn-relay-save" data-i18n="relay_save"></button>
+          </div>
           <div class="toggle" id="network-pending" hidden>
             <div class="small" style="color: var(--warn)" data-i18n="network_restart"></div>
             <button class="desktop-only" id="btn-restart" data-i18n="restart_now"></button>

@@ -128,15 +128,43 @@ running window instead of opening a second one.
 
 ## Network modes
 
-| | `local` (default) | `internet` |
-|---|---|---|
-| Servers contacted | none | public iroh relays and DNS run by n0, free of charge |
-| Devices reachable | on the same network (or VPN) | also on other networks (mobile data, another home) |
-| Encryption | end-to-end | end-to-end; relays forward only encrypted packets |
-| Visible to servers | nothing | IP addresses, Node IDs and timing – never content |
+| | `local` (default) | `internet` | `relay` (own relay) |
+|---|---|---|---|
+| Servers contacted | none | public iroh relays and DNS run by n0, free of charge | only the relays you set |
+| Devices reachable | on the same network (or VPN) | also on other networks (mobile data, another home) | also on other networks, through your relay |
+| Finding paired devices | local network | local network, then n0 DNS by Node ID | local network, then the address saved at pairing |
+| Encryption | end-to-end | end-to-end; relays forward only encrypted packets | end-to-end; your relay forwards only encrypted packets |
+| Visible to servers | nothing | IP addresses, Node IDs and timing – never content | the same, but only to your relay |
 
-Change it with `ferry config set network-mode internet`, `M` in the TUI or *Settings → Network*;
-it applies after a restart. The desktop app always shows the active mode in the top bar.
+Every mode tries a direct connection first; a relay is only the fallback when the devices cannot
+reach each other directly. Change the mode with `ferry network local|internet`,
+`ferry network relay https://relay.example.org`, `M` in the TUI or *Settings → Network*; it applies
+after a restart. The desktop app always shows the active mode in the top bar.
+
+### Own relay
+
+The `relay` mode is the internet mode without n0. It needs an
+[iroh relay](https://github.com/n0-computer/iroh/tree/main/iroh-relay) that both devices can reach,
+for example on a small VPS or a home server with a forwarded port. Use the version of iroh-relay
+that matches Ferry's iroh (1.4):
+
+```bash
+cargo install iroh-relay --version 1.4.1 --features server
+iroh-relay --dev          
+```
+
+For use over the internet, run it with a configuration file that enables TLS (Let's Encrypt or your
+own certificate) and give Ferry the `https://` address. Plain `http://` is accepted only for IP
+addresses on this computer or the local network.
+
+- Pair devices **after** both use the relay mode: without n0's lookup, a device is found at the
+  address saved when pairing, which then contains the relay URL. Devices paired earlier are still
+  found on the local network; pair them again to reach them through the relay.
+- Both devices can also use different relays: Ferry reaches the other device through the relay
+  named in its address.
+- Anyone who knows the relay address can use the relay, unless you restrict it in its
+  configuration. Your relay sees what n0's relays would: IP addresses, Node IDs, amounts and
+  timing, never content.
 
 ## Local network and pairing
 

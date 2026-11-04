@@ -21,7 +21,7 @@ const RESPONSES = {
   safety_number: { number: '54414 79221 16121 20603 92559 97490 46181 21597 26358 47392 45394 97560', verified: false },
   set_verified: null,
   app_info: { name: 'Ferry', version: '0.0.0-test' },
-  get_network_mode: { active: 'local', saved: 'local' },
+  get_network_mode: { active: 'local', saved: 'local', relays: [] },
   get_privacy: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false },
   get_quit_on_close: false,
   start_web_share: { url: 'http://192.168.1.10:47835/0123456789abcdef0123456789abcdef/', urls: ['http://192.168.1.10:47835/0123456789abcdef0123456789abcdef/', 'http://10.5.0.2:47835/0123456789abcdef0123456789abcdef/'], qr_svg: '<svg xmlns="http://www.w3.org/2000/svg"/>', expires_in: 1800, files: 0 },
@@ -41,6 +41,7 @@ function installMock(responses) {
         window.__calls.push([cmd, args ?? {}]);
         if (cmd === 'set_language') return args.code;
         if (cmd === 'set_network_mode') responses.get_network_mode.saved = args.mode;
+        if (cmd === 'set_network_mode' && args.relays) responses.get_network_mode.relays = args.relays;
         return cmd in responses ? structuredClone(responses[cmd]) : null;
       },
     },

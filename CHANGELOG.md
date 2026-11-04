@@ -19,6 +19,11 @@ compatibility).
 
 ### Added
 
+- **Own relay mode** (`relay`): the internet mode without n0. Connections go directly when
+  possible, otherwise only through the relays you set (`ferry network relay https://…`,
+  `ferry config set relay-urls`, *Settings → Network*), and nothing is published to or looked up
+  from n0's DNS. Paired devices are reached at the address saved at pairing. Tested against a real
+  iroh relay server (`tests/relay.rs`). The README explains how to run one.
 - **Browser sessions** (like PairDrop, without a server): `ferry web [files]` or *Receive from a
   browser* / *Open in a browser* in the GUI shows a link and QR code. Any phone or computer on the
   same network can download the shared files and send files to Ferry in its web browser, with no

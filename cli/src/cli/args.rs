@@ -96,8 +96,11 @@ pub enum Commands {
     /// or `internet` (also through the free public iroh relays, for devices in
     /// different networks).
     Network {
-        /// Mode to save.
+        /// Mode to save: `local`, `internet` or `relay`.
         mode: Option<String>,
+        /// With `relay`: the relay URLs (`https://relay.example.org`); without
+        /// them the saved ones are kept.
+        relays: Vec<String>,
     },
     /// Manage trusted devices.
     Peer {
@@ -140,6 +143,8 @@ pub enum SettingKey {
     AutoAcceptExecutables,
     /// Desktop app: quit when the window is closed instead of staying in the tray (`true`/`false`).
     QuitOnClose,
+    /// Relays of the `relay` network mode, separated by commas (`https://relay.example.org`).
+    RelayUrls,
     /// Receive files from LocalSend apps – iPhone, Mac – without pairing (`true`/`false`).
     Localsend,
 }

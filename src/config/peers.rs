@@ -47,6 +47,10 @@ pub struct Config {
     /// Applies when the node starts.
     #[serde(default, skip_serializing_if = "NetworkMode::is_local")]
     pub network_mode: NetworkMode,
+    /// Relays of [`NetworkMode::Relay`] (`https://relay.example.org`); kept
+    /// when another mode is chosen, so switching back needs no typing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relay_urls: Vec<String>,
     /// Hide this device on the local network from everyone except paired devices.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hidden: bool,

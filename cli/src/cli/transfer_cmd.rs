@@ -115,7 +115,7 @@ async fn share_by_ticket(files: &[PathBuf]) -> Result<()> {
     };
     println!("{}", t!("cli.hashing", name = path.display()));
     let file = prepare_file(path).await?;
-    let mode = Config::load().unwrap_or_default().network_mode;
+    let mode = ferry::node::Network::from_config(&Config::load().unwrap_or_default())?;
 
     let (tx, mut rx) = mpsc::unbounded_channel();
     let sink: ShareSink = Arc::new(move |event| {

@@ -9,14 +9,18 @@
 //!   address lookup of n0 (the iroh developers) are used, so paired devices can
 //!   reach each other from different networks. Relays forward only encrypted
 //!   packets, but they see IP addresses and Node IDs.
+//! - [`NetworkMode::Relay`]: like the internet mode, but only through relays
+//!   the user runs or trusts ([`Network::relays`]) and without n0's address
+//!   lookup: devices find each other through local discovery and the address
+//!   (with the relay URL) saved at pairing or carried by a TICKET.
 
 use anyhow::{Context, Result};
 use iroh::endpoint::{ConnectOptions, Connection, QuicTransportConfig, presets};
-use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, SecretKey, Watcher};
+use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, SecretKey, Watcher};
 use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -46,7 +50,8 @@ pub const QUIC_PORT: u16 = 47824;
 /// How long to wait for the first local address before building a TICKET.
 const ADDR_TIMEOUT: Duration = Duration::from_secs(2);
 /// How long to wait for a relay connection before building a TICKET in
-/// [`NetworkMode::Internet`], so the TICKET includes the relay URL.
+/// [`NetworkMode::Internet`] or [`NetworkMode::Relay`], so the TICKET includes
+/// the relay URL.
 const ONLINE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Whether connections may use servers on the internet.
@@ -64,18 +69,33 @@ pub enum NetworkMode {
     /// of n0; addresses are also published and looked up through n0's DNS
     /// server. Works between different networks without hosting anything.
     Internet,
+    /// Direct connections when possible, otherwise through the relays in
+    /// [`Network::relays`] (e.g. one the user runs); no n0 server is
+    /// contacted. Paired devices are reached at the address saved at
+    /// pairing, which contains their relay URL.
+    Relay,
 }
 
 impl NetworkMode {
-    /// Both modes, in display order.
-    pub const ALL: [NetworkMode; 2] = [NetworkMode::Local, NetworkMode::Internet];
+    /// All modes, in display order.
+    pub const ALL: [NetworkMode; 3] = [
+        NetworkMode::Local,
+        NetworkMode::Internet,
+        NetworkMode::Relay,
+    ];
 
     /// Name used in the configuration file and on the command line.
     pub fn code(self) -> &'static str {
         match self {
             NetworkMode::Local => "local",
             NetworkMode::Internet => "internet",
+            NetworkMode::Relay => "relay",
         }
+    }
+
+    /// Whether relay servers are used (and a TICKET waits for one).
+    pub fn uses_relays(self) -> bool {
+        self != NetworkMode::Local
     }
 
     /// Whether this is [`NetworkMode::Local`] (used to omit the default from `config.toml`).
@@ -102,6 +122,80 @@ impl FromStr for NetworkMode {
     }
 }
 
+/// The network mode with the relays of [`NetworkMode::Relay`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Network {
+    /// Whether and which servers may be used.
+    pub mode: NetworkMode,
+    /// Relays of [`NetworkMode::Relay`]; ignored in the other modes.
+    pub relays: Vec<RelayUrl>,
+}
+
+impl From<NetworkMode> for Network {
+    fn from(mode: NetworkMode) -> Self {
+        Self {
+            mode,
+            relays: Vec::new(),
+        }
+    }
+}
+
+impl Network {
+    /// The network saved in `config` (`network_mode`, `relay_urls`).
+    ///
+    /// # Errors
+    ///
+    /// Fails in [`NetworkMode::Relay`] when no relay is set or a URL is invalid.
+    pub fn from_config(config: &crate::config::Config) -> Result<Self> {
+        let relays = if config.network_mode == NetworkMode::Relay {
+            let relays = config
+                .relay_urls
+                .iter()
+                .map(|u| parse_relay_url(u))
+                .collect::<Result<Vec<_>>>()?;
+            if relays.is_empty() {
+                anyhow::bail!(t!("engine.no_relay"));
+            }
+            relays
+        } else {
+            Vec::new()
+        };
+        Ok(Self {
+            mode: config.network_mode,
+            relays,
+        })
+    }
+}
+
+/// Checks the URL of a relay: `https://`, or `http://` only to an IP address
+/// on this computer or the local network (a relay in development mode), since
+/// plain HTTP would show the Node IDs to everyone on the way.
+///
+/// # Errors
+///
+/// Fails for anything else, with the reason.
+pub fn parse_relay_url(text: &str) -> Result<RelayUrl> {
+    let text = text.trim();
+    let url: RelayUrl = text
+        .parse()
+        .map_err(|_| anyhow::anyhow!(t!("engine.bad_relay", url = text)))?;
+    let local_ip = |host: &str| {
+        host.trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<IpAddr>()
+            .is_ok_and(|ip| match ip {
+                IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
+                IpAddr::V6(v6) => v6.is_loopback() || v6.is_unique_local(),
+            })
+    };
+    match (url.scheme(), url.host_str()) {
+        ("https", Some(_)) => Ok(url),
+        ("http", Some(host)) if local_ip(host) => Ok(url),
+        ("http", Some(_)) => anyhow::bail!(t!("engine.relay_http", url = text)),
+        _ => anyhow::bail!(t!("engine.bad_relay", url = text)),
+    }
+}
+
 /// Thin wrapper over [`iroh::Endpoint`] (QUIC with TLS 1.3).
 ///
 /// Cheap to clone: all clones share the same endpoint.
@@ -109,8 +203,8 @@ impl FromStr for NetworkMode {
 pub struct NodeEngine {
     /// The iroh endpoint shared by all clones.
     endpoint: Endpoint,
-    /// Whether relays and DNS address lookup are used.
-    mode: NetworkMode,
+    /// Whether relays and DNS address lookup are used, and which relays.
+    network: Network,
 }
 
 /// Turns a failed connection attempt into the error shown to the user: a peer
@@ -145,7 +239,7 @@ pub fn transport_config(mode: NetworkMode) -> QuicTransportConfig {
     match mode {
         NetworkMode::Local => builder
             .congestion_controller_factory(Arc::new(noq_proto::congestion::CubicConfig::default())),
-        NetworkMode::Internet => builder
+        NetworkMode::Internet | NetworkMode::Relay => builder
             .congestion_controller_factory(Arc::new(noq_proto::congestion::Bbr3Config::default())),
     }
     .build()
@@ -156,7 +250,10 @@ impl NodeEngine {
     /// network paths). It must accept [`ALPN`]; `mode` is only reported by
     /// [`NodeEngine::mode`].
     pub fn from_endpoint(endpoint: Endpoint, mode: NetworkMode) -> Self {
-        Self { endpoint, mode }
+        Self {
+            endpoint,
+            network: mode.into(),
+        }
     }
 
     /// Binds a new endpoint in [`NetworkMode::Local`]: no relay servers and no
@@ -176,7 +273,19 @@ impl NodeEngine {
     ///
     /// Fails when the endpoint cannot bind its UDP sockets.
     pub async fn with_mode(secret_key: SecretKey, mode: NetworkMode) -> Result<Self> {
-        Self::bind_in(secret_key, mode, QUIC_PORT..=QUIC_PORT).await
+        Self::with_network(secret_key, mode.into()).await
+    }
+
+    /// Binds a new endpoint with the given identity and [`Network`] (with the
+    /// relays of [`NetworkMode::Relay`]), on IPv4 port [`QUIC_PORT`] when it
+    /// is free.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the endpoint cannot bind its UDP sockets, or in
+    /// [`NetworkMode::Relay`] without relays.
+    pub async fn with_network(secret_key: SecretKey, network: Network) -> Result<Self> {
+        Self::bind_in(secret_key, network, QUIC_PORT..=QUIC_PORT).await
     }
 
     /// A node with a **new, random identity** for sharing one file by TICKET.
@@ -190,23 +299,30 @@ impl NodeEngine {
     /// # Errors
     ///
     /// Fails when the endpoint cannot bind its UDP sockets.
-    pub async fn one_time(mode: NetworkMode) -> Result<Self> {
-        Self::bind_in(SecretKey::generate(), mode, SHARE_PORTS).await
+    pub async fn one_time(network: impl Into<Network>) -> Result<Self> {
+        Self::bind_in(SecretKey::generate(), network.into(), SHARE_PORTS).await
     }
 
     /// Binds on the first free IPv4 port of `ports`, or on a random one when all
     /// are taken.
     async fn bind_in(
         secret_key: SecretKey,
-        mode: NetworkMode,
+        network: Network,
         ports: std::ops::RangeInclusive<u16>,
     ) -> Result<Self> {
+        let mode = network.mode;
+        if mode == NetworkMode::Relay && network.relays.is_empty() {
+            anyhow::bail!(t!("engine.no_relay"));
+        }
         let builder = |key: SecretKey| {
             let builder = match mode {
                 NetworkMode::Local => {
                     Endpoint::builder(presets::Minimal).relay_mode(RelayMode::Disabled)
                 }
                 NetworkMode::Internet => Endpoint::builder(presets::N0),
+                // No address lookup service: nothing goes to n0.
+                NetworkMode::Relay => Endpoint::builder(presets::Minimal)
+                    .relay_mode(RelayMode::custom(network.relays.iter().cloned())),
             };
             builder
                 .secret_key(key)
@@ -245,7 +361,7 @@ impl NodeEngine {
             endpoint.id(),
             endpoint.bound_sockets()
         );
-        Ok(Self { endpoint, mode })
+        Ok(Self { endpoint, network })
     }
 
     /// A node using the persistent identity and the [`NetworkMode`] saved in
@@ -255,15 +371,19 @@ impl NodeEngine {
     ///
     /// Fails when the key cannot be loaded or the endpoint cannot bind.
     pub async fn with_persistent_identity() -> Result<Self> {
-        let mode = crate::config::Config::load()
-            .map(|c| c.network_mode)
-            .unwrap_or_default();
-        Self::with_mode(super::load_or_generate_default_key()?, mode).await
+        let config = crate::config::Config::load().unwrap_or_default();
+        let network = Network::from_config(&config)?;
+        Self::with_network(super::load_or_generate_default_key()?, network).await
     }
 
     /// The network mode this node was started with.
     pub fn mode(&self) -> NetworkMode {
-        self.mode
+        self.network.mode
+    }
+
+    /// The network (mode and relays) this node was started with.
+    pub fn network(&self) -> &Network {
+        &self.network
     }
 
     /// Current address of this node: its Node ID, IP addresses and, in
@@ -277,7 +397,7 @@ impl NodeEngine {
     ///
     /// Currently infallible; kept fallible for API stability.
     pub async fn node_addr(&self) -> Result<EndpointAddr> {
-        if self.mode == NetworkMode::Internet {
+        if self.mode().uses_relays() {
             let _ = tokio::time::timeout(ONLINE_TIMEOUT, self.endpoint.online()).await;
             return Ok(self.endpoint.addr());
         }
@@ -397,8 +517,51 @@ mod tests {
             " LOCAL ".parse::<NetworkMode>().unwrap(),
             NetworkMode::Local
         );
-        assert!("relay".parse::<NetworkMode>().is_err());
+        assert_eq!("relay".parse::<NetworkMode>().unwrap(), NetworkMode::Relay);
+        assert!("n0".parse::<NetworkMode>().is_err());
         assert_eq!(NetworkMode::default(), NetworkMode::Local);
+    }
+
+    #[test]
+    fn relay_urls_must_be_https_or_local() {
+        for good in [
+            "https://relay.example.org",
+            "https://relay.example.org:8443/",
+            "http://127.0.0.1:3340",
+            "http://192.168.1.5:3340",
+            "http://[::1]:3340",
+        ] {
+            assert!(parse_relay_url(good).is_ok(), "{good}");
+        }
+        for bad in [
+            "http://relay.example.org",
+            "http://8.8.8.8:3340",
+            "relay.example.org",
+            "ftp://relay.example.org",
+            "",
+        ] {
+            assert!(parse_relay_url(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_relay_mode_needs_a_relay() {
+        let mut config = Config {
+            network_mode: NetworkMode::Relay,
+            ..Config::default()
+        };
+        assert!(Network::from_config(&config).is_err());
+        config.relay_urls = vec!["https://relay.example.org".into()];
+        let network = Network::from_config(&config).unwrap();
+        assert_eq!(network.relays.len(), 1);
+        config.relay_urls.push("http://relay.example.org".into());
+        assert!(
+            Network::from_config(&config).is_err(),
+            "every URL is checked"
+        );
+        // Other modes ignore the list.
+        config.network_mode = NetworkMode::Internet;
+        assert!(Network::from_config(&config).unwrap().relays.is_empty());
     }
 
     #[test]

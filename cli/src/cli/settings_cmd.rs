@@ -58,7 +58,16 @@ pub fn run_language(code: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-/// `ferry network [local|internet]`: shows or saves the [`NetworkMode`].
+/// Checks every relay URL; the list for `relay_urls`.
+fn parse_relays<'a>(urls: impl IntoIterator<Item = &'a str>) -> Result<Vec<String>> {
+    urls.into_iter()
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .map(|u| ferry::node::parse_relay_url(u).map(|r| r.to_string()))
+        .collect()
+}
+
+/// `ferry network [local|internet|relay [URL…]]`: shows or saves the [`NetworkMode`].
 ///
 /// The mode applies to nodes started afterwards (CLI commands, the daemon, the
 /// TUI and the GUI after a restart).
@@ -66,15 +75,24 @@ pub fn run_language(code: Option<&str>) -> Result<()> {
 /// # Errors
 ///
 /// Fails when the mode is unknown or the configuration cannot be saved.
-pub fn run_network(mode: Option<&str>) -> Result<()> {
+pub fn run_network(mode: Option<&str>, relays: &[String]) -> Result<()> {
     let mut config = Config::load()?;
     if let Some(mode) = mode {
         config.network_mode = mode.parse()?;
+        if !relays.is_empty() {
+            config.relay_urls = parse_relays(relays.iter().map(String::as_str))?;
+        }
+        // Refuse a relay mode that could not start.
+        ferry::node::Network::from_config(&config)?;
         config.save()?;
     }
     let description = match config.network_mode {
         NetworkMode::Local => t!("settings.network_local"),
         NetworkMode::Internet => t!("settings.network_internet"),
+        NetworkMode::Relay => t!(
+            "settings.network_relay",
+            relays = config.relay_urls.join(", ")
+        ),
     };
     println!(
         "{}",
@@ -91,10 +109,11 @@ pub fn run_network(mode: Option<&str>) -> Result<()> {
 }
 
 /// Every key of `ferry config`, in display order.
-const SETTING_KEYS: [SettingKey; 9] = [
+const SETTING_KEYS: [SettingKey; 10] = [
     SettingKey::DeviceName,
     SettingKey::Language,
     SettingKey::NetworkMode,
+    SettingKey::RelayUrls,
     SettingKey::DownloadDir,
     SettingKey::Hidden,
     SettingKey::AutoAcceptTexts,
@@ -120,6 +139,7 @@ fn get_setting(config: &Config, key: SettingKey) -> String {
             .clone()
             .unwrap_or_else(|| i18n::current().code().to_string()),
         SettingKey::NetworkMode => config.network_mode.to_string(),
+        SettingKey::RelayUrls => config.relay_urls.join(","),
         SettingKey::DownloadDir => config.download_dir().display().to_string(),
         SettingKey::Hidden => config.hidden.to_string(),
         SettingKey::AutoAcceptTexts => config.auto_accept_texts.to_string(),
@@ -152,7 +172,11 @@ fn set_setting(config: &mut Config, key: SettingKey, value: &str) -> Result<()> 
             let language: Language = value.parse()?;
             config.language = Some(language.code().to_string());
         }
-        SettingKey::NetworkMode => config.network_mode = value.parse()?,
+        SettingKey::NetworkMode => {
+            config.network_mode = value.parse()?;
+            ferry::node::Network::from_config(config)?;
+        }
+        SettingKey::RelayUrls => config.relay_urls = parse_relays(value.split(','))?,
         SettingKey::DownloadDir => {
             let dir = PathBuf::from(value);
             if !dir.is_dir() {
@@ -175,6 +199,13 @@ fn unset_setting(config: &mut Config, key: SettingKey) {
         SettingKey::DeviceName => config.device_name = None,
         SettingKey::Language => config.language = None,
         SettingKey::NetworkMode => config.network_mode = NetworkMode::default(),
+        SettingKey::RelayUrls => {
+            config.relay_urls.clear();
+            // The relay mode cannot run without a relay.
+            if config.network_mode == NetworkMode::Relay {
+                config.network_mode = NetworkMode::Local;
+            }
+        }
         SettingKey::DownloadDir => config.default_download_dir = None,
         SettingKey::Hidden => config.hidden = false,
         SettingKey::AutoAcceptTexts => config.auto_accept_texts = false,
@@ -221,6 +252,38 @@ pub fn run_config(command: Option<ConfigCommands>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relay_settings_are_checked() {
+        let mut config = Config::default();
+        assert!(
+            set_setting(&mut config, SettingKey::NetworkMode, "relay").is_err(),
+            "no relay set yet"
+        );
+        assert!(
+            set_setting(
+                &mut config,
+                SettingKey::RelayUrls,
+                "http://relay.example.org"
+            )
+            .is_err()
+        );
+        set_setting(
+            &mut config,
+            SettingKey::RelayUrls,
+            "https://a.example.org, http://192.168.1.5:3340",
+        )
+        .unwrap();
+        assert_eq!(config.relay_urls.len(), 2);
+        set_setting(&mut config, SettingKey::NetworkMode, "relay").unwrap();
+        assert_eq!(get_setting(&config, SettingKey::NetworkMode), "relay");
+        unset_setting(&mut config, SettingKey::RelayUrls);
+        assert_eq!(
+            config.network_mode,
+            NetworkMode::Local,
+            "never left without a relay"
+        );
+    }
 
     #[test]
     fn settings_round_trip() -> Result<()> {

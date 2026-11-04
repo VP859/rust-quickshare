@@ -162,6 +162,9 @@ select {
 .tag.verified { color: var(--ok); }
 .risk-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--bad); border-radius: var(--radius); background: var(--bad-soft); color: var(--bad); font-size: 13px; font-weight: 500; }
 .compat-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--warn); border-radius: var(--radius); color: var(--warn); font-size: 13px; font-weight: 500; }
+.relay-field { display: grid; gap: 6px; margin-top: 8px; }
+.relay-field textarea { width: 100%; font: 12.5px var(--mono, ui-monospace, monospace); resize: vertical; }
+.relay-field button { justify-self: start; }
 .toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .toggle .label { font-weight: 500; }
 .toggle .desc { color: var(--muted); font-size: 12.5px; }
