@@ -29,6 +29,7 @@ use super::risk;
 use super::sender::{
     PreparedFile, SendItem, SendOutcome, expand_paths, prepare_file, push_file, send_on_channel,
 };
+use crate::history::HistoryEntry;
 use crate::localsend::LocalSendOffer;
 use crate::node::{NodeEngine, NodeTicket};
 use crate::pairing::{PAIR_DECISION_TIMEOUT, PairRequest, answer_pairing, clean_device_name};
@@ -67,7 +68,7 @@ const RETRY_DELAYS: [Duration; 3] = [
 ];
 
 /// Direction of a transfer as seen from this device.
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Direction {
     /// This device sends the file.
@@ -86,6 +87,8 @@ pub enum TransferStatus {
     AwaitingDecision,
     /// Data is being transferred; see [`TransferEvent::done`].
     Running,
+    /// Paused on this device ([`pause_transfer`]); resumes where it stopped.
+    Paused,
     /// Finished and verified.
     Completed {
         /// Path of the received file (downloads only).
@@ -120,7 +123,11 @@ impl TransferStatus {
     pub fn is_final(&self) -> bool {
         !matches!(
             self,
-            Self::Preparing | Self::AwaitingDecision | Self::Running | Self::Retrying { .. }
+            Self::Preparing
+                | Self::AwaitingDecision
+                | Self::Running
+                | Self::Paused
+                | Self::Retrying { .. }
         )
     }
 }
@@ -137,9 +144,31 @@ impl std::fmt::Display for Cancelled {
 
 impl std::error::Error for Cancelled {}
 
-/// Cancellation tokens of the transfers in progress, keyed by transfer ID.
-static ACTIVE_TRANSFERS: LazyLock<Mutex<HashMap<String, CancellationToken>>> =
+/// Controls of one transfer in progress.
+struct ActiveTransfer {
+    /// Ends the transfer ([`cancel_transfer`]).
+    cancel: CancellationToken,
+    /// `true` while it is paused ([`pause_transfer`]).
+    pause: tokio::sync::watch::Sender<bool>,
+}
+
+/// The transfers in progress, keyed by transfer ID.
+static ACTIVE_TRANSFERS: LazyLock<Mutex<HashMap<String, ActiveTransfer>>> =
     LazyLock::new(Mutex::default);
+
+/// Pauses (`paused`) or resumes a running transfer of this process; returns
+/// whether it was found.
+///
+/// A paused transfer reports [`TransferStatus::Paused`]; it stops reading or
+/// writing data, so the other device waits too, and the connection stays
+/// open. Pausing is local: the other device cannot resume it.
+pub fn pause_transfer(id: &str, paused: bool) -> bool {
+    ACTIVE_TRANSFERS
+        .lock()
+        .ok()
+        .and_then(|active| active.get(id).map(|t| t.pause.send_replace(paused)))
+        .is_some()
+}
 
 /// Stops a running transfer of this process; returns whether it was found.
 ///
@@ -149,7 +178,7 @@ pub fn cancel_transfer(id: &str) -> bool {
     let token = ACTIVE_TRANSFERS
         .lock()
         .ok()
-        .and_then(|active| active.get(id).cloned());
+        .and_then(|active| active.get(id).map(|t| t.cancel.clone()));
     token.inspect(CancellationToken::cancel).is_some()
 }
 
@@ -513,6 +542,8 @@ pub struct Tracker<'a> {
     sink: EventSink<'a>,
     /// Triggered by [`cancel_transfer`].
     cancel: CancellationToken,
+    /// Set by [`pause_transfer`].
+    pause: tokio::sync::watch::Receiver<bool>,
     /// Connection whose path is reported in every event, once known;
     /// replaced when the sender reconnects.
     conn: Mutex<Option<Connection>>,
@@ -552,8 +583,15 @@ impl<'a> Tracker<'a> {
     ) -> Self {
         let id = uuid::Uuid::new_v4().to_string();
         let cancel = CancellationToken::new();
+        let (pause_tx, pause) = tokio::sync::watch::channel(false);
         if let Ok(mut active) = ACTIVE_TRANSFERS.lock() {
-            active.insert(id.clone(), cancel.clone());
+            active.insert(
+                id.clone(),
+                ActiveTransfer {
+                    cancel: cancel.clone(),
+                    pause: pause_tx,
+                },
+            );
         }
         Self {
             base: TransferEvent {
@@ -569,6 +607,7 @@ impl<'a> Tracker<'a> {
             },
             sink,
             cancel,
+            pause,
             conn: Mutex::new(None),
             last_done: std::sync::atomic::AtomicU64::new(0),
         }
@@ -594,11 +633,30 @@ impl<'a> Tracker<'a> {
     /// # Errors
     ///
     /// Returns the error of `transfer`, or [`Cancelled`].
+    ///
+    /// The transfer can also be paused ([`pause_transfer`]): its data loops
+    /// wait in `control::pace` ([`super::control`]), and every change is
+    /// reported as [`TransferStatus::Paused`] or [`TransferStatus::Running`].
     pub async fn cancellable<T>(&self, transfer: impl Future<Output = Result<T>>) -> Result<T> {
-        tokio::select! {
-            biased;
-            () = self.cancel.cancelled() => Err(Cancelled.into()),
-            result = transfer => result,
+        let transfer = super::control::with_pause(self.pause.clone(), transfer);
+        let mut transfer = std::pin::pin!(transfer);
+        let mut pause = self.pause.clone();
+        let mut watching = true;
+        loop {
+            tokio::select! {
+                biased;
+                () = self.cancel.cancelled() => return Err(Cancelled.into()),
+                result = &mut transfer => return result,
+                changed = pause.changed(), if watching => {
+                    if changed.is_err() {
+                        watching = false;
+                        continue;
+                    }
+                    let done = self.last_done.load(std::sync::atomic::Ordering::Relaxed);
+                    let paused = *pause.borrow_and_update();
+                    self.emit(done, if paused { TransferStatus::Paused } else { TransferStatus::Running });
+                }
+            }
         }
     }
 
@@ -617,6 +675,9 @@ impl<'a> Tracker<'a> {
             .lock()
             .ok()
             .and_then(|c| c.as_ref().and_then(Route::of));
+        if ev.status.is_final() {
+            crate::history::record(&ev);
+        }
         (self.sink)(ev);
     }
 
@@ -897,6 +958,7 @@ async fn handle_text<H: TransferHandler>(
 ) -> Result<()> {
     let peer = conn.remote_id();
     let permit = gate.enter(peer);
+    let text_len = text.len();
     let decision = if text.is_empty() || text.len() > MAX_TEXT_LEN {
         TextDecision::Rejected {
             reason: t!("service.text_too_long", max = MAX_TEXT_LEN).into_owned(),
@@ -914,6 +976,15 @@ async fn handle_text<H: TransferHandler>(
             })
     };
     drop(permit);
+    crate::history::record_text(HistoryEntry::text(
+        Direction::Download,
+        &peer.to_string(),
+        text_len,
+        match &decision {
+            TextDecision::Accepted => Ok(()),
+            TextDecision::Rejected { reason } => Err(("rejected", reason.clone())),
+        },
+    ));
     write_msg(&mut channel.send, &decision).await?;
     channel.finish().await;
     Ok(())
@@ -1144,6 +1215,34 @@ pub async fn send_files(
     Ok(())
 }
 
+/// Sends `paths` to every device of `targets` at the same time, as
+/// [`send_files`] does for one. Every file is hashed once for all of them.
+/// Returns one result per target, in the same order; a device that cannot be
+/// reached does not affect the others.
+pub async fn send_files_to_many(
+    engine: &NodeEngine,
+    targets: &[iroh::EndpointAddr],
+    paths: &[PathBuf],
+    sink: EventSink<'_>,
+) -> Vec<Result<()>> {
+    if targets.len() > 1 {
+        // Hash before the sends start, so they find the hashes ready instead
+        // of all reading the same files at once.
+        let owned = paths.to_vec();
+        if let Ok(Ok(items)) = tokio::task::spawn_blocking(move || expand_paths(&owned)).await {
+            for item in items {
+                let _ = prepare_file(&item.path).await;
+            }
+        }
+    }
+    futures_util::future::join_all(
+        targets
+            .iter()
+            .map(|target| send_files(engine, target.clone(), paths, sink)),
+    )
+    .await
+}
+
 /// Pushes `file` on `conn`. When the connection breaks, waits a little
 /// ([`RETRY_DELAYS`]), reconnects to `target` and pushes again: the receiver
 /// resumes from its partial file and does not ask the user again
@@ -1257,18 +1356,33 @@ pub async fn send_text(
     if text.len() > MAX_TEXT_LEN {
         anyhow::bail!(t!("service.text_too_long", max = MAX_TEXT_LEN));
     }
-    let conn = engine.connect(target).await?;
-    let mut channel = Channel::open(
-        &conn,
-        &Hello::Text {
-            text: text.to_string(),
+    let peer = target.id.to_string();
+    let decision = async {
+        let conn = engine.connect(target).await?;
+        let mut channel = Channel::open(
+            &conn,
+            &Hello::Text {
+                text: text.to_string(),
+            },
+        )
+        .await?;
+        let decision: Result<TextDecision> = read_msg(&mut channel.recv)
+            .await
+            .with_context(|| t!("service.text_no_answer"));
+        conn.close(0u32.into(), b"done");
+        decision
+    }
+    .await;
+    crate::history::record_text(HistoryEntry::text(
+        Direction::Upload,
+        &peer,
+        text.len(),
+        match &decision {
+            Ok(TextDecision::Accepted) => Ok(()),
+            Ok(TextDecision::Rejected { reason }) => Err(("rejected", reason.clone())),
+            Err(e) => Err(("failed", format!("{e:#}"))),
         },
-    )
-    .await?;
-    let decision: Result<TextDecision> = read_msg(&mut channel.recv)
-        .await
-        .with_context(|| t!("service.text_no_answer"));
-    conn.close(0u32.into(), b"done");
+    ));
     decision
 }
 

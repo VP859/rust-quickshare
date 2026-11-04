@@ -51,6 +51,14 @@ pub struct Config {
     /// when another mode is chosen, so switching back needs no typing.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub relay_urls: Vec<String>,
+    /// Do not keep a history of transfers ([`crate::history`]); it is kept
+    /// by default.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub disable_history: bool,
+    /// Speed limit in bytes per second, for sending and separately for
+    /// receiving ([`crate::transfer::control`]); none when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed_limit: Option<u64>,
     /// Hide this device on the local network from everyone except paired devices.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hidden: bool,

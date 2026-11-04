@@ -8,8 +8,10 @@
 //   transfers.js  the transfers list and incoming offers
 //   settings.js   the settings dialog
 //   web.js        sessions with a web browser (link and QR code)
+//   history.js    the history of finished transfers
 //   state.js      state shared by them
 import { fail, toast } from './dom.js';
+import './history.js';
 import { applyStaticText, t } from './i18n.js';
 import { ensureDeviceName, listenNearbyAndPairing, pairRequests, renderNearby, setNearby, showNextPairRequest, updateDiscoveryHint } from './nearby.js';
 import { loadNodeInfo, renderNodeStatus } from './node.js';

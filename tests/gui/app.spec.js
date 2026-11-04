@@ -180,7 +180,7 @@ test('the LocalSend compatibility mode is switched on in the privacy settings', 
   await app.locator('label.switch:has(#privacy-localsend)').click();
   await expect(toggle).toBeChecked();
   expect(await calls(app)).toContainEqual(['set_privacy', {
-    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: true },
+    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: true, keep_history: true },
   }]);
 });
 
@@ -260,4 +260,99 @@ test('the own-relay mode is saved together with the relay address', async ({ app
   await app.locator('#network-mode').selectOption('local');
   await expect(app.locator('#relay-field')).toBeHidden();
   expect(await calls(app)).toContainEqual(['set_network_mode', { mode: 'local', relays: null }]);
+});
+
+test('a running transfer can be paused and resumed', async ({ app }) => {
+  const ev = (status) => ({ id: 't1', peer: PEER, peer_name: null, file_name: 'big.iso', direction: 'download', total: 1000, done: 400, status, route: 'direct' });
+  await emit(app, 'transfer', ev({ kind: 'running' }));
+  const row = app.locator('#transfers .row.transfer').first();
+  await row.getByRole('button', { name: 'Pause' }).click();
+  expect(await calls(app)).toContainEqual(['pause_transfer', { id: 't1', paused: true }]);
+
+  await emit(app, 'transfer', ev({ kind: 'paused' }));
+  await expect(row).toContainText('Paused at 400 B of 1000 B');
+  await row.getByRole('button', { name: 'Resume' }).click();
+  expect(await calls(app)).toContainEqual(['pause_transfer', { id: 't1', paused: false }]);
+  await expect(row.getByRole('button', { name: 'Cancel transfer' })).toBeVisible();
+});
+
+test('files can be sent to several devices at once', async ({ app }) => {
+  await emit(app, 'nearby', [{ node_id: 'c'.repeat(64), name: 'Kitchen PC', platform: 'linux', addr: null }]);
+  await app.evaluate(() => window.__respond('plugin:dialog|open', ['/home/me/a.jpg']));
+  await app.locator('#btn-select-file').click();
+  const dialog = app.locator('#modal-recipient');
+  await expect(app.locator('#btn-send-selected')).toBeHidden();
+  await dialog.getByRole('checkbox', { name: 'Select Laptop' }).check();
+  await dialog.getByRole('checkbox', { name: 'Select Kitchen PC' }).check();
+  await expect(app.locator('#btn-send-selected')).toHaveText('Send to the selected devices (2)');
+  await app.locator('#btn-send-selected').click();
+  await expect(dialog).not.toHaveClass(/active/);
+  const sends = (await calls(app)).filter(([cmd]) => cmd === 'send_files').map(([, a]) => a.target);
+  expect(sends.sort()).toEqual([PEER, 'c'.repeat(64)].sort());
+});
+
+test('the history can be searched and cleared', async ({ app }) => {
+  await app.locator('#btn-history').click();
+  const dialog = app.locator('#modal-history');
+  await expect(dialog).toHaveClass(/active/);
+  await expect(app.locator('#history-list .row')).toHaveCount(3);
+  await expect(app.locator('#history-list')).toContainText('holiday.jpg');
+  await expect(app.locator('#history-list')).toContainText('Laptop', { message: 'the alias of a trusted device' });
+  await expect(app.locator('#history-list')).toContainText('declined');
+
+  await app.locator('#history-search').fill('report');
+  await expect.poll(async () => (await calls(app)).some(([cmd, a]) => cmd === 'get_history' && a.query === 'report' && a.kind === 'all')).toBe(true);
+
+  app.once('dialog', (d) => d.accept());
+  await app.locator('#btn-history-clear').click();
+  expect(await calls(app)).toContainEqual(['clear_history', {}]);
+});
+
+test('the speed limit and the history setting are saved', async ({ app }) => {
+  await app.locator('#btn-settings').click();
+  await expect(app.locator('#speed-limit')).toHaveValue('');
+  await app.locator('#speed-limit').fill('2M');
+  await app.locator('#btn-speed-save').click();
+  expect(await calls(app)).toContainEqual(['set_speed_limit', { value: '2M' }]);
+  await expect(app.locator('#toast')).toContainText('Speed limit: 2M/s');
+
+  await expect(app.locator('#privacy-history')).toBeChecked();
+  await app.locator('label.switch:has(#privacy-history)').click();
+  expect(await calls(app)).toContainEqual(['set_privacy', {
+    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: false },
+  }]);
+});
+
+test('the empty transfers list leads quietly to the history', async ({ app }) => {
+  const link = app.locator('#transfers .empty .link');
+  await expect(link).toHaveText('See earlier transfers in the history');
+  await link.click();
+  await expect(app.locator('#modal-history')).toHaveClass(/active/);
+  await expect(app.locator('#history-list .row')).toHaveCount(3);
+  await app.locator('[data-close="modal-history"]').first().click();
+
+  // A transfer replaces the empty message (and with it the link).
+  await emit(app, 'transfer', { id: 't9', peer: PEER, peer_name: null, file_name: 'x.bin', direction: 'download', total: 10, done: 10, status: { kind: 'completed', path: null }, route: null });
+  await expect(link).toHaveCount(0);
+});
+
+test('the history has tabs for files and texts, and texts show no content', async ({ app }) => {
+  await app.locator('#btn-history').click();
+  const tab = (name) => app.locator('#history-tabs').getByRole('tab', { name });
+  await expect(tab('All')).toHaveAttribute('aria-selected', 'true');
+
+  await tab('Texts').click();
+  expect(await calls(app)).toContainEqual(['get_history', { query: '', kind: 'text' }]);
+  await expect(tab('Texts')).toHaveAttribute('aria-selected', 'true');
+  await expect(tab('All')).toHaveAttribute('aria-selected', 'false');
+
+  await tab('Files').click();
+  expect(await calls(app)).toContainEqual(['get_history', { query: '', kind: 'file' }]);
+
+  // The mock answers with everything: check how a text row looks.
+  await tab('All').click();
+  const text = app.locator('#history-list .row', { hasText: 'Text sent' });
+  await expect(text).toHaveCount(1);
+  await expect(text).toContainText('27 B');
+  await expect(text).toContainText('Laptop');
 });

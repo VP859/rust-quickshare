@@ -32,6 +32,8 @@
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"/></symbol>
   <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><path d="M11 9h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
   <symbol id="i-globe" viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol>
   <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
 </svg>
@@ -90,6 +92,7 @@
     <header>
       <h2 data-i18n="transfers"></h2>
       <span class="spacer"></span>
+      <button class="ghost" id="btn-history" data-i18n="history"></button>
       <button class="ghost" id="btn-clear" data-i18n="clear_finished"></button>
     </header>
     <div class="list" id="transfers"></div>
@@ -133,6 +136,7 @@
     <div class="modal-body">
       <p class="muted small" id="recipient-files"></p>
       <div class="recipients" id="recipients"></div>
+      <button class="primary" id="btn-send-selected" hidden></button>
       <button id="btn-share-ticket"><svg class="i sm"><use href="#i-link"/></svg><span data-i18n="share_by_ticket"></span></button>
       <button id="btn-share-web"><svg class="i sm"><use href="#i-globe"/></svg><span data-i18n="share_in_browser"></span></button>
     </div>
@@ -149,6 +153,26 @@
       <div class="modal-actions">
         <button id="btn-ticket-close" data-i18n="close"></button>
         <button class="primary" id="btn-ticket-copy" data-i18n="copy"></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-history" role="dialog" aria-modal="true" aria-labelledby="history-title">
+  <div class="modal">
+    <div class="modal-head"><h3 id="history-title" data-i18n="history"></h3><button class="ghost icon" data-close="modal-history" data-i18n-aria="close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <div class="tabs" role="tablist" id="history-tabs">
+        <button role="tab" data-kind="all" aria-selected="true" data-i18n="hist_all"></button>
+        <button role="tab" data-kind="file" aria-selected="false" data-i18n="hist_files"></button>
+        <button role="tab" data-kind="text" aria-selected="false" data-i18n="hist_texts"></button>
+      </div>
+      <input type="search" id="history-search" data-i18n-ph="history_search" data-i18n-aria="history_search" autocomplete="off">
+      <div class="list history-list" id="history-list"></div>
+      <p class="muted small" id="history-off" data-i18n="history_off" hidden></p>
+      <div class="modal-actions">
+        <button class="danger" id="btn-history-clear" data-i18n="history_clear"></button>
+        <button class="primary" data-close="modal-history" data-i18n="close"></button>
       </div>
     </div>
   </div>
@@ -292,6 +316,10 @@
           </select>
           <div class="muted small" data-i18n="close_action_hint"></div>
         </div>
+        <div class="field"><label for="speed-limit" data-i18n="speed_limit"></label>
+          <div class="inline"><input type="text" id="speed-limit" data-i18n-ph="speed_limit_ph" autocomplete="off"><button id="btn-speed-save" data-i18n="save"></button></div>
+          <div class="muted small" data-i18n="speed_limit_hint"></div>
+        </div>
         <div class="toggle desktop-only">
           <div><div class="label" data-i18n="autostart"></div><div class="desc" data-i18n="autostart_hint"></div></div>
           <label class="switch"><input type="checkbox" id="autostart"><span></span></label>
@@ -322,6 +350,10 @@
         <div class="toggle">
           <div><div class="label" id="privacy-localsend-label" data-i18n="privacy_localsend"></div><div class="desc" data-i18n="privacy_localsend_hint"></div></div>
           <label class="switch"><input type="checkbox" id="privacy-localsend" aria-labelledby="privacy-localsend-label"><span></span></label>
+        </div>
+        <div class="toggle">
+          <div><div class="label" id="privacy-history-label" data-i18n="privacy_history"></div><div class="desc" data-i18n="privacy_history_hint"></div></div>
+          <label class="switch"><input type="checkbox" id="privacy-history" aria-labelledby="privacy-history-label"><span></span></label>
         </div>
         <details class="data-flow">
           <summary data-i18n="data_flow_title"></summary>

@@ -3,6 +3,7 @@
 import { $, close, el, emptyState, fail, fmtSize, icon, open, shortId } from './dom.js';
 import { t } from './i18n.js';
 import { state } from './state.js';
+import { openHistory } from './history.js';
 import { invoke, isMobile, listen } from './tauri.js';
 
 /** Row ID → `{ el, ev }` for files, or `{ el, text, render }` for texts. */
@@ -44,6 +45,7 @@ function renderTransfer(ev) {
     : kind === 'retrying' ? t('st_retrying', { attempt: ev.status.attempt, of: ev.status.of })
     : kind === 'failed' ? t('tr_failed', { error: ev.status.error }) : kind === 'rejected' ? t('tr_rejected', { reason: ev.status.reason })
     : kind === 'completed' ? (ev.status.path ? t('tr_saved', { path: ev.status.path }) : t('st_completed')) + route
+    : kind === 'paused' ? t('st_paused', { done: fmtSize(ev.done), total: fmtSize(ev.total) })
     : t('st_' + kind);
   row.el.className = 'row transfer' + (kind === 'completed' ? ' done' : kind === 'failed' || kind === 'rejected' ? ' failed' : kind === 'cancelled' ? ' cancelled' : '');
   const bar = el('div', { class: 'progress' }, el('div'));
@@ -54,8 +56,11 @@ function renderTransfer(ev) {
       el('div', { class: 'meta' }, el('span', { class: 'title' }, ev.file_name), el('span', { class: 'muted small' }, peer)),
       bar,
       el('div', { class: 'detail' }, detail))];
-  if (kind === 'preparing' || kind === 'running' || kind === 'retrying') {
-    parts.push(el('div', { class: 'trailing' },
+  if (kind === 'preparing' || kind === 'running' || kind === 'retrying' || kind === 'paused') {
+    const paused = kind === 'paused';
+    const pause = (kind === 'running' || paused) ? el('button', { class: 'ghost icon', title: t(paused ? 'resume' : 'pause'), 'aria-label': t(paused ? 'resume' : 'pause'),
+      onclick: () => invoke('pause_transfer', { id: ev.id, paused: !paused }).catch(fail) }, icon(paused ? 'play' : 'pause', 'sm')) : '';
+    parts.push(el('div', { class: 'trailing' }, pause,
       el('button', { class: 'ghost icon', title: t('cancel_transfer'), 'aria-label': t('cancel_transfer'),
         onclick: () => invoke('cancel_transfer', { id: ev.id }).catch(fail) }, icon('x', 'sm'))));
   }
@@ -70,7 +75,11 @@ function renderTransfer(ev) {
 }
 
 export function renderNoTransfers() {
-  if (!transfers.size) $('transfers').replaceChildren(emptyState('inbox', t('no_transfers')));
+  if (!transfers.size) {
+    // A quiet way to the history: the list only shows this session.
+    const link = el('button', { class: 'link', onclick: openHistory }, t('see_history'));
+    $('transfers').replaceChildren(emptyState('inbox', t('no_transfers'), link));
+  }
   $('btn-clear').style.visibility = transfers.size ? '' : 'hidden';
 }
 $('btn-clear').onclick = () => {

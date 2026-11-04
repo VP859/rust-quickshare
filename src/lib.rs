@@ -50,6 +50,7 @@ rust_i18n::i18n!("locales", fallback = "en");
 pub mod config;
 pub mod discovery;
 pub mod error;
+pub mod history;
 mod httpd;
 pub mod i18n;
 pub mod localsend;

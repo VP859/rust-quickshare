@@ -306,6 +306,15 @@ fn render_transfers(f: &mut Frame, app: &App, area: Rect) {
                     t!("tui.st_retrying", attempt = attempt, of = of).into_owned(),
                     Color::Yellow,
                 ),
+                TransferStatus::Paused => (
+                    t!(
+                        "tui.st_paused",
+                        done = human_size(ev.done),
+                        total = human_size(ev.total)
+                    )
+                    .into_owned(),
+                    Color::Cyan,
+                ),
                 TransferStatus::Running => {
                     let speed = if row.speed > 0.0 {
                         format!(" · {}/s", human_size(row.speed as u64))
@@ -730,6 +739,7 @@ fn render_help(f: &mut Frame) {
         ("v", t!("tui.help_safety")),
         ("o / f", t!("tui.help_open")),
         ("x", t!("tui.help_cancel")),
+        ("p", t!("tui.help_pause")),
         ("C", t!("tui.help_clear")),
         ("t / c", t!("tui.help_ticket")),
         ("g / N", t!("tui.help_settings")),

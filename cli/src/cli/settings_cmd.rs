@@ -109,7 +109,7 @@ pub fn run_network(mode: Option<&str>, relays: &[String]) -> Result<()> {
 }
 
 /// Every key of `ferry config`, in display order.
-const SETTING_KEYS: [SettingKey; 10] = [
+const SETTING_KEYS: [SettingKey; 12] = [
     SettingKey::DeviceName,
     SettingKey::Language,
     SettingKey::NetworkMode,
@@ -120,6 +120,8 @@ const SETTING_KEYS: [SettingKey; 10] = [
     SettingKey::AutoAcceptExecutables,
     SettingKey::QuitOnClose,
     SettingKey::Localsend,
+    SettingKey::History,
+    SettingKey::SpeedLimit,
 ];
 
 /// Name of a setting as typed on the command line (`device-name`, …).
@@ -140,6 +142,11 @@ fn get_setting(config: &Config, key: SettingKey) -> String {
             .unwrap_or_else(|| i18n::current().code().to_string()),
         SettingKey::NetworkMode => config.network_mode.to_string(),
         SettingKey::RelayUrls => config.relay_urls.join(","),
+        SettingKey::History => (!config.disable_history).to_string(),
+        SettingKey::SpeedLimit => config.speed_limit.map_or_else(
+            || "off".to_string(),
+            |b| format!("{}/s", ferry::size::human_size(b)),
+        ),
         SettingKey::DownloadDir => config.download_dir().display().to_string(),
         SettingKey::Hidden => config.hidden.to_string(),
         SettingKey::AutoAcceptTexts => config.auto_accept_texts.to_string(),
@@ -177,6 +184,10 @@ fn set_setting(config: &mut Config, key: SettingKey, value: &str) -> Result<()> 
             ferry::node::Network::from_config(config)?;
         }
         SettingKey::RelayUrls => config.relay_urls = parse_relays(value.split(','))?,
+        SettingKey::History => config.disable_history = !parse_bool(value)?,
+        SettingKey::SpeedLimit => {
+            config.speed_limit = ferry::transfer::control::parse_speed(value)?;
+        }
         SettingKey::DownloadDir => {
             let dir = PathBuf::from(value);
             if !dir.is_dir() {
@@ -199,6 +210,8 @@ fn unset_setting(config: &mut Config, key: SettingKey) {
         SettingKey::DeviceName => config.device_name = None,
         SettingKey::Language => config.language = None,
         SettingKey::NetworkMode => config.network_mode = NetworkMode::default(),
+        SettingKey::History => config.disable_history = false,
+        SettingKey::SpeedLimit => config.speed_limit = None,
         SettingKey::RelayUrls => {
             config.relay_urls.clear();
             // The relay mode cannot run without a relay.

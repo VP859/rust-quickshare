@@ -190,6 +190,11 @@ Node IDs (earlier versions of Ferry) could be matched offline in seconds by gene
   where there is no common keyring API, and the key must be available without a desktop login.
 * Received files are stored unencrypted in the download folder (on Android `Download/Ferry`;
   photos and videos in `Pictures/Ferry`, visible to the gallery and to apps with media access).
+* The **history of transfers** (`history.jsonl` in the configuration folder, `0600` on Unix) holds
+  the file names, sizes, devices, times, save paths and error messages of the last 1000 finished
+  transfers – no content. Texts and links are listed too, but only that one was sent or received
+  and its size, never what it said (it may be a password or an account number). It never leaves the device. `ferry history --clear` or *Clear history*
+  deletes it; `history = false` (*Settings → Privacy*) stops recording.
 * Ferry does not write log files itself. Logs go to the terminal (CLI, daemon) or to the system
   log (Android logcat); at the default level they contain Node IDs, device names, file names and
   paths.

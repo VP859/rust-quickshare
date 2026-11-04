@@ -666,6 +666,8 @@ pub fn start(app: AppHandle) {
                 let _ = app.emit("node-ready", engine.node_id().to_string());
                 let config = state.config.lock().await.clone();
                 start_discovery(&app, engine, &config);
+                ferry::history::enable_from_config(&config);
+                ferry::transfer::control::set_speed_limit(config.speed_limit);
                 if let Err(e) = sync_localsend(&app).await {
                     warn!("{e}");
                 }

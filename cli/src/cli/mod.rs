@@ -2,6 +2,7 @@
 
 pub mod args;
 pub mod display;
+pub mod history_cmd;
 pub mod identity_cmd;
 pub mod nearby_cmd;
 pub mod peer_cmd;

@@ -31,6 +31,12 @@ its authors. In the default mode it does not contact any server at all.
 - **Privacy controls** – hide the device from local network discovery except for paired devices,
   and see exactly what leaves the device (*Settings → Privacy*, [details](docs/SECURITY-MODEL.md#what-each-party-can-see)).
 - **Cancel any transfer** – a partly received file is resumed next time.
+- **Pause and speed limit** – pause a transfer and resume it later (the connection stays open), and
+  limit the speed of sending and receiving.
+- **Several devices at once** – send the same files to several devices in one go.
+- **History** – a searchable list of finished files and texts, kept only on this device (texts
+  without their content); it can be cleared or turned off. The transfers list shows the current
+  session and leads to it.
 - **Every interface** – desktop and Android app (Tauri), terminal UI, command line and a
   background daemon; English and Polish.
 - **Receive from iPhone and Mac** – an optional [LocalSend](https://localsend.org) compatibility
@@ -66,6 +72,8 @@ ferry peer add <TICKET> --alias Laptop --auto-accept
 ferry peer verify Laptop             # safety number to compare with the other device
 ferry peer list | ferry peer edit Laptop --auto-accept false | ferry peer remove Laptop
 ferry send film.mkv                     # share one file through a one-time TICKET
+ferry send photos/ --to Laptop --to Phone  # several devices at once
+ferry history holiday                   # finished transfers, searched; --clear deletes them
 ferry web photo.jpg                     # link + QR code for a browser: download it, send files back
 ferry receive <TICKET> ~/Downloads      # download a shared file
 ferry config                            # all settings (also: get, set, unset, path)
@@ -87,6 +95,8 @@ ferry doctor                            # network and discovery diagnostics
 | Copy texts from Auto-Accept devices without asking | `auto-accept-texts true` | `false` |
 | Desktop app quits when its window is closed | `quit-on-close true` | `false` (keeps running in the tray) |
 | Receive from LocalSend apps (iPhone, Mac) | `localsend true` | `false` |
+| Speed limit (per second, sending and receiving separately) | `speed-limit 2M` | `off` |
+| Keep a history of transfers | `history false` | `true` |
 
 Settings are stored in `~/.config/ferry/config.toml` (Linux), `%APPDATA%\ferry\config.toml`
 (Windows) or the app's private storage (Android). Environment variables:

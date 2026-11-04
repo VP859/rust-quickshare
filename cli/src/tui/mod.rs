@@ -213,6 +213,7 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Char('o') => app.open_selected_transfer(false),
         KeyCode::Char('f') => app.open_selected_transfer(true),
         KeyCode::Char('C') => app.clear_finished(),
+        KeyCode::Char('p') if app.focus == Focus::Transfers => app.pause_selected_transfer(),
         KeyCode::Char('p') => {
             if app.focus == Focus::Nearby {
                 app.pair_selected();

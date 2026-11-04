@@ -1,6 +1,7 @@
 //! File transfers: the sending and receiving halves of the protocol, file name
 //! security and the shared node service used by every user interface.
 
+pub mod control;
 pub mod hash;
 pub mod receiver;
 pub mod risk;

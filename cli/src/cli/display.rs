@@ -79,7 +79,11 @@ impl TerminalProgress {
         match ev.status {
             TransferStatus::Preparing => pb.set_message(t!("cli.hashing", name = &ev.file_name)),
             TransferStatus::AwaitingDecision => pb.set_message(t!("cli.awaiting")),
-            TransferStatus::Running => pb.set_position(ev.done),
+            TransferStatus::Running => {
+                pb.set_position(ev.done);
+                pb.set_message(String::new());
+            }
+            TransferStatus::Paused => pb.set_message(t!("cli.paused")),
             TransferStatus::Retrying { attempt, of } => {
                 pb.set_prefix(format!(
                     " · {}",

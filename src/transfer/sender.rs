@@ -113,7 +113,17 @@ fn walk_folder(dir: &Path, folder: Vec<String>, items: &mut Vec<SendItem>) -> Re
     Ok(())
 }
 
-/// Reads metadata of the file at `path` and computes its hash.
+/// Hashes computed by [`prepare_file`], so a file sent to several devices
+/// (or again) is read once: path → (size, modification time, hash).
+static HASHES: std::sync::LazyLock<std::sync::Mutex<HashCache>> =
+    std::sync::LazyLock::new(Default::default);
+/// Path → (size, modification time, BLAKE3 hash).
+type HashCache = std::collections::HashMap<PathBuf, (u64, std::time::SystemTime, [u8; 32])>;
+/// Most remembered hashes.
+const MAX_HASHES: usize = 512;
+
+/// Reads metadata of the file at `path` and computes its hash (or takes it
+/// from the cache when the size and modification time did not change).
 ///
 /// # Errors
 ///
@@ -130,7 +140,27 @@ pub async fn prepare_file(path: &Path) -> Result<PreparedFile> {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let name = sanitize_filename(&raw_name).unwrap_or_else(|_| "file".to_string());
-    let hash = compute_file_hash(path).await?;
+    let modified = metadata.modified().ok();
+    let cached = modified.and_then(|m| {
+        let hashes = HASHES.lock().ok()?;
+        hashes
+            .get(path)
+            .filter(|(size, at, _)| *size == metadata.len() && *at == m)
+            .map(|(_, _, hash)| *hash)
+    });
+    let hash = match cached {
+        Some(hash) => hash,
+        None => {
+            let hash = compute_file_hash(path).await?;
+            if let (Some(m), Ok(mut hashes)) = (modified, HASHES.lock()) {
+                if hashes.len() >= MAX_HASHES {
+                    hashes.clear();
+                }
+                hashes.insert(path.to_path_buf(), (metadata.len(), m, hash));
+            }
+            hash
+        }
+    };
     Ok(PreparedFile {
         path: path.to_path_buf(),
         name,
@@ -230,6 +260,8 @@ pub async fn send_on_channel(
             let len = offer
                 .chunk_len(chunk_index)
                 .with_context(|| t!("transfer.chunk_len"))?;
+            // Pause and speed limit (see `control`).
+            super::control::pace(super::service::Direction::Upload, u64::from(len)).await;
             let mut payload = vec![0u8; len as usize];
             source
                 .read_exact(&mut payload)

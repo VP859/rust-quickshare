@@ -19,6 +19,17 @@ compatibility).
 
 ### Added
 
+- **Pause and speed limit**: pause a running transfer and resume it (GUI button, `p` in the TUI);
+  the connection stays open. A speed limit for sending and, separately, receiving
+  (`ferry config set speed-limit 2M`, *Settings*) applies to all transfers, also from LocalSend
+  and browsers.
+- **Send to several devices at once**: `ferry send … --to A --to B`, or tick several devices in the
+  GUI. Every file is hashed once for all of them.
+- **History of transfers**: finished transfers are kept on this device (`history.jsonl`, the last
+  1000) – `ferry history [search] [--kind files|texts] [--clear]`, *History* in the GUI with search,
+  *Files* / *Texts* tabs and *Clear history*. Texts are recorded without their content. The empty
+  transfers list links to it.
+  Turn it off with `ferry config set history false` or in *Settings → Privacy*.
 - **Own relay mode** (`relay`): the internet mode without n0. Connections go directly when
   possible, otherwise only through the relays you set (`ferry network relay https://…`,
   `ferry config set relay-urls`, *Settings → Network*), and nothing is published to or looked up

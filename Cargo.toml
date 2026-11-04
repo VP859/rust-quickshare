@@ -11,7 +11,7 @@ resolver = "2"
 # Shared by all crates; the version is the single source for the CLI, the GUI
 # and (through scripts/set-version.sh) tauri.conf.json.
 [workspace.package]
-version = "0.2.6"
+version = "0.2.7"
 edition = "2024"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"
@@ -112,6 +112,8 @@ tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring
 rcgen = { version = "0.14.10", default-features = false, features = ["ring", "crypto"] }
 # SHA-256: LocalSend certificate fingerprints and file checksums.
 sha2 = "0.10.9"
+# join_all for sending to several devices at once (already used by iroh).
+futures-util = { version = "0.3.34", default-features = false, features = ["alloc"] }
 serde_json = "1"
 
 # ---------------------------------------------------------------------------

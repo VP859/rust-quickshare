@@ -278,6 +278,14 @@ async fn receive_chunks(
         let expected_len = offer
             .chunk_len(chunk_index)
             .with_context(|| t!("transfer.chunk_len"))?;
+        // Pause and speed limit (see `control`); not reading makes QUIC's
+        // flow control hold the sender back.
+        meter
+            .while_waiting(super::control::pace(
+                super::service::Direction::Download,
+                u64::from(expected_len),
+            ))
+            .await?;
         let stream = meter
             .while_waiting(conn.accept_uni())
             .await?

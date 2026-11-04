@@ -402,6 +402,7 @@ impl<H: TransferHandler> WebServer<H> {
                     let mut source = tokio::fs::File::open(&file.path).await?;
                     let (mut sent, mut buf) = (0u64, vec![0u8; CHUNK]);
                     while sent < file.size {
+                        crate::transfer::control::pace(Direction::Upload, CHUNK as u64).await;
                         let n = source.read(&mut buf).await?;
                         if n == 0 {
                             anyhow::bail!("the file became shorter while it was downloaded");

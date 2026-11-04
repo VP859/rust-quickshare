@@ -26,16 +26,31 @@ export async function sendToPeer(p) {
 let pendingFiles = [];
 let pendingText = null;
 let pendingIsFolder = false;
-function recipientRow(avatar, title, sub, onclick) {
-  return el('button', { class: 'row', onclick },
-    el('div', { class: 'avatar' }, avatar),
-    el('div', { class: 'body' }, el('div', { class: 'title' }, title), el('div', { class: 'sub' }, sub)));
+/** Devices ticked in the recipient list: Node ID → name. */
+const selected = new Map();
+function renderSelected() {
+  const button = $('btn-send-selected');
+  button.hidden = selected.size < 1;
+  button.textContent = t('send_selected', { n: selected.size });
 }
-function deliver(nodeId, label) {
+/** A device in the recipient list: clicking sends to it, the box selects it for sending to several. */
+function recipientRow(avatar, title, sub, nodeId) {
+  const box = el('input', { type: 'checkbox', 'aria-label': t('select_device', { name: title }),
+    onchange: (e) => { if (e.target.checked) selected.set(nodeId, title); else selected.delete(nodeId); renderSelected(); } });
+  return el('div', { class: 'recipient' }, box,
+    el('button', { class: 'row', onclick: () => deliver([[nodeId, title]]) },
+      el('div', { class: 'avatar' }, avatar),
+      el('div', { class: 'body' }, el('div', { class: 'title' }, title), el('div', { class: 'sub' }, sub))));
+}
+/** Sends the pending files or text to every `[nodeId, name]` of `targets` at once. */
+function deliver(targets) {
   close('modal-recipient');
-  if (pendingText !== null) sendText(pendingText, nodeId, label);
-  else sendFiles(pendingFiles, nodeId, label);
+  for (const [nodeId, label] of targets) {
+    if (pendingText !== null) sendText(pendingText, nodeId, label);
+    else sendFiles(pendingFiles, nodeId, label);
+  }
 }
+$('btn-send-selected').onclick = () => deliver([...selected]);
 /** Asks where to send `paths` (or `text`) among trusted and nearby devices. */
 export function chooseRecipient(paths, text = null, isFolder = false) {
   if (text === null && !paths.length) return;
@@ -47,17 +62,19 @@ export function chooseRecipient(paths, text = null, isFolder = false) {
     : paths.length === 1 ? baseName(paths[0]) : t('n_files_list', { n: paths.length, list: paths.map(baseName).join(', ') });
   const box = $('recipients');
   box.replaceChildren();
+  selected.clear();
+  renderSelected();
   const { peers, online } = state;
   const unpaired = state.nearby.filter(d => !isTrusted(d.node_id));
   if (!peers.length && !unpaired.length) box.append(emptyState('inbox', t('no_devices')));
   for (const p of peers) {
     box.append(recipientRow([initials(p.alias), el('span', { class: dotClass(online.get(p.node_id)) })], p.alias, el('span', { class: 'mono' }, shortId(p.node_id)),
-      () => deliver(p.node_id, p.alias)));
+      p.node_id));
   }
   if (unpaired.length) box.append(el('div', { class: 'label' }, t('nearby_unpaired')));
   for (const d of unpaired) {
     box.append(recipientRow([icon(platformIcon(d.platform)), el('span', { class: 'dot ok' })], d.name, platformLabel(d.platform),
-      () => deliver(d.node_id, d.name)));
+      d.node_id));
   }
   // A TICKET shares exactly one file, so it is not offered for texts and folders.
   $('btn-share-ticket').style.display = text !== null || pendingIsFolder ? 'none' : '';

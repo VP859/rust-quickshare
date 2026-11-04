@@ -26,9 +26,24 @@ pub enum Commands {
         #[arg(required = true, num_args = 1..)]
         files: Vec<PathBuf>,
         /// Alias, nearby device name, Node ID or TICKET of the receiver
-        /// (it must run `ferry daemon`, the TUI or the GUI).
+        /// (it must run `ferry daemon`, the TUI or the GUI). Repeat it to send
+        /// to several devices at once.
         #[arg(short, long)]
-        to: Option<String>,
+        to: Vec<String>,
+    },
+    /// Show finished transfers, newest first, or search them.
+    History {
+        /// Show only transfers whose file name, device or detail contains this text.
+        query: Option<String>,
+        /// How many transfers to show.
+        #[arg(short = 'n', long, default_value_t = 30)]
+        limit: usize,
+        /// Show only texts and links (never their content), or only files.
+        #[arg(long, value_enum)]
+        kind: Option<HistoryFilter>,
+        /// Delete the history.
+        #[arg(long)]
+        clear: bool,
     },
     /// Share files with a web browser on the local network and receive files from it, through a
     /// one-time link and QR code (the other device needs no app).
@@ -124,6 +139,15 @@ pub enum Commands {
     Doctor,
 }
 
+/// What `ferry history` shows.
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HistoryFilter {
+    /// Files and folders only.
+    Files,
+    /// Texts and links only.
+    Texts,
+}
+
 /// Settings that `ferry config` can read and change.
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SettingKey {
@@ -145,6 +169,10 @@ pub enum SettingKey {
     QuitOnClose,
     /// Relays of the `relay` network mode, separated by commas (`https://relay.example.org`).
     RelayUrls,
+    /// Keep a history of transfers (`true`/`false`).
+    History,
+    /// Speed limit for sending and, separately, receiving (`500K`, `2M`, `off`).
+    SpeedLimit,
     /// Receive files from LocalSend apps – iPhone, Mac – without pairing (`true`/`false`).
     Localsend,
 }

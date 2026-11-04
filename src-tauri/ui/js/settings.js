@@ -69,6 +69,7 @@ function showPrivacy() {
   $('privacy-texts').checked = privacy.auto_accept_texts;
   $('privacy-exe').checked = privacy.auto_accept_executables;
   $('privacy-localsend').checked = privacy.localsend;
+  $('privacy-history').checked = privacy.keep_history;
   renderModePill();
 }
 export async function loadPrivacy() {
@@ -88,6 +89,25 @@ $('privacy-hidden').onchange = (e) => savePrivacy({ hidden: e.target.checked });
 $('privacy-texts').onchange = (e) => savePrivacy({ auto_accept_texts: e.target.checked });
 $('privacy-exe').onchange = (e) => savePrivacy({ auto_accept_executables: e.target.checked });
 $('privacy-localsend').onchange = (e) => savePrivacy({ localsend: e.target.checked });
+$('privacy-history').onchange = (e) => savePrivacy({ keep_history: e.target.checked });
+
+// ---------- Speed limit ----------
+/** `2M`, `500K` or empty for no limit (bytes per second as typed by `parse_speed`). */
+function speedText(bytes) {
+  if (!bytes) return '';
+  const mib = 1024 * 1024;
+  return bytes % mib === 0 ? `${bytes / mib}M` : `${Math.round(bytes / 1024)}K`;
+}
+export async function loadSpeedLimit() {
+  try { $('speed-limit').value = speedText(await invoke('get_speed_limit')); } catch (e) { console.warn('Speed limit:', e); }
+}
+$('btn-speed-save').onclick = async () => {
+  try {
+    const limit = await invoke('set_speed_limit', { value: $('speed-limit').value.trim() || 'off' });
+    $('speed-limit').value = speedText(limit);
+    toast(limit ? t('speed_saved', { speed: speedText(limit) }) : t('speed_off'));
+  } catch (e) { fail(e); }
+};
 
 // ---------- Language ----------
 export async function loadLanguage() {
@@ -128,6 +148,7 @@ $('btn-settings').onclick = async () => {
   await loadNetwork();
   await loadPrivacy();
   await loadBackgroundStatus();
+  await loadSpeedLimit();
   if (!isMobile) { try { $('autostart').checked = await invoke('plugin:autostart|is_enabled'); } catch {} }
   if (!isMobile) { try { $('close-action').value = (await invoke('get_quit_on_close')) ? 'quit' : 'tray'; } catch {} }
   open('modal-settings');

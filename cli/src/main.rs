@@ -12,6 +12,7 @@ use anyhow::Result;
 use clap::Parser;
 
 use crate::cli::args::{Cli, Commands};
+use crate::cli::history_cmd::run_history;
 use crate::cli::identity_cmd::run_identity;
 use crate::cli::nearby_cmd::{run_discover, run_pair};
 use crate::cli::peer_cmd::handle_peer_cmd;
@@ -28,8 +29,11 @@ use ferry::config::Config;
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let saved_language = Config::load().ok().and_then(|c| c.language);
-    ferry::i18n::init(cli.lang.as_deref(), saved_language.as_deref());
+    let config = Config::load().unwrap_or_default();
+    ferry::i18n::init(cli.lang.as_deref(), config.language.as_deref());
+    // Every command that transfers files records them and keeps the speed limit.
+    ferry::history::enable_from_config(&config);
+    ferry::transfer::control::set_speed_limit(config.speed_limit);
 
     let default_filter = if matches!(cli.command, Commands::Tui) {
         "off"
@@ -44,7 +48,13 @@ async fn main() -> Result<()> {
         .init();
 
     match cli.command {
-        Commands::Send { files, to } => run_send(&files, to.as_deref()).await?,
+        Commands::Send { files, to } => run_send(&files, &to).await?,
+        Commands::History {
+            query,
+            limit,
+            kind,
+            clear,
+        } => run_history(query.as_deref(), limit, kind, clear)?,
         Commands::Web {
             files,
             no_receive,

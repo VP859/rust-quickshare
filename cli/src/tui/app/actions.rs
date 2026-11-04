@@ -296,6 +296,32 @@ impl App {
         .into_owned();
     }
 
+    /// Pauses the selected running transfer, or resumes it when paused.
+    pub fn pause_selected_transfer(&mut self) {
+        let Some(row) = self.selected_transfer() else {
+            self.status_msg = t!("tui.no_transfers").into_owned();
+            return;
+        };
+        let pause = match row.ev.status {
+            TransferStatus::Paused => false,
+            TransferStatus::Running => true,
+            _ => {
+                self.status_msg = t!("tui.cannot_pause").into_owned();
+                return;
+            }
+        };
+        self.status_msg = if service::pause_transfer(&row.ev.id, pause) {
+            if pause {
+                t!("tui.pausing", name = &row.ev.file_name)
+            } else {
+                t!("tui.resuming", name = &row.ev.file_name)
+            }
+        } else {
+            t!("tui.cannot_pause")
+        }
+        .into_owned();
+    }
+
     /// Opens the selected received file, or its folder when `reveal` is set.
     pub fn open_selected_transfer(&mut self, reveal: bool) {
         let Some(row) = self.selected_transfer() else {

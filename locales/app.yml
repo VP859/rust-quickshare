@@ -354,6 +354,48 @@ cli.web_expired:
 cli.web_stopped:
   en: "Stopped; the link no longer works."
   pl: "Zatrzymano; link już nie działa."
+cli.sending_many:
+  en: "Sending to %{count} devices at once…"
+  pl: "Wysyłanie do %{count} urządzeń naraz…"
+cli.many_done:
+  en: "[OK] %{name} → %{device}"
+  pl: "[OK] %{name} → %{device}"
+cli.many_rejected:
+  en: "[DECLINED] %{name} → %{device}: %{reason}"
+  pl: "[ODRZUCONO] %{name} → %{device}: %{reason}"
+cli.many_failed:
+  en: "[ERROR] %{name} → %{device}: %{error}"
+  pl: "[BŁĄD] %{name} → %{device}: %{error}"
+cli.many_summary:
+  en: "%{failed} of %{total} devices did not receive everything"
+  pl: "%{failed} z %{total} urządzeń nie otrzymało wszystkiego"
+history.completed:
+  en: "done"
+  pl: "gotowe"
+history.failed:
+  en: "failed"
+  pl: "błąd"
+history.rejected:
+  en: "declined"
+  pl: "odrzucone"
+history.cancelled:
+  en: "cancelled"
+  pl: "anulowane"
+history.text:
+  en: "text (content not recorded)"
+  pl: "tekst (treść nie jest zapisywana)"
+history.cleared:
+  en: "History deleted."
+  pl: "Historia usunięta."
+history.empty:
+  en: "No transfers in the history."
+  pl: "Brak transferów w historii."
+history.more:
+  en: "… and %{count} more (use -n or a search text)"
+  pl: "… i %{count} więcej (użyj -n lub tekstu do wyszukania)"
+history.off:
+  en: "Recording is off (ferry config set history true)."
+  pl: "Zapisywanie jest wyłączone (ferry config set history true)."
 cli.shared:
   en: "Shared '%{name}'. Receiver: ferry receive <TICKET>"
   pl: "Udostępniono '%{name}'. Odbiorca: ferry receive <TICKET>"
@@ -515,6 +557,9 @@ localsend.tag:
 daemon.no_localsend:
   en: "offers from LocalSend apps always need a question, and this daemon has no terminal"
   pl: "oferty z aplikacji LocalSend zawsze wymagają pytania, a ten demon nie ma terminala"
+control.bad_speed:
+  en: "'%{value}' is not a speed (examples: 500K, 2M, off)"
+  pl: "'%{value}' nie jest prędkością (przykłady: 500K, 2M, off)"
 web.firewalld:
   en: "firewalld blocks the link for other devices. Allow it: sudo firewall-cmd --permanent --add-port=%{port}/tcp && sudo firewall-cmd --reload"
   pl: "firewalld blokuje link dla innych urządzeń. Odblokuj go: sudo firewall-cmd --permanent --add-port=%{port}/tcp && sudo firewall-cmd --reload"
@@ -774,6 +819,12 @@ tui.transfers_title:
 tui.transfers_empty:
   en: "No transfers. Select a device and press Enter to send a file."
   pl: "Brak transferów. Wybierz urządzenie i naciśnij Enter, aby wysłać plik."
+tui.st_paused:
+  en: "Paused at %{done} / %{total} (p: resume)"
+  pl: "Wstrzymano przy %{done} / %{total} (p: wznów)"
+cli.paused:
+  en: "paused"
+  pl: "wstrzymano"
 tui.st_hashing:
   en: "computing the BLAKE3 hash…"
   pl: "liczenie haszu BLAKE3…"
@@ -799,8 +850,8 @@ tui.footer_nearby:
   en: "p pair · Enter send file · T send text · r search · i add by TICKET · Tab panel"
   pl: "p sparuj · Enter wyślij plik · T wyślij tekst · r szukaj · i dodaj przez TICKET · Tab panel"
 tui.footer_transfers:
-  en: "Enter/o open file · f open folder · x cancel · C clear finished · Tab panel"
-  pl: "Enter/o otwórz plik · f otwórz folder · x anuluj · C wyczyść zakończone · Tab panel"
+  en: "Enter/o open file · f open folder · p pause/resume · x cancel · C clear finished · Tab panel"
+  pl: "Enter/o otwórz plik · f otwórz folder · p wstrzymaj/wznów · x anuluj · C wyczyść zakończone · Tab panel"
 tui.queued:
   en: "queued: %{count}"
   pl: "w kolejce: %{count}"
@@ -870,6 +921,18 @@ tui.help_manage:
 tui.help_open:
   en: "open the received file / its folder"
   pl: "otwórz odebrany plik / jego folder"
+tui.help_pause:
+  en: "pause or resume the selected transfer (in the transfers panel)"
+  pl: "wstrzymaj lub wznów wybrany transfer (w panelu transferów)"
+tui.pausing:
+  en: "Paused: %{name}"
+  pl: "Wstrzymano: %{name}"
+tui.resuming:
+  en: "Resumed: %{name}"
+  pl: "Wznowiono: %{name}"
+tui.cannot_pause:
+  en: "Only a running transfer can be paused"
+  pl: "Wstrzymać można tylko trwający transfer"
 tui.help_cancel:
   en: "cancel the selected transfer (in the transfers panel)"
   pl: "anuluj wybrany transfer (w panelu transferów)"

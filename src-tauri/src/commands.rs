@@ -918,6 +918,73 @@ pub fn cancel_transfer(id: String) -> bool {
     service::cancel_transfer(&id)
 }
 
+/// Pauses (`paused`) or resumes a running transfer; `false` when it has ended.
+#[tauri::command]
+pub fn pause_transfer(id: String, paused: bool) -> bool {
+    service::pause_transfer(&id, paused)
+}
+
+/// Finished transfers, newest first, filtered by `query` and `kind`
+/// (`file` or `text`; anything else: both); at most 500.
+///
+/// # Errors
+///
+/// When the history file cannot be read.
+#[tauri::command]
+pub fn get_history(
+    query: Option<String>,
+    kind: Option<String>,
+) -> CmdResult<Vec<ferry::history::HistoryEntry>> {
+    use ferry::history::HistoryKind;
+    let path = ferry::history::default_path().map_err(err)?;
+    let entries = ferry::history::load(&path).map_err(err)?;
+    let mut entries = ferry::history::search(entries, query.as_deref().unwrap_or_default());
+    match kind.as_deref() {
+        Some("file") => entries.retain(|e| e.kind == HistoryKind::File),
+        Some("text") => entries.retain(|e| e.kind == HistoryKind::Text),
+        _ => {}
+    }
+    entries.truncate(500);
+    Ok(entries)
+}
+
+/// Deletes the history of transfers.
+///
+/// # Errors
+///
+/// When the file cannot be deleted.
+#[tauri::command]
+pub fn clear_history() -> CmdResult<()> {
+    let path = ferry::history::default_path().map_err(err)?;
+    ferry::history::clear(&path).map_err(err)
+}
+
+/// The speed limit in bytes per second; `null` without a limit.
+///
+/// # Errors
+///
+/// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
+#[tauri::command]
+pub async fn get_speed_limit(state: State<'_, AppState>) -> CmdResult<Option<u64>> {
+    Ok(state.config.lock().await.speed_limit)
+}
+
+/// Sets the speed limit (`2M`, `500K`, `off`), saves it and applies it to
+/// transfers in progress; returns it in bytes per second.
+///
+/// # Errors
+///
+/// When the value is not a speed or the configuration cannot be saved.
+#[tauri::command]
+pub async fn set_speed_limit(value: String, state: State<'_, AppState>) -> CmdResult<Option<u64>> {
+    let limit = ferry::transfer::control::parse_speed(&value).map_err(|e| format!("{e:#}"))?;
+    let mut config = state.config.lock().await;
+    config.speed_limit = limit;
+    config.save().map_err(err)?;
+    ferry::transfer::control::set_speed_limit(limit);
+    Ok(limit)
+}
+
 /// What closing the main window does (desktop): `true` quits Ferry, `false`
 /// keeps it running in the system tray.
 ///
@@ -958,6 +1025,14 @@ pub struct PrivacySettings {
     /// LocalSend compatibility mode: LocalSend apps can send files here.
     #[serde(default)]
     localsend: bool,
+    /// Finished transfers are kept in the history.
+    #[serde(default = "default_true")]
+    keep_history: bool,
+}
+
+/// `true`, for settings that are on when the frontend does not send them.
+fn default_true() -> bool {
+    true
 }
 
 /// Current privacy settings.
@@ -973,6 +1048,7 @@ pub async fn get_privacy(state: State<'_, AppState>) -> CmdResult<PrivacySetting
         auto_accept_texts: config.auto_accept_texts,
         auto_accept_executables: config.auto_accept_executables,
         localsend: config.localsend,
+        keep_history: !config.disable_history,
     })
 }
 
@@ -995,7 +1071,9 @@ pub async fn set_privacy(
         config.auto_accept_texts = settings.auto_accept_texts;
         config.auto_accept_executables = settings.auto_accept_executables;
         config.localsend = settings.localsend;
+        config.disable_history = !settings.keep_history;
         config.save().map_err(err)?;
+        ferry::history::enable_from_config(&config);
         state.sync_visibility(&config);
     }
     if let Err(e) = crate::node::sync_localsend(&app).await {

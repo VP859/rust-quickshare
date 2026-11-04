@@ -27,15 +27,80 @@ const NEARBY_LOOKUP: Duration = Duration::from_millis(1500);
 /// # Errors
 ///
 /// Fails when the node cannot start, the receiver cannot be resolved or a transfer fails.
-pub async fn run_send(files: &[PathBuf], to: Option<&str>) -> Result<()> {
-    let Some(target) = to else {
+pub async fn run_send(files: &[PathBuf], to: &[String]) -> Result<()> {
+    let engine = match to {
         // Sharing by TICKET uses a throw-away identity, not the device's own.
-        return share_by_ticket(files).await;
+        [] => return share_by_ticket(files).await,
+        _ => NodeEngine::with_persistent_identity().await?,
     };
-    let engine = NodeEngine::with_persistent_identity().await?;
-    let result = send_to_peer(&engine, files, target).await;
+    let result = match to {
+        [target] => send_to_peer(&engine, files, target).await,
+        targets => send_to_many(&engine, files, targets).await,
+    };
     engine.close().await;
     result
+}
+
+/// Sends `files` to several devices at once, printing every finished file.
+async fn send_to_many(engine: &NodeEngine, files: &[PathBuf], targets: &[String]) -> Result<()> {
+    let mut addrs = Vec::with_capacity(targets.len());
+    for target in targets {
+        addrs.push(resolve_receiver(engine, target).await?);
+    }
+    let config = Config::load().unwrap_or_default();
+    let name_of = |peer: &str| {
+        config.find_peer(peer).map_or_else(
+            || format!("{}…", &peer[..8.min(peer.len())]),
+            |p| p.alias.clone(),
+        )
+    };
+    println!("{}", t!("cli.sending_many", count = targets.len()));
+    let results = service::send_files_to_many(engine, &addrs, files, &|ev| {
+        let line = match &ev.status {
+            service::TransferStatus::Completed { .. } => {
+                t!(
+                    "cli.many_done",
+                    name = &ev.file_name,
+                    device = name_of(&ev.peer)
+                )
+            }
+            service::TransferStatus::Rejected { reason } => t!(
+                "cli.many_rejected",
+                name = &ev.file_name,
+                device = name_of(&ev.peer),
+                reason = reason
+            ),
+            service::TransferStatus::Failed { error } => t!(
+                "cli.many_failed",
+                name = &ev.file_name,
+                device = name_of(&ev.peer),
+                error = error
+            ),
+            _ => return,
+        };
+        println!("{line}");
+    })
+    .await;
+    let failed: Vec<&String> = targets
+        .iter()
+        .zip(&results)
+        .filter(|(_, r)| r.is_err())
+        .map(|(t, _)| t)
+        .collect();
+    for (target, result) in targets.iter().zip(&results) {
+        if let Err(e) = result {
+            eprintln!("{target}: {e:#}");
+        }
+    }
+    if failed.is_empty() {
+        Ok(())
+    } else {
+        anyhow::bail!(t!(
+            "cli.many_summary",
+            failed = failed.len(),
+            total = targets.len()
+        ))
+    }
 }
 
 /// Address of the receiver; prefers a fresh address from local discovery.

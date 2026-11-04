@@ -14,7 +14,7 @@ export const state = {
   /** The network mode the node runs in and the saved one. */
   network: { active: 'local', saved: 'local' },
   /** Privacy settings (`get_privacy`). */
-  privacy: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false },
+  privacy: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: true },
 };
 
 export const isTrusted = (id) => state.peers.some(p => p.node_id === id);

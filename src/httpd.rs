@@ -183,6 +183,11 @@ pub(crate) async fn receive(
         let Ok(data) = frame.map_err(fail)?.into_data() else {
             continue;
         };
+        crate::transfer::control::pace(
+            crate::transfer::service::Direction::Download,
+            data.len() as u64,
+        )
+        .await;
         received += data.len() as u64;
         if received > file.size {
             return Err(fail(anyhow::anyhow!(
