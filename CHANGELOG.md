@@ -163,6 +163,10 @@ compatibility).
 
 ### Changed
 
+- README: animation, screenshots of the desktop, Android and terminal interfaces, installation per
+  platform, a comparison with similar tools, limitations, FAQ and how Ferry is made (with an AI
+  coding assistant). The images are made reproducibly from the real interfaces with example data
+  (`tests/gui/screenshots.spec.js`, `scripts/make-demo-gif.sh`, `scripts/tui-screenshot.py`).
 - The workspace has three crates: the `ferry` library (no terminal or GUI dependencies), `ferry-cli`
   (`cli/`, the `ferry` binary) and `ferry-gui`. CLI release archives are named `ferry-cli-…`.
 - The GUI frontend is split into `index.html`, `styles.css` and ES modules with one translation

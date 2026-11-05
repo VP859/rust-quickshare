@@ -14,7 +14,7 @@ val tauriProperties = Properties().apply {
     }
 }
 
-// Podpis wydania: gen/android/keystore.properties (tworzony w CI z sekretów, ignorowany przez git).
+// Release signing: gen/android/keystore.properties (created in CI from secrets, ignored by git).
 val keystoreProperties = Properties().apply {
     val propFile = rootProject.file("keystore.properties")
     if (propFile.exists()) {
@@ -91,7 +91,7 @@ rust {
 dependencies {
     implementation("androidx.webkit:webkit:1.18.0")
     implementation("androidx.appcompat:appcompat:1.8.0")
-    // IntentCompat / ServiceCompat (Share Target, usługa pierwszoplanowa)
+    // IntentCompat / ServiceCompat (share target, foreground service)
     implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("com.google.android.material:material:1.14.0")

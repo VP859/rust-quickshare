@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1066" height="600" viewBox="0 0 1066 600" font-family="'JetBrains Mono','DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="14">
+<rect width="100%" height="100%" rx="8" fill="#16181d"/>
+<text x="12.0" y="25" fill="#56b6c2" textLength="58.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌ Ferry</text>
+<text x="87.6" y="25" fill="#56b6c2" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[?] help</text>
+<text x="171.6" y="25" fill="#56b6c2" textLength="84.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[t] TICKET</text>
+<text x="272.4" y="25" fill="#56b6c2" textLength="100.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[L] language</text>
+<text x="390.0" y="25" fill="#56b6c2" textLength="663.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[q] quit ─────────────────────────────────────────────────────────────────────┐</text>
+<text x="12.0" y="43" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="20.4" y="43" fill="#d7dae0" font-weight="bold" textLength="58.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Desktop</text>
+<text x="96.0" y="43" fill="#d7dae0" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">·</text>
+<text x="121.2" y="43" fill="#d7dae0" textLength="176.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Node ID b6eaede8873e…</text>
+<text x="314.4" y="43" fill="#d7dae0" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">·</text>
+<text x="339.6" y="43" fill="#d7dae0" textLength="260.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">saving to: /home/alex/Downloads</text>
+<text x="616.8" y="43" fill="#d7dae0" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">·</text>
+<text x="642.0" y="43" fill="#d7dae0" textLength="117.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">network: local</text>
+<text x="1045.2" y="43" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="61" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="20.4" y="61" fill="#e5c07b" textLength="529.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Node ready. [?] help, [t] TICKET, [i] add device, [L] language.</text>
+<text x="1045.2" y="61" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="79" fill="#56b6c2" textLength="1041.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘</text>
+<text x="12.0" y="97" fill="#56b6c2" textLength="420.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌ [1] Trusted devices (2) ───────────────────────┐</text>
+<text x="432.0" y="97" fill="#5c6370" textLength="126.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌ [3] Transfers</text>
+<text x="574.8" y="97" fill="#5c6370" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[o] open</text>
+<text x="658.8" y="97" fill="#5c6370" textLength="84.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[f] folder</text>
+<text x="759.6" y="97" fill="#5c6370" textLength="294.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[C] clear ────────────────────────┐</text>
+<rect x="20.4" y="102" width="403.2" height="18" fill="#56b6c2"/>
+<text x="12.0" y="115" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="20.4" y="115" fill="#1e1e1e" font-weight="bold" textLength="134.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">▶ ○ Alex&#x27;s phone</text>
+<text x="171.6" y="115" fill="#1e1e1e" font-weight="bold" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">✓</text>
+<text x="196.8" y="115" fill="#1e1e1e" font-weight="bold" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">9a419a41…</text>
+<text x="423.6" y="115" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="115" fill="#5c6370" textLength="520.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│No transfers. Select a device and press Enter to send a file.</text>
+<text x="1045.2" y="115" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="133" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="37.2" y="133" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">○ </text>
+<text x="54.0" y="133" fill="#d7dae0" textLength="92.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Work laptop</text>
+<text x="163.2" y="133" fill="#98c379" textLength="109.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[Auto-Accept]</text>
+<text x="289.2" y="133" fill="#98c379" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">✓</text>
+<text x="314.4" y="133" fill="#5c6370" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">3c7f3c7f…</text>
+<text x="423.6" y="133" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="133" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="133" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="151" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="151" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="151" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="151" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="169" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="169" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="169" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="169" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="187" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="187" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="187" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="187" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="205" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="205" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="205" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="205" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="223" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="223" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="223" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="223" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="241" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="241" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="241" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="241" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="259" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="259" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="259" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="259" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="277" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="277" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="277" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="277" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="295" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="295" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="295" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="295" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="313" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="313" fill="#56b6c2" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="432.0" y="313" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="313" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="331" fill="#56b6c2" textLength="420.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└────────────────────────────────────────────────┘</text>
+<text x="432.0" y="331" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="1045.2" y="331" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="349" fill="#5c6370" textLength="100.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">┌ [2] Nearby</text>
+<text x="129.6" y="349" fill="#5c6370" textLength="310.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">[p] pair (0) ──────────────────────┐│</text>
+<text x="1045.2" y="349" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="367" fill="#5c6370" textLength="344.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│Searching for Ferry devices on the local</text>
+<text x="423.6" y="367" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">││</text>
+<text x="1045.2" y="367" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="385" fill="#5c6370" textLength="176.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│network… [r] refresh</text>
+<text x="423.6" y="385" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">││</text>
+<text x="1045.2" y="385" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="403" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="403" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">││</text>
+<text x="1045.2" y="403" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="421" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="20.4" y="421" fill="#e5c07b" textLength="352.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">No announcements from other devices on the</text>
+<text x="423.6" y="421" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">││</text>
+<text x="1045.2" y="421" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="439" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="20.4" y="439" fill="#e5c07b" textLength="369.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">network yet. Check that they are on the same</text>
+<text x="423.6" y="439" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">││</text>
+<text x="1045.2" y="439" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="457" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="20.4" y="457" fill="#e5c07b" textLength="403.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">network and that firewalls on both devices allow</text>
+<text x="423.6" y="457" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">││</text>
+<text x="1045.2" y="457" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="475" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="20.4" y="475" fill="#e5c07b" textLength="84.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">UDP 47823.</text>
+<text x="423.6" y="475" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">││</text>
+<text x="1045.2" y="475" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="493" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="493" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">││</text>
+<text x="1045.2" y="493" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="511" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="511" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">││</text>
+<text x="1045.2" y="511" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="529" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="529" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">││</text>
+<text x="1045.2" y="529" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="547" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="423.6" y="547" fill="#5c6370" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">││</text>
+<text x="1045.2" y="547" fill="#5c6370" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="12.0" y="565" fill="#5c6370" textLength="1041.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">└────────────────────────────────────────────────┘└────────────────────────────────────────────────────────────────────────┘</text>
+<text x="12.0" y="583" fill="#5c6370" textLength="1041.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Enter send file · T send text · e rename · a Auto-Accept · v safety number · x remove · i add · Tab panel · g folder · N dev</text>
+</svg>

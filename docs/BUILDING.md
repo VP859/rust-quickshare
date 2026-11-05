@@ -89,6 +89,21 @@ CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$BIN/aarch64-linux-android24-clang \
 cargo clippy -p ferry -p ferry-gui --target aarch64-linux-android -- -D warnings
 ```
 
+## Screenshots in the README
+
+The images in `docs/images/` are made from the real interfaces with example data, so they can be
+made again after a change of the interface:
+
+```bash
+npx playwright install chromium
+FERRY_SCREENSHOTS=docs/images npx playwright test tests/gui/screenshots.spec.js   # GUI images and animation frames
+scripts/make-demo-gif.sh                                                          # docs/images/demo.gif (ffmpeg)
+cargo build -p ferry-cli && python3 -I scripts/tui-screenshot.py target/debug/ferry docs/images/tui.svg
+```
+
+The terminal screenshot runs `ferry tui` with an example configuration in a network namespace
+without real network (`unshare -rn`), so no device of your network appears in it.
+
 ## Releases
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`: CLI archives and installers

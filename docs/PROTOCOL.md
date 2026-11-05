@@ -6,6 +6,12 @@ implementation. The authoritative source is the code
 [`protocol-vectors.json`](protocol-vectors.json) lists exact bytes for fixed inputs and is checked
 by a test on every build, so the document, the code and the vectors cannot drift apart unnoticed.
 
+Ferry also speaks two other protocols, which are not part of `ferry/1`: it can receive with
+**LocalSend protocol v2** ([specification](https://github.com/localsend/protocol); Ferry's side is
+in [`src/localsend/`](../src/localsend/) and the README) and it serves **browser sessions** over
+HTTP ([`src/web/`](../src/web/)). Their security is described in
+[SECURITY-MODEL.md](SECURITY-MODEL.md).
+
 Contents: [versions](#versions-and-negotiation) · [transport and encoding](#transport-and-encoding) ·
 [control stream](#control-stream) · [pairing](#pairing) · [discovery](#local-network-discovery) ·
 [TICKET](#ticket) · [file names](#file-and-folder-names) · [limits](#limits) ·

@@ -5,8 +5,11 @@
 <p align="center"><b>Private, peer-to-peer file sharing for Linux, Windows and Android.</b></p>
 
 <p align="center">
+  <a href="https://github.com/VP859/rust-quickshare/actions/workflows/rust.yml"><img alt="CI" src="https://github.com/VP859/rust-quickshare/actions/workflows/rust.yml/badge.svg"></a>
+  <a href="https://github.com/VP859/rust-quickshare/releases"><img alt="Version" src="https://img.shields.io/github/v/tag/VP859/rust-quickshare?label=version&sort=semver"></a>
   <a href="LICENSE-MIT"><img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue"></a>
   <img alt="Rust 1.91+" src="https://img.shields.io/badge/rust-1.91%2B-orange">
+  <img alt="Linux, Windows, Android" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20Android-informational">
 </p>
 
 Ferry sends files, folders and text directly from one device to another over QUIC, end-to-end
@@ -17,6 +20,19 @@ paired devices can also reach each other from different networks through free pu
 
 **No telemetry.** Ferry has no analytics, no crash reporting, no update checks and never contacts
 its authors. In the default mode it does not contact any server at all.
+
+<p align="center"><img src="docs/images/demo.gif" width="640" alt="Choosing two files, picking a trusted laptop as the recipient and watching both transfers complete"></p>
+
+| Desktop | Dark theme | Android |
+|---|---|---|
+| ![Main window with nearby devices, trusted devices and transfers](docs/images/gui-desktop-light.png) | ![The same window in the dark theme](docs/images/gui-desktop-dark.png) | ![The Android app](docs/images/gui-android-light.png) |
+
+| Terminal UI (`ferry tui`) | Incoming files |
+|---|---|
+| ![Terminal UI with trusted devices, nearby devices and transfers](docs/images/tui.svg) | ![Dialog asking whether to accept three files from a phone](docs/images/gui-offer.png) |
+
+The images are made from the real interfaces with example data (`tests/gui/screenshots.spec.js`,
+`scripts/tui-screenshot.py`).
 
 ## Features
 
@@ -47,12 +63,24 @@ its authors. In the default mode it does not contact any server at all.
 
 ## Install
 
-Ferry is not published yet. Build it from source as described in
-[docs/BUILDING.md](docs/BUILDING.md):
+Ferry has no published release yet. When there is one, the
+[releases page](https://github.com/VP859/rust-quickshare/releases) has these files, with
+`SHA256SUMS.txt` to check them (`sha256sum -c SHA256SUMS.txt --ignore-missing`):
+
+| Platform | File | Contains |
+|---|---|---|
+| Debian, Ubuntu | `.deb` | desktop app, `ferry` CLI, systemd user service, "Send with Ferry" for the file managers |
+| Fedora, openSUSE | `.rpm` | the same |
+| Other Linux | `.AppImage` | desktop app (run `ferry integrate` for the file-manager entries) |
+| Windows 10/11 | `-setup.exe` (NSIS) or `.msi` | desktop app; the `.exe` also adds *Send to → Ferry* |
+| Android 7+ | `.apk` | the app |
+| Command line only | `ferry-cli-*.tar.xz` / `.zip`, or the shell / PowerShell installer | `ferry` |
+
+Until then, build it from source ([docs/BUILDING.md](docs/BUILDING.md) lists the requirements):
 
 ```bash
-cargo install --path cli --locked   # the `ferry` command line tool
-cd src-tauri && npx @tauri-apps/cli@2 build   # desktop app (.deb/.rpm/.AppImage, .msi/.exe)
+cargo install --path cli --locked              # the `ferry` command line tool
+cd src-tauri && npx @tauri-apps/cli@2 build    # desktop app (.deb/.rpm/.AppImage, .msi/.exe)
 ```
 
 ## Quick start
@@ -252,6 +280,60 @@ with a notification keeps Ferry reachable in the background. Received files are 
 `Download/Ferry`; photos and videos go to `Pictures/Ferry` so they appear in the gallery.
 Ferry's data is excluded from Android backups – a new phone pairs again.
 
+## Compared with similar tools
+
+| | Ferry | [LocalSend](https://localsend.org) | [KDE Connect](https://kdeconnect.kde.org) | [Warpinator](https://github.com/linuxmint/warpinator) | [PairDrop](https://pairdrop.net) | [croc](https://github.com/schollz/croc) / [magic-wormhole](https://magic-wormhole.readthedocs.io) |
+|---|---|---|---|---|---|---|
+| Main purpose | file and text transfer | file and text transfer | phone–computer integration | file transfer | file transfer in the browser | file transfer from the terminal |
+| Platforms | Linux, Windows, Android | all, including iOS and macOS | Linux, Windows, macOS, Android, iOS (limited) | Linux (Windows and Android ports) | any browser | any with a terminal |
+| Between different networks | optional, through relays | no | no | no | yes, through a server | yes, through a relay |
+| Trust | pairing with a code, then trusted devices | none (anyone on the network can offer files) | pairing | group code | room or pairing | one-time code phrase |
+| Interfaces | GUI, terminal UI, CLI, daemon | GUI, CLI | GUI and many integrations | GUI | web page | CLI |
+
+The table reflects the other projects as we understand them (2026); they change, so check their
+documentation. Ferry can receive from LocalSend apps ([above](#localsend-compatibility-mode)) and
+from any browser ([above](#browser-sessions-no-app-on-the-other-device)). KDE Connect does much more
+than transfers (notifications, remote input, media control); Ferry only moves files and text.
+
+## Limitations
+
+- **No iOS or macOS app.** iPhones and Macs can send to Ferry through LocalSend or a browser
+  session, but Ferry cannot send to them except through a browser session.
+- **Not audited, and largely written with an AI assistant** (see [below](#how-ferry-is-made)).
+  It has many tests, fuzzing and a written security model, but no independent review yet.
+- **Metadata is visible.** Who talks to whom, when and how much can be seen on the local network
+  and, in internet mode, by the relay operator. Ferry does not offer anonymity.
+- **Pairing protects only when the codes are compared.** The [known limitations](docs/SECURITY-MODEL.md#known-limitations)
+  list this and the other limits of the security model.
+- **The LocalSend mode and browser sessions are weaker by design** (no pairing, plain HTTP for
+  browsers); both are off until used and always ask before saving anything.
+- **Background on Android** depends on the phone: battery savers can pause Ferry; the app shows
+  what limits it.
+
+## FAQ
+
+**Is my data sent through a server?** Not in the default local mode: devices connect directly.
+In internet mode, connections still go directly when possible and otherwise through a relay that
+only forwards encrypted packets; you can run your own relay ([Own relay](#own-relay)).
+
+**Why is a device not in the *Nearby* list?** Both devices must be on the same network and the
+firewall must allow UDP 47823–47834 ([details](#local-network-and-pairing)). VPNs with a "kill
+switch" often block the local network. `ferry doctor` checks the usual causes.
+
+**What happens if a transfer is interrupted?** The partly received file is kept; sending the same
+file again continues where it stopped. A broken connection is retried automatically.
+
+**Can someone send me files I did not ask for?** Only devices you trust with Auto-Accept can;
+everyone else needs your confirmation, and programs and scripts always ask, even from Auto-Accept
+devices.
+
+**How do I move Ferry to a new computer and keep my pairings?** `ferry identity export FILE` on the
+old one, `ferry identity import FILE` on the new one. Keep the file secret.
+
+**Where is my data stored?** In `~/.config/ferry` (Linux), `%APPDATA%\ferry` (Windows) or the app's
+private storage (Android): the device key (optionally in the system keyring), the configuration and,
+unless turned off, the history of transfers. Nothing is stored anywhere else.
+
 ## Security
 
 Read [docs/SECURITY-MODEL.md](docs/SECURITY-MODEL.md) for what Ferry protects against and its known
@@ -266,6 +348,15 @@ audited.
 - [Testing](docs/TESTING.md) – tests, fuzzing, bad networks, benchmarks, Android by hand
 - [Translating](docs/TRANSLATING.md) – improving or adding a language
 - [Contributing](CONTRIBUTING.md) and the [changelog](CHANGELOG.md)
+
+## How Ferry is made
+
+Ferry is **"vibe-coded"**: most of its code, tests and documentation were written by an AI coding
+assistant – Claude, a model made by Anthropic – following the instructions of the author, who
+decides what Ferry should do, reviews and tests the results and publishes them. Treat the code
+accordingly: read it, test it, and report what you find.
+
+<sub>Written with the help of Claude (Anthropic), at the author's request.</sub>
 
 ## License
 

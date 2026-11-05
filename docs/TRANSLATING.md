@@ -1,12 +1,14 @@
 # Translating Ferry
 
-Ferry speaks English (default) and Polish. Translations live in three places:
+Ferry speaks English (default) and Polish. Translations live in these places:
 
 | Part | File | Format |
 |------|------|--------|
 | Rust side: CLI, TUI, daemon, errors, notifications, tray | `locales/app.yml` | one entry per key with every language |
 | GUI | `src-tauri/ui/js/locales/<code>.js` | one file per language |
 | Android notification and share menu | `src-tauri/gen/android/app/src/main/res/values*/strings.xml` | Android string resources |
+| Page of a browser session (`ferry web`) | `src/web/page/page.js` | the `TEXTS` object, one entry per language |
+| "Send with Ferry" in file managers | `dist/integration/` | `Name[<code>]=` lines; the Nautilus extension picks its label in `_label()` |
 
 ## Improving an existing translation
 
@@ -30,6 +32,9 @@ and stay untranslated.
 3. **GUI** – copy `src-tauri/ui/js/locales/en.js` to `<code>.js`, translate the values and add
    the language to `I18N` in `src-tauri/ui/js/i18n.js`.
 4. **Android** – add `res/values-<code>/strings.xml` and the locale to `res/xml/locales_config.xml`.
+5. **Browser page and file managers** (optional) – add the language to `TEXTS` in
+   `src/web/page/page.js` (the browser's language picks it) and a `Name[<code>]=` line to the
+   files in `dist/integration/`.
 
 Check the result:
 

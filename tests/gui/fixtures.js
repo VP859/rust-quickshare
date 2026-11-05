@@ -72,8 +72,10 @@ function installMock(responses) {
 }
 
 export const test = base.extend({
+  /** Answers that replace the defaults above (`test.use({ responses: … })`). */
+  responses: [{}, { option: true }],
   /** The app page with the mocked API; console errors fail the test. */
-  app: async ({ page }, use) => {
+  app: async ({ page, responses }, use) => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -83,7 +85,7 @@ export const test = base.extend({
       const headers = path === '/' ? { 'Content-Security-Policy': CSP } : {};
       return route.fulfill({ path: file, headers });
     });
-    await page.addInitScript(installMock, structuredClone(RESPONSES));
+    await page.addInitScript(installMock, { ...structuredClone(RESPONSES), ...responses });
     await page.goto(`${ORIGIN}/`);
     await expect(page.locator('#node-status')).toContainText('Online');
     await use(page);
