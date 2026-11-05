@@ -34,6 +34,8 @@ its authors. In the default mode it does not contact any server at all.
 - **Pause and speed limit** – pause a transfer and resume it later (the connection stays open), and
   limit the speed of sending and receiving.
 - **Several devices at once** – send the same files to several devices in one go.
+- **"Send with Ferry" in the file manager** – Dolphin, Nautilus and Nemo on Linux, *Send to* in
+  Windows File Explorer ([below](#send-with-ferry-from-the-file-manager)).
 - **History** – a searchable list of finished files and texts, kept only on this device (texts
   without their content); it can be cleared or turned off. The transfers list shows the current
   session and leads to it.
@@ -191,6 +193,20 @@ addresses on this computer or the local network.
   on random values from both devices, so an impostor cannot predict it.
 - When the device list stays empty, every interface explains why (blocked sending, no network,
   nothing received).
+
+## Send with Ferry from the file manager
+
+Select files or folders, right-click and choose **Send with Ferry**; Ferry opens (or comes to the
+front) and asks for the recipient.
+
+- **Linux packages (deb, rpm)** install the entry for Dolphin (KDE), Nemo (Cinnamon) and Nautilus
+  (GNOME Files; needs nautilus-python, e.g. `sudo dnf install nautilus-python` or
+  `sudo apt install python3-nautilus`).
+- **AppImage or `cargo install`:** run `ferry integrate` once; it adds the entries for your user
+  (in Nautilus without nautilus-python under *Scripts → Send with Ferry*). `ferry integrate --remove`
+  takes them away again.
+- **Windows:** the installer adds Ferry to *Send to* in File Explorer (Windows 11: *Show more options*).
+- Any other file manager: open the files with `ferry-gui -- FILE…`.
 
 ## Browser sessions (no app on the other device)
 

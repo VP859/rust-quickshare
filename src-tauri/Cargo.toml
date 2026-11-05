@@ -61,3 +61,6 @@ jni = "0.22.4"
 # Background limits reported by PowerHelper.kt as JSON.
 serde_json = "1"
 ndk-context = "0.1.1"
+
+[dev-dependencies]
+tempfile = "3.27.0"

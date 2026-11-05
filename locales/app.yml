@@ -396,6 +396,21 @@ history.more:
 history.off:
   en: "Recording is off (ferry config set history true)."
   pl: "Zapisywanie jest wyłączone (ferry config set history true)."
+integrate.no_gui:
+  en: "The desktop app (ferry-gui) was found neither on PATH nor next to this program; install it first"
+  pl: "Nie znaleziono aplikacji desktopowej (ferry-gui) ani w PATH, ani obok tego programu; najpierw ją zainstaluj"
+integrate.write:
+  en: "Could not write %{path}"
+  pl: "Nie można zapisać %{path}"
+integrate.done:
+  en: "\"Send with Ferry\" is now in the context menu of Dolphin, Nautilus and Nemo (restart the file manager if it is open). Remove it with: ferry integrate --remove"
+  pl: "\"Wyślij przez Ferry\" jest teraz w menu kontekstowym Dolphina, Nautilusa i Nemo (uruchom ponownie menedżer plików, jeśli jest otwarty). Usuniesz to poleceniem: ferry integrate --remove"
+integrate.removed:
+  en: "\"Send with Ferry\" was removed from the file managers of this user."
+  pl: "Usunięto \"Wyślij przez Ferry\" z menedżerów plików tego użytkownika."
+integrate.not_linux:
+  en: "On Windows the installer adds \"Send to → Ferry\"; this command is for Linux."
+  pl: "W Windows \"Wyślij do → Ferry\" dodaje instalator; to polecenie jest dla Linuksa."
 cli.shared:
   en: "Shared '%{name}'. Receiver: ferry receive <TICKET>"
   pl: "Udostępniono '%{name}'. Odbiorca: ferry receive <TICKET>"

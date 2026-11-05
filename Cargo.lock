@@ -1984,7 +1984,7 @@ dependencies = [
 
 [[package]]
 name = "ferry"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -2025,7 +2025,7 @@ dependencies = [
 
 [[package]]
 name = "ferry-cli"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "anyhow",
  "arboard",
@@ -2048,7 +2048,7 @@ dependencies = [
 
 [[package]]
 name = "ferry-gui"
-version = "0.2.7"
+version = "0.2.8"
 dependencies = [
  "anyhow",
  "ferry",
@@ -2068,6 +2068,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-notification",
  "tauri-plugin-single-instance",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-android",

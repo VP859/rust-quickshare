@@ -1,0 +1,10 @@
+[Nemo Action]
+Name=Send with Ferry
+Name[pl]=Wyślij przez Ferry
+Comment=Send the selected files to another device with Ferry
+Comment[pl]=Wyślij zaznaczone pliki na inne urządzenie przez Ferry
+Exec=ferry-gui -- %F
+Icon-Name=ferry-gui
+Selection=notnone
+Extensions=any;
+Quote=double

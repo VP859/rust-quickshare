@@ -362,9 +362,9 @@ mod imp {
         Ok(PathBuf::from(input))
     }
 
-    /// There is no "Share" menu on desktop.
+    /// Files from the file manager ("Send with Ferry"), see `open_files`.
     pub fn take_shared_files(_app: &AppHandle) -> Vec<String> {
-        Vec::new()
+        crate::open_files::take()
     }
 
     /// There is no "Share" menu on desktop.

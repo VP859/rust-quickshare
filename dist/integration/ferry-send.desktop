@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Service
+Name=Ferry
+MimeType=application/octet-stream;inode/directory;
+Actions=sendWithFerry;
+X-KDE-Priority=TopLevel
+
+[Desktop Action sendWithFerry]
+Name=Send with Ferry
+Name[pl]=Wyślij przez Ferry
+Icon=ferry-gui
+Exec=ferry-gui -- %F

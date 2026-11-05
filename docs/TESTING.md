@@ -11,6 +11,7 @@
 | Protocol versions | `tests/version_negotiation.rs` | `cargo test --test version_negotiation` | every push |
 | Protocol vectors | `tests/protocol_vectors.rs`, `scripts/verify-vectors.py` (independent, from the spec) | `cargo test --test protocol_vectors`; `python3 scripts/verify-vectors.py` | every push |
 | Pause, speed limit, history, several devices | `tests/control.rs` (real nodes; the limit is global, so its own process) | `cargo test --test control` | every push |
+| "Send with Ferry" in file managers | `src-tauri/src/open_files.rs` (command line → files), `cli/src/cli/integrate_cmd.rs`, `tests/integration/test_nautilus_extension.py` (stand-ins for Nautilus), GUI test of the handover | `cargo test -p ferry-gui -p ferry-cli`; `python3 -I tests/integration/test_nautilus_extension.py` | every push |
 | Own relay mode | `tests/relay.rs` (a real iroh relay server in the test; two devices that know only its URL transfer a file) | `cargo test --test relay` | every push |
 | Browser sessions | `tests/web.rs` (token, first device owns it, expiry, downloads, uploads, names and sizes); `tests/gui/web-page.spec.js` (the page in Chromium) | `cargo test --test web`; `npm run test:ui` | every push |
 | LocalSend compatibility mode | `tests/localsend.rs` (client written from the LocalSend spec, pins the certificate like the official one) | `cargo test --test localsend` (also multicast and the Python client: `-- --include-ignored`) | every push; the Python client on Linux |

@@ -19,6 +19,11 @@ compatibility).
 
 ### Added
 
+- **"Send with Ferry" in file managers**: the context menu of Dolphin, Nautilus (with
+  nautilus-python) and Nemo, installed by the deb and rpm packages or for one user with
+  `ferry integrate`, and *Send to → Ferry* in Windows File Explorer (NSIS installer). The desktop
+  app takes files and folders on its command line (`ferry-gui -- PATH…`); when it already runs, the
+  new start hands them over and the running app asks for the recipient.
 - **Pause and speed limit**: pause a running transfer and resume it (GUI button, `p` in the TUI);
   the connection stays open. A speed limit for sending and, separately, receiving
   (`ferry config set speed-limit 2M`, *Settings*) applies to all transfers, also from LocalSend

@@ -262,6 +262,23 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet blake3==1.0.11 cryptography==50.0.2
           "$RUNNER_TEMP/venv/bin/python" scripts/verify-vectors.py
+      # "Send with Ferry" for Nautilus, with stand-ins for its Python bindings.
+      - name: Nautilus extension
+        run: python3 -I tests/integration/test_nautilus_extension.py
+      - name: Dolphin service menu and Nemo action (syntax)
+        run: |
+          python3 - <<'PY'
+          import configparser
+          for path, group, key in [
+              ("dist/integration/ferry-send.desktop", "Desktop Action sendWithFerry", "Exec"),
+              ("dist/integration/ferry-send.nemo_action", "Nemo Action", "Exec"),
+          ]:
+              parser = configparser.ConfigParser(interpolation=None, strict=True)
+              parser.optionxform = str
+              parser.read(path, encoding="utf-8")
+              assert parser[group][key] == "ferry-gui -- %F", (path, parser[group][key])
+              print("ok ", path)
+          PY
 
   dependencies:
     name: Licenses and advisories

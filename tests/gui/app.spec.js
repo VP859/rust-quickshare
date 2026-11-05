@@ -356,3 +356,14 @@ test('the history has tabs for files and texts, and texts show no content', asyn
   await expect(text).toContainText('27 B');
   await expect(text).toContainText('Laptop');
 });
+
+test('files from "Send with Ferry" in a file manager open the recipient list', async ({ app }) => {
+  // Ferry is already running; the file manager starts it again with the files.
+  await app.evaluate(() => window.__respond('take_shared_files', ['/home/me/Photos/a.jpg', '/home/me/Photos/b.jpg']));
+  await emit(app, 'share-files', null);
+  const dialog = app.locator('#modal-recipient');
+  await expect(dialog).toHaveClass(/active/);
+  await expect(app.locator('#recipient-files')).toContainText('a.jpg, b.jpg');
+  await dialog.getByRole('button', { name: /Laptop/ }).click();
+  expect(await calls(app)).toContainEqual(['send_files', { paths: ['/home/me/Photos/a.jpg', '/home/me/Photos/b.jpg'], target: PEER }]);
+});

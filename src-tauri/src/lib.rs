@@ -9,13 +9,15 @@ rust_i18n::i18n!("../locales", fallback = "en");
 
 pub mod commands;
 mod node;
+#[cfg(desktop)]
+mod open_files;
 mod platform;
 
 use commands::*;
 use node::AppState;
 
 #[cfg(desktop)]
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// Argument passed by autostart: the app starts hidden in the tray.
 #[cfg(desktop)]
@@ -54,8 +56,15 @@ pub fn run() {
     // instance and exits before anything else is initialized.
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             tray::show_main(app);
+            // "Send with Ferry" while Ferry runs: the new start hands its files over.
+            if open_files::add(open_files::paths_from_args(
+                &args,
+                std::path::Path::new(&cwd),
+            )) {
+                let _ = app.emit("share-files", ());
+            }
         }));
     }
 
@@ -89,6 +98,13 @@ pub fn run() {
         .manage(AppState::new())
         .setup(|app| {
             platform::init(app.handle());
+            #[cfg(desktop)]
+            {
+                // Files from the file manager that started Ferry.
+                let args: Vec<String> = std::env::args().collect();
+                let cwd = std::env::current_dir().unwrap_or_default();
+                open_files::add(open_files::paths_from_args(&args, &cwd));
+            }
             commands::load_config(app.handle());
             node::start(app.handle().clone());
 

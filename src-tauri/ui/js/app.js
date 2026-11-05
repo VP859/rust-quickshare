@@ -88,5 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   checkOnline();
   setInterval(checkOnline, 60000);
   setInterval(updateDiscoveryHint, 5000);
-  if (isMobile) checkSharedFiles();
+  // Files from the Android "Share" menu or from "Send with Ferry" in a file manager.
+  await listen('share-files', checkSharedFiles);
+  checkSharedFiles();
 });

@@ -31,6 +31,12 @@ pub enum Commands {
         #[arg(short, long)]
         to: Vec<String>,
     },
+    /// Add "Send with Ferry" to the file managers of this user (Dolphin, Nautilus, Nemo; Linux).
+    Integrate {
+        /// Remove the entries again.
+        #[arg(long)]
+        remove: bool,
+    },
     /// Show finished transfers, newest first, or search them.
     History {
         /// Show only transfers whose file name, device or detail contains this text.

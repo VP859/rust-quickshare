@@ -14,6 +14,7 @@ use clap::Parser;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::history_cmd::run_history;
 use crate::cli::identity_cmd::run_identity;
+use crate::cli::integrate_cmd::run_integrate;
 use crate::cli::nearby_cmd::{run_discover, run_pair};
 use crate::cli::peer_cmd::handle_peer_cmd;
 use crate::cli::settings_cmd::{run_config, run_language, run_name, run_network};
@@ -49,6 +50,7 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Send { files, to } => run_send(&files, &to).await?,
+        Commands::Integrate { remove } => run_integrate(remove)?,
         Commands::History {
             query,
             limit,
