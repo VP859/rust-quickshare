@@ -21,7 +21,8 @@ struct Entry {
     /// Its content.
     content: String,
     /// Whether it must be executable (KDE requires it for a user's service
-    /// menus, Nautilus for scripts).
+    /// menus, Nautilus for scripts). Only applied on Unix.
+    #[cfg_attr(not(unix), allow(dead_code))]
     executable: bool,
 }
 

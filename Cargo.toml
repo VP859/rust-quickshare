@@ -11,7 +11,7 @@ resolver = "2"
 # Shared by all crates; the version is the single source for the CLI, the GUI
 # and (through scripts/set-version.sh) tauri.conf.json.
 [workspace.package]
-version = "0.2.8"
+version = "0.2.9"
 edition = "2024"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"

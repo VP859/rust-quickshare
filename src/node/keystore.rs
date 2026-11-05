@@ -80,6 +80,7 @@ const SERVICE: &str = "io.github.vp859.ferry";
 /// The entry of the device key of the configuration in `config_dir`; the
 /// folder is part of the name, so separate profiles (`FERRY_CONFIG_DIR`)
 /// keep separate keys.
+#[cfg(any(all(target_os = "linux", not(target_os = "android")), windows, test))]
 fn account(config_dir: &Path) -> String {
     format!("device key ({})", config_dir.display())
 }
