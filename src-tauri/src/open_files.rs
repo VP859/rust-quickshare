@@ -68,6 +68,8 @@ pub fn paths_from_args(args: &[String], cwd: &Path) -> Vec<String> {
         } else {
             cwd.join(path)
         };
+        // Same separators as the system's own paths (`C:/a/b` from a URI → `C:\a\b`).
+        let path: PathBuf = path.components().collect();
         if path.exists() {
             paths.push(path.to_string_lossy().into_owned());
         }
@@ -118,12 +120,12 @@ mod tests {
         let dash = dir.path().join("-weird.txt");
         std::fs::write(&dash, b"x").unwrap();
 
-        let uri = format!(
-            "file://{}",
-            file.to_string_lossy()
-                .replace(' ', "%20")
-                .replace('ę', "%C4%99")
-        );
+        // A real file URI: `file:///home/…` on Unix, `file:///C:/Users/…` on Windows.
+        let mut path = file.to_string_lossy().replace('\\', "/");
+        if !path.starts_with('/') {
+            path.insert(0, '/');
+        }
+        let uri = format!("file://{}", path.replace(' ', "%20").replace('ę', "%C4%99"));
         let got = paths_from_args(
             &args(&[
                 "--minimized",
