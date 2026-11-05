@@ -186,8 +186,15 @@ Node IDs (earlier versions of Ferry) could be matched offline in seconds by gene
   A new phone pairs again.
 * `ferry identity export <file>` writes a deliberate backup (a new `0600` file with a warning);
   `ferry identity import` restores it and keeps the replaced key as a `.bak` file.
-* The key is **not** stored in an OS keyring: Ferry also runs as a headless daemon and on Android,
-  where there is no common keyring API, and the key must be available without a desktop login.
+* **Optionally**, on desktop Linux and Windows, the key can be kept in the system's secret store
+  instead (`ferry identity storage system`, *Settings → Privacy*): Secret Service (KWallet, GNOME
+  Keyring) or the Credential Manager, protected by DPAPI. It is then encrypted while the user is
+  logged out and is not in copies or backups of the configuration folder. It is **not** hidden from
+  other programs of the same user, who can ask the store for it like Ferry does. The key is
+  written to the store and read back before the file is overwritten and removed; an interruption
+  leaves a working key in one place, and Ferry never generates a new identity when the store is
+  unreachable – it stops with an error instead. A daemon started without a desktop session cannot
+  read the store, so the file is the default.
 * Received files are stored unencrypted in the download folder (on Android `Download/Ferry`;
   photos and videos in `Pictures/Ferry`, visible to the gallery and to apps with media access).
 * The **history of transfers** (`history.jsonl` in the configuration folder, `0600` on Unix) holds

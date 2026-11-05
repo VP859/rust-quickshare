@@ -55,6 +55,13 @@ pub struct Config {
     /// by default.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub disable_history: bool,
+    /// Where the device key is kept ([`crate::node::keystore`]); change it
+    /// only with [`crate::node::identity::set_key_storage`], which moves the key.
+    #[serde(
+        default,
+        skip_serializing_if = "crate::node::keystore::KeyStorage::is_file"
+    )]
+    pub key_storage: crate::node::keystore::KeyStorage,
     /// Speed limit in bytes per second, for sending and separately for
     /// receiving ([`crate::transfer::control`]); none when unset.
     #[serde(default, skip_serializing_if = "Option::is_none")]

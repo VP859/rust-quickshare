@@ -91,6 +91,24 @@ $('privacy-exe').onchange = (e) => savePrivacy({ auto_accept_executables: e.targ
 $('privacy-localsend').onchange = (e) => savePrivacy({ localsend: e.target.checked });
 $('privacy-history').onchange = (e) => savePrivacy({ keep_history: e.target.checked });
 
+// ---------- Device key in the system's secret store ----------
+async function loadKeyStorage() {
+  try {
+    const info = await invoke('get_key_storage');
+    $('keyring-toggle').hidden = !info.supported;
+    $('privacy-keyring').checked = info.system;
+  } catch (e) { console.warn('Key storage:', e); }
+}
+$('privacy-keyring').onchange = async (e) => {
+  const system = e.target.checked;
+  e.target.disabled = true;
+  try {
+    await invoke('set_key_storage', { system });
+    toast(t(system ? 'keyring_moved_system' : 'keyring_moved_file'));
+  } catch (err) { e.target.checked = !system; fail(err); }
+  e.target.disabled = false;
+};
+
 // ---------- Speed limit ----------
 /** `2M`, `500K` or empty for no limit (bytes per second as typed by `parse_speed`). */
 function speedText(bytes) {
@@ -149,6 +167,7 @@ $('btn-settings').onclick = async () => {
   await loadPrivacy();
   await loadBackgroundStatus();
   await loadSpeedLimit();
+  await loadKeyStorage();
   if (!isMobile) { try { $('autostart').checked = await invoke('plugin:autostart|is_enabled'); } catch {} }
   if (!isMobile) { try { $('close-action').value = (await invoke('get_quit_on_close')) ? 'quit' : 'tray'; } catch {} }
   open('modal-settings');

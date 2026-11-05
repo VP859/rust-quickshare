@@ -80,11 +80,7 @@ pub fn speed_limit() -> Option<u64> {
 /// Waits while the current transfer is paused, then takes `bytes` from the
 /// speed limit of `direction`, waiting when it is used up.
 pub(crate) async fn pace(direction: Direction, bytes: u64) {
-    if let Ok(mut pause) = PAUSE.try_with(Clone::clone) {
-        // `wait_for` returns at once when not paused, and with an error when
-        // the transfer ended (its switch was dropped).
-        let _ = pause.wait_for(|paused| !paused).await;
-    }
+    wait_while_paused().await;
     let wait = {
         let mut buckets = BUCKETS
             .lock()
@@ -102,6 +98,18 @@ pub(crate) async fn pace(direction: Direction, bytes: u64) {
     };
     if let Some(wait) = wait {
         tokio::time::sleep(wait).await;
+        // Paused while waiting for the limit: hold this piece back too.
+        wait_while_paused().await;
+    }
+}
+
+/// Waits while the current transfer is paused; returns at once outside a
+/// transfer or when it is not paused.
+async fn wait_while_paused() {
+    if let Ok(mut pause) = PAUSE.try_with(Clone::clone) {
+        // `wait_for` returns at once when not paused, and with an error when
+        // the transfer ended (its switch was dropped).
+        let _ = pause.wait_for(|paused| !paused).await;
     }
 }
 

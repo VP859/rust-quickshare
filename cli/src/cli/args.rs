@@ -219,6 +219,12 @@ pub enum IdentityCommands {
         /// File to create; an existing file is never overwritten.
         file: PathBuf,
     },
+    /// Show or change where the key is kept: `file` (default) or `system`
+    /// (Secret Service / KWallet / GNOME Keyring on Linux, Credential Manager on Windows).
+    Storage {
+        /// Where to move the key; without it the current place is shown.
+        storage: Option<String>,
+    },
     /// Replace this device's key with one from a backup.
     Import {
         /// Backup created by `ferry identity export`.

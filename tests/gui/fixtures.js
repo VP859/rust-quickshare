@@ -24,6 +24,8 @@ const RESPONSES = {
   get_network_mode: { active: 'local', saved: 'local', relays: [] },
   get_privacy: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: true },
   get_speed_limit: null,
+  get_key_storage: { system: false, supported: true },
+  set_key_storage: null,
   set_speed_limit: 2097152,
   get_history: [
     { time: '2026-11-04T10:00:00Z', direction: 'download', peer: 'b'.repeat(64), file_name: 'holiday.jpg', size: 2048, status: 'completed', detail: '/home/me/Downloads/holiday.jpg' },

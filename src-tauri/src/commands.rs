@@ -959,6 +959,57 @@ pub fn clear_history() -> CmdResult<()> {
     ferry::history::clear(&path).map_err(err)
 }
 
+/// Where the device key is kept, and whether the system's secret store can
+/// be chosen here.
+#[derive(Serialize)]
+pub struct KeyStorageInfo {
+    /// The key is in the system's secret store.
+    system: bool,
+    /// This platform has a secret store Ferry can use (not Android).
+    supported: bool,
+}
+
+/// Where the device key is kept.
+///
+/// # Errors
+///
+/// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
+#[tauri::command]
+pub async fn get_key_storage(state: State<'_, AppState>) -> CmdResult<KeyStorageInfo> {
+    use ferry::node::keystore::KeyStorage;
+    Ok(KeyStorageInfo {
+        system: state.config.lock().await.key_storage == KeyStorage::System,
+        supported: KeyStorage::system_supported(),
+    })
+}
+
+/// Moves the device key into the system's secret store (`system`) or back
+/// into its file; the Node ID stays the same and the running node is not
+/// affected.
+///
+/// # Errors
+///
+/// When the secret store cannot be used; the key then stays where it was.
+#[tauri::command]
+pub async fn set_key_storage(system: bool, state: State<'_, AppState>) -> CmdResult<()> {
+    use ferry::node::keystore::KeyStorage;
+    let target = if system {
+        KeyStorage::System
+    } else {
+        KeyStorage::File
+    };
+    let mut config = state.config.lock().await;
+    // The move reads and writes config.toml itself, and talks to D-Bus or
+    // the Credential Manager: off the async threads.
+    tauri::async_runtime::spawn_blocking(move || ferry::node::identity::set_key_storage(target))
+        .await
+        .map_err(err)?
+        .map_err(|e| format!("{e:#}"))?;
+    // Keep the in-memory copy in step, or the next save would undo the switch.
+    config.key_storage = target;
+    Ok(())
+}
+
 /// The speed limit in bytes per second; `null` without a limit.
 ///
 /// # Errors

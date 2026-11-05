@@ -367,3 +367,20 @@ test('files from "Send with Ferry" in a file manager open the recipient list', a
   await dialog.getByRole('button', { name: /Laptop/ }).click();
   expect(await calls(app)).toContainEqual(['send_files', { paths: ['/home/me/Photos/a.jpg', '/home/me/Photos/b.jpg'], target: PEER }]);
 });
+
+test('the device key can be moved into the system keyring', async ({ app }) => {
+  await app.locator('#btn-settings').click();
+  await expect(app.locator('#keyring-toggle')).toBeVisible();
+  await expect(app.locator('#privacy-keyring')).not.toBeChecked();
+  await app.locator('label.switch:has(#privacy-keyring)').click();
+  expect(await calls(app)).toContainEqual(['set_key_storage', { system: true }]);
+  await expect(app.locator('#toast')).toContainText('now in the system keyring');
+  await expect(app.locator('#privacy-keyring')).toBeChecked();
+});
+
+test('the keyring option is hidden where there is no keyring', async ({ app }) => {
+  await app.evaluate(() => window.__respond('get_key_storage', { system: false, supported: false }));
+  await app.locator('#btn-settings').click();
+  await expect(app.locator('#modal-settings')).toHaveClass(/active/);
+  await expect(app.locator('#keyring-toggle')).toBeHidden();
+});

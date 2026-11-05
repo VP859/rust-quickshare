@@ -71,6 +71,39 @@ identity.read:
 identity.write:
   en: "Could not save the key to %{path}"
   pl: "Nie udało się zapisać klucza do %{path}"
+identity.in_system_store:
+  en: "the system's secret store"
+  pl: "systemowy magazyn sekretów"
+identity.storage:
+  en: "Key storage: %{storage} (file: secret.key in the configuration folder; system: the system's secret store)"
+  pl: "Przechowywanie klucza: %{storage} (file: secret.key w katalogu konfiguracji; system: systemowy magazyn sekretów)"
+identity.storage_moved:
+  en: "The key was moved (%{storage}); the Node ID stays the same."
+  pl: "Klucz został przeniesiony (%{storage}); Node ID pozostaje bez zmian."
+identity.import_system:
+  en: "The key is in the system's secret store; to import a backup, run first: ferry identity storage file"
+  pl: "Klucz jest w systemowym magazynie sekretów; aby zaimportować kopię, najpierw uruchom: ferry identity storage file"
+keystore.bad_storage:
+  en: "'%{value}' is not a key storage (use: file, system)"
+  pl: "'%{value}' nie jest miejscem przechowywania klucza (dostępne: file, system)"
+keystore.unavailable:
+  en: "The system's secret store cannot be used (%{error}). Is the desktop session running and the wallet (KWallet, GNOME Keyring) unlocked? To keep the key in a file again: ferry identity storage file"
+  pl: "Nie można użyć systemowego magazynu sekretów (%{error}). Czy sesja pulpitu działa, a portfel (KWallet, GNOME Keyring) jest odblokowany? Aby znów trzymać klucz w pliku: ferry identity storage file"
+keystore.unsupported:
+  en: "This system has no secret store Ferry can use; the key stays in a file"
+  pl: "Ten system nie ma magazynu sekretów, którego Ferry może użyć; klucz zostaje w pliku"
+keystore.missing:
+  en: "The configuration says the key is in the system's secret store, but it is not there while %{path} exists. Run: ferry identity storage system (to move the file there) or remove key_storage from config.toml"
+  pl: "Konfiguracja wskazuje, że klucz jest w systemowym magazynie sekretów, ale go tam nie ma, a istnieje %{path}. Uruchom: ferry identity storage system (aby przenieść tam plik) albo usuń key_storage z config.toml"
+keystore.empty:
+  en: "The system's secret store holds no key of this device"
+  pl: "Systemowy magazyn sekretów nie zawiera klucza tego urządzenia"
+keystore.file_differs:
+  en: "%{path} holds a different key; move it away first so the stored key is not lost"
+  pl: "%{path} zawiera inny klucz; najpierw go przenieś, aby nie stracić zapisanego klucza"
+keystore.verify_failed:
+  en: "The key read back from its new place differs; nothing was changed"
+  pl: "Klucz odczytany z nowego miejsca jest inny; niczego nie zmieniono"
 identity.bad_size:
   en: "The key file has an invalid size (32 bytes required)"
   pl: "Plik klucza ma nieprawidłowy rozmiar (wymagane 32 bajty)"
@@ -78,8 +111,8 @@ identity.bad_export:
   en: "Not a Ferry identity backup (expected a line starting with ferry-identity-v1:)"
   pl: "To nie jest kopia tożsamości Ferry (oczekiwano wiersza zaczynającego się od ferry-identity-v1:)"
 identity.show:
-  en: "Node ID:  %{id}\nKey file: %{path}"
-  pl: "Node ID:     %{id}\nPlik klucza: %{path}"
+  en: "Node ID: %{id}\nKey:     %{path}"
+  pl: "Node ID: %{id}\nKlucz:   %{path}"
 identity.exported:
   en: "Identity saved to %{path}. Keep this file secret: anyone who has it can pose as this device to its paired devices."
   pl: "Tożsamość zapisana do %{path}. Chroń ten plik: każdy, kto go ma, może podszyć się pod to urządzenie wobec sparowanych urządzeń."

@@ -125,11 +125,20 @@ async fn a_paused_transfer_waits_and_then_completes() {
                 }
                 tokio::time::sleep(Duration::from_millis(20)).await;
             };
-            // Let what was already on its way arrive, then watch for 1.5 s.
-            tokio::time::sleep(Duration::from_millis(500)).await;
+            // Let what was already on its way arrive (it is reported later on
+            // a busy machine): wait until the progress stops changing, at most
+            // 5 s, then watch for 1.5 s.
             let max_done =
                 |events: &[TransferEvent]| events.iter().map(|e| e.done).max().unwrap_or(0);
-            let before = max_done(&events.lock().unwrap());
+            let mut before = max_done(&events.lock().unwrap());
+            for _ in 0..25 {
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                let now = max_done(&events.lock().unwrap());
+                if now == before {
+                    break;
+                }
+                before = now;
+            }
             tokio::time::sleep(Duration::from_millis(1500)).await;
             let after = max_done(&events.lock().unwrap());
             assert!(

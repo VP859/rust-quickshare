@@ -1,19 +1,22 @@
 //! `ferry identity`: shows, backs up and restores the Node ID key.
 //!
 //! The key is what paired devices recognize; a backup lets a reinstalled
-//! system keep its pairings. It is stored as a file readable only by the user
-//! (see [`ferry::node::identity`]), not in an OS keyring: Ferry also runs as a
-//! headless daemon and on Android, where no common keyring API exists.
+//! system keep its pairings. It is stored as a file readable only by the user,
+//! or – optionally, on the desktop – in the system's secret store
+//! ([`ferry::node::keystore`]).
 
 use anyhow::{Context, Result};
 use rust_i18n::t;
 use std::path::Path;
 
 use crate::cli::args::IdentityCommands;
+use ferry::config::Config;
+use ferry::node::identity::set_key_storage;
 use ferry::node::identity::{
     default_key_path, load_or_generate_default_key, parse_identity, replace_secret_key,
     write_identity_export,
 };
+use ferry::node::keystore::KeyStorage;
 
 /// `ferry identity [show|export|import]`.
 ///
@@ -25,14 +28,20 @@ pub fn run_identity(command: Option<IdentityCommands>) -> Result<()> {
     match command.unwrap_or(IdentityCommands::Show) {
         IdentityCommands::Show => {
             let key = load_or_generate_default_key()?;
-            println!(
-                "{}",
-                t!(
-                    "identity.show",
-                    id = key.public(),
-                    path = default_key_path()?.display()
-                )
-            );
+            let place = match Config::load().unwrap_or_default().key_storage {
+                KeyStorage::File => default_key_path()?.display().to_string(),
+                KeyStorage::System => t!("identity.in_system_store").into_owned(),
+            };
+            println!("{}", t!("identity.show", id = key.public(), path = place));
+        }
+        IdentityCommands::Storage { storage } => {
+            if let Some(storage) = storage {
+                let target: KeyStorage = storage.parse()?;
+                set_key_storage(target)?;
+                println!("{}", t!("identity.storage_moved", storage = target));
+            }
+            let current = Config::load().unwrap_or_default().key_storage;
+            println!("{}", t!("identity.storage", storage = current));
         }
         IdentityCommands::Export { file } => {
             let key = load_or_generate_default_key()?;
@@ -49,6 +58,9 @@ fn import(file: &Path, force: bool) -> Result<()> {
     let text = std::fs::read_to_string(file)
         .with_context(|| t!("identity.read", path = file.display()))?;
     let key = parse_identity(&text)?;
+    if Config::load().unwrap_or_default().key_storage == KeyStorage::System {
+        anyhow::bail!(t!("identity.import_system"));
+    }
     let path = default_key_path()?;
     if path.exists() {
         let current = load_or_generate_default_key()?;

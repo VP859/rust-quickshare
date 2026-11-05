@@ -99,6 +99,7 @@ ferry doctor                            # network and discovery diagnostics
 | Receive from LocalSend apps (iPhone, Mac) | `localsend true` | `false` |
 | Speed limit (per second, sending and receiving separately) | `speed-limit 2M` | `off` |
 | Keep a history of transfers | `history false` | `true` |
+| Device key in the system keyring (KWallet, GNOME Keyring, Windows Credential Manager) | `ferry identity storage system` | a file (`ferry identity storage file`) |
 
 Settings are stored in `~/.config/ferry/config.toml` (Linux), `%APPDATA%\ferry\config.toml`
 (Windows) or the app's private storage (Android). Environment variables:

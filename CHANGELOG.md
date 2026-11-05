@@ -19,6 +19,10 @@ compatibility).
 
 ### Added
 
+- **Device key in the system keyring** (optional, desktop): `ferry identity storage system` or
+  *Settings → Privacy* moves the key into the Secret Service (KWallet, GNOME Keyring) or the Windows
+  Credential Manager, and `ferry identity storage file` back; the Node ID and pairings stay the
+  same. The move is verified before the key file is overwritten and removed.
 - **"Send with Ferry" in file managers**: the context menu of Dolphin, Nautilus (with
   nautilus-python) and Nemo, installed by the deb and rpm packages or for one user with
   `ferry integrate`, and *Send to → Ferry* in Windows File Explorer (NSIS installer). The desktop

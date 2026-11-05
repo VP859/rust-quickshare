@@ -141,6 +141,8 @@ pub fn run() {
             get_history,
             clear_history,
             get_speed_limit,
+            get_key_storage,
+            set_key_storage,
             set_speed_limit,
             safety_number,
             set_verified,
