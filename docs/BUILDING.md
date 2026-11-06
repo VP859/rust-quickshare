@@ -104,6 +104,26 @@ cargo build -p ferry-cli && python3 -I scripts/tui-screenshot.py target/debug/fe
 The terminal screenshot runs `ferry tui` with an example configuration in a network namespace
 without real network (`unshare -rn`), so no device of your network appears in it.
 
+## Website
+
+The project website is an [mdBook](https://rust-lang.github.io/mdBook/) made from the README, the
+other documents in the repository root and `docs/`; `site/` holds only its table of contents
+(`SUMMARY.md`), `book.toml` and a few styles (`ferry.css`). The documents stay readable on GitHub as they are.
+
+```bash
+cargo install mdbook --version 0.5.4 --locked
+python3 -I scripts/build-site.py              # → target/site/index.html
+python3 -I scripts/build-site.py --no-build   # only check the links (no mdbook needed)
+```
+
+The script copies the pages into `target/site-src`, points links to source files at GitHub, and
+fails when a link or a `#heading` between the pages does not exist. A new document is added to
+`site/SUMMARY.md`.
+
+CI (`.github/workflows/site.yml`) builds the website on every change of the documents. It is
+published to GitHub Pages only when the workflow is started by hand, after *Settings → Pages →
+Source* is set to *GitHub Actions*.
+
 ## Releases
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`: CLI archives and installers

@@ -1,0 +1,13 @@
+/* Wider pages than mdBook's default (750px), for the comparison tables, and tighter table cells. */
+:root {
+    --content-max-width: 960px;
+}
+
+.content table {
+    font-size: 0.9em;
+}
+
+.content table td,
+.content table th {
+    padding: 0.4em 0.7em;
+}

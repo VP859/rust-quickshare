@@ -8,7 +8,10 @@ all welcome.
 - Be respectful – this project follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 - Security problems are reported privately, see [SECURITY.md](SECURITY.md).
 - For larger changes, open an issue first so the approach can be discussed before you spend time
-  on it.
+  on it. [GOVERNANCE.md](GOVERNANCE.md) says how decisions are made, and the
+  [roadmap](ROADMAP.md) what is planned.
+- Used an AI tool? Say so in the pull request and check the result as carefully as your own code
+  ([details](GOVERNANCE.md#ai-assisted-development)).
 
 ## Project layout
 

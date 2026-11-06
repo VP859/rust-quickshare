@@ -167,6 +167,14 @@ compatibility).
   platform, a comparison with similar tools, limitations, FAQ and how Ferry is made (with an AI
   coding assistant). The images are made reproducibly from the real interfaces with example data
   (`tests/gui/screenshots.spec.js`, `scripts/make-demo-gif.sh`, `scripts/tui-screenshot.py`).
+- A project website (mdBook) made from the README and the documents, with link checking
+  (`scripts/build-site.py`, `.github/workflows/site.yml`; published only when started by hand).
+  New pages: a detailed comparison with other tools including where Ferry is worse
+  (`docs/COMPARISON.md`), measured benchmarks and how to repeat them (`docs/BENCHMARKS.md`), the
+  roadmap (`ROADMAP.md`), governance (`GOVERNANCE.md`) and funding (`docs/FUNDING.md`,
+  `.github/FUNDING.yml` without accounts yet).
+- `sha2` 0.11 (from 0.10), used for the LocalSend certificate fingerprint and the SHA-256 checksums
+  that LocalSend senders may include.
 - The workspace has three crates: the `ferry` library (no terminal or GUI dependencies), `ferry-cli`
   (`cli/`, the `ferry` binary) and `ferry-gui`. CLI release archives are named `ferry-cli-…`.
 - The GUI frontend is split into `index.html`, `styles.css` and ES modules with one translation

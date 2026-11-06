@@ -294,6 +294,8 @@ The table reflects the other projects as we understand them (2026); they change,
 documentation. Ferry can receive from LocalSend apps ([above](#localsend-compatibility-mode)) and
 from any browser ([above](#browser-sessions-no-app-on-the-other-device)). KDE Connect does much more
 than transfers (notifications, remote input, media control); Ferry only moves files and text.
+[docs/COMPARISON.md](docs/COMPARISON.md) goes into more detail, including **where Ferry is worse**
+and which tool to choose instead.
 
 ## Limitations
 
@@ -342,12 +344,23 @@ audited.
 
 ## Documentation
 
+- [Compared with other tools](docs/COMPARISON.md) – including where Ferry is worse
+- [Benchmarks](docs/BENCHMARKS.md) – measured speeds and how to repeat the measurements
 - [Architecture](docs/ARCHITECTURE.md) – how the crates and interfaces fit together
 - [Protocol](docs/PROTOCOL.md) – wire format, pairing and discovery
 - [Building](docs/BUILDING.md) – desktop, Android, checks and releases
 - [Testing](docs/TESTING.md) – tests, fuzzing, bad networks, benchmarks, Android by hand
 - [Translating](docs/TRANSLATING.md) – improving or adding a language
 - [Contributing](CONTRIBUTING.md) and the [changelog](CHANGELOG.md)
+
+The same documents form the project website (mdBook): `python3 -I scripts/build-site.py` builds it
+into `target/site` ([BUILDING.md](docs/BUILDING.md#website)).
+
+## Project
+
+- [Roadmap](ROADMAP.md) – what is planned, and what is not
+- [Governance](GOVERNANCE.md) – who decides and how
+- [Funding](docs/FUNDING.md) – Ferry receives no money yet; how donations will be handled openly
 
 ## How Ferry is made
 

@@ -1,0 +1,52 @@
+# The project website (mdBook, scripts/build-site.py).
+#
+# Every change of the documents builds the website and checks its links. It is published to
+# GitHub Pages only when the workflow is started by hand (Actions → Site → Run workflow), after
+# Pages is set to "GitHub Actions" in the repository settings.
+name: Site
+
+on:
+  push:
+    branches: [main]
+    paths: ["*.md", "docs/**", "site/**", "scripts/build-site.py", ".github/workflows/site.yml"]
+  pull_request:
+    paths: ["*.md", "docs/**", "site/**", "scripts/build-site.py", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@b80e2bb2635f28eb98b9fce1e2f0887e1535c6b2 # v2.90.0
+        with:
+          tool: mdbook@0.5.4
+      - name: Build the website and check its links
+        run: python3 -I scripts/build-site.py
+      - if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: target/site
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

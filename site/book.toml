@@ -1,0 +1,18 @@
+# The project website (mdBook). Its pages are the README and the documents in docs/; build it with
+# `python3 -I scripts/build-site.py`, which gathers them, fixes their links and runs `mdbook build`.
+
+[book]
+title = "Ferry"
+description = "Private, peer-to-peer file sharing for Linux, Windows and Android"
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../site"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/VP859/rust-quickshare"
+site-url = "/rust-quickshare/"
+no-section-label = true
+additional-css = ["ferry.css"]
