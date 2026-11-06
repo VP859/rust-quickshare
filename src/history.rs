@@ -195,12 +195,19 @@ fn record_entry(path: &Path, mut entry: HistoryEntry) {
     }
 }
 
+/// Held while the file is written: both ends of a transfer between two nodes
+/// of one process (and transfers to several devices) finish at the same time.
+static WRITING: Mutex<()> = Mutex::new(());
+
 /// Appends `entry` to `path`, trimming the file to [`MAX_ENTRIES`] now and then.
 ///
 /// # Errors
 ///
 /// Fails when the file cannot be written.
 pub fn append(path: &Path, entry: &HistoryEntry) -> Result<()> {
+    let _writing = WRITING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -214,7 +221,12 @@ pub fn append(path: &Path, entry: &HistoryEntry) -> Result<()> {
     let mut file = options
         .open(path)
         .with_context(|| format!("cannot open {}", path.display()))?;
-    writeln!(file, "{}", serde_json::to_string(entry)?)?;
+    // One write for the whole line: `writeln!` may write the text and the line
+    // break separately, and two such writes from other programs (a second
+    // Ferry process) could then be interleaved into one damaged line.
+    let mut line = serde_json::to_string(entry)?;
+    line.push('\n');
+    file.write_all(line.as_bytes())?;
     drop(file);
     // About 300 bytes per line: trim when the file holds about twice the limit.
     if std::fs::metadata(path).map(|m| m.len()).unwrap_or(0) > (MAX_ENTRIES as u64) * 600 {
@@ -404,5 +416,34 @@ mod tests {
         let entries = load(&path).unwrap();
         assert!(entries.len() <= MAX_ENTRIES + 600 && entries.len() >= MAX_ENTRIES);
         assert_eq!(entries[0].file_name, format!("file-{}", MAX_ENTRIES + 599));
+    }
+
+    #[test]
+    fn simultaneous_entries_do_not_damage_each_other() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("history.jsonl");
+        let threads = 8;
+        let per_thread = 150;
+        std::thread::scope(|scope| {
+            for t in 0..threads {
+                let path = &path;
+                scope.spawn(move || {
+                    let mut entry = HistoryEntry::from_event(&event(
+                        "x",
+                        TransferStatus::Completed { path: None },
+                    ))
+                    .unwrap();
+                    for i in 0..per_thread {
+                        entry.file_name = format!("file-{t}-{i}");
+                        append(path, &entry).unwrap();
+                    }
+                });
+            }
+        });
+        // Every line is a whole entry (a line damaged by interleaved writes
+        // would be skipped by `load`).
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(text.lines().count(), threads * per_thread);
+        assert_eq!(load(&path).unwrap().len(), threads * per_thread);
     }
 }

@@ -130,6 +130,10 @@ compatibility).
 
 ### Fixed
 
+- The history of transfers could lose entries when two transfers ended at the same moment (both
+  ends of a transfer inside one process, or a file sent to several devices): their lines were
+  written in pieces and could be mixed into one damaged line, which was then skipped. Entries are
+  now written one at a time, each line in a single write.
 - File names such as `". A"` were sanitized to `" A"` (leading space), and sanitizing again gave
   another name; dots and whitespace are now trimmed together (found by the property tests).
 - Errors of a broken QUIC connection read through `tokio::io` were classified as local I/O errors.
