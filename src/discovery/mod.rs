@@ -457,7 +457,7 @@ pub fn find_in(devices: &[NearbyDevice], query: &str) -> Option<NearbyDevice> {
 /// stores the result in [`DiscoveryHealth::firewall_blocking`].
 fn spawn_firewall_check(shared: Arc<Shared>, port: u16) {
     std::thread::spawn(move || {
-        let blocking = blocking_firewall(port);
+        let blocking = blocking_firewall_for(port, "udp");
         if let Some(name) = &blocking {
             warn!("Discovery: {name} blocks incoming UDP {port}");
         }
@@ -465,11 +465,6 @@ fn spawn_firewall_check(shared: Arc<Shared>, port: u16) {
             health.firewall_blocking = blocking;
         }
     });
-}
-
-/// Name of an active firewall that does not allow incoming UDP on `port`.
-fn blocking_firewall(port: u16) -> Option<String> {
-    blocking_firewall_for(port, "udp")
 }
 
 /// Name of an active firewall that does not allow incoming `protocol`

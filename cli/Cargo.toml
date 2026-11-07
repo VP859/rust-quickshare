@@ -47,5 +47,3 @@ tempfile = "3.27.0"
 arboard = "3.7.0"
 # Network interfaces for `ferry doctor`.
 network-interface = "2.0.5"
-
-tempfile = "3.27.0"

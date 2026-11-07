@@ -116,7 +116,7 @@ function speedText(bytes) {
   const mib = 1024 * 1024;
   return bytes % mib === 0 ? `${bytes / mib}M` : `${Math.round(bytes / 1024)}K`;
 }
-export async function loadSpeedLimit() {
+async function loadSpeedLimit() {
   try { $('speed-limit').value = speedText(await invoke('get_speed_limit')); } catch (e) { console.warn('Speed limit:', e); }
 }
 $('btn-speed-save').onclick = async () => {

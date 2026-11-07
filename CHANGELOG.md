@@ -167,6 +167,10 @@ compatibility).
 
 ### Changed
 
+- Progress of a transfer reaches the interfaces at most about ten times per second (the first value,
+  pauses and the end at once) instead of after every chunk: a 1 GiB transfer on a fast link now
+  makes about 30 events on each side instead of about 1260, so the GUI redraws the transfer list
+  far less often.
 - README: animation, screenshots of the desktop, Android and terminal interfaces, installation per
   platform, a comparison with similar tools, limitations, FAQ and how Ferry is made (with an AI
   coding assistant). The images are made reproducibly from the real interfaces with example data

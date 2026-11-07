@@ -59,6 +59,11 @@ const PAIR_RETRY_DELAY: Duration = Duration::from_secs(30);
 const RESUME_WINDOW: Duration = Duration::from_secs(10 * 60);
 /// Upper bound of remembered accepted files and batches.
 const MAX_RESUMABLE: usize = 256;
+/// Shortest interval between two progress events of one transfer. Data moves
+/// in pieces of up to a few MiB, so a fast transfer would otherwise report
+/// hundreds of times per second, and every event costs the interfaces work
+/// (the GUI redraws the transfer).
+const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 /// Pauses before the sender tries again after the connection broke: enough for
 /// a phone waking up or a network coming back, short enough to wait for.
 const RETRY_DELAYS: [Duration; 3] = [
@@ -549,6 +554,18 @@ pub struct Tracker<'a> {
     conn: Mutex<Option<Connection>>,
     /// Bytes reported by the last progress event, shown while reconnecting.
     last_done: std::sync::atomic::AtomicU64,
+    /// Progress events held back by [`PROGRESS_INTERVAL`].
+    shown: Mutex<ShownProgress>,
+}
+
+/// What a [`Tracker`] has shown of the progress.
+#[derive(Default)]
+struct ShownProgress {
+    /// When the last [`TransferStatus::Running`] event was emitted.
+    at: Option<Instant>,
+    /// Whether progress was held back since the last event; it is emitted by
+    /// [`Tracker::cancellable`] once the interval has passed.
+    owed: bool,
 }
 
 impl Drop for Tracker<'_> {
@@ -610,6 +627,7 @@ impl<'a> Tracker<'a> {
             pause,
             conn: Mutex::new(None),
             last_done: std::sync::atomic::AtomicU64::new(0),
+            shown: Mutex::default(),
         }
     }
 
@@ -642,6 +660,8 @@ impl<'a> Tracker<'a> {
         let mut transfer = std::pin::pin!(transfer);
         let mut pause = self.pause.clone();
         let mut watching = true;
+        let mut tick = tokio::time::interval(PROGRESS_INTERVAL);
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             tokio::select! {
                 biased;
@@ -656,6 +676,7 @@ impl<'a> Tracker<'a> {
                     let paused = *pause.borrow_and_update();
                     self.emit(done, if paused { TransferStatus::Paused } else { TransferStatus::Running });
                 }
+                _ = tick.tick() => self.emit_owed_progress(),
             }
         }
     }
@@ -667,6 +688,12 @@ impl<'a> Tracker<'a> {
 
     /// Emits an event with the given progress and status.
     pub fn emit(&self, done: u64, status: TransferStatus) {
+        if let Ok(mut shown) = self.shown.lock() {
+            shown.owed = false;
+            if status == TransferStatus::Running {
+                shown.at = Some(Instant::now());
+            }
+        }
         let mut ev = self.base.clone();
         ev.done = done;
         ev.status = status;
@@ -681,11 +708,37 @@ impl<'a> Tracker<'a> {
         (self.sink)(ev);
     }
 
-    /// Emits a [`TransferStatus::Running`] event.
+    /// Emits a [`TransferStatus::Running`] event: the first and the last
+    /// (`done` reached the size) at once, the others at most every 100 ms.
+    /// Progress held back is emitted by [`Tracker::cancellable`] when no newer
+    /// one comes in time.
     pub fn progress(&self, done: u64) {
         self.last_done
             .store(done, std::sync::atomic::Ordering::Relaxed);
-        self.emit(done, TransferStatus::Running);
+        // A total of 0 means an unknown size, not the end.
+        let last = self.base.total > 0 && done >= self.base.total;
+        let due = last
+            || self.shown.lock().map_or(true, |mut shown| {
+                let due = shown.at.is_none_or(|at| at.elapsed() >= PROGRESS_INTERVAL);
+                shown.owed = !due;
+                due
+            });
+        if due {
+            self.emit(done, TransferStatus::Running);
+        }
+    }
+
+    /// Emits the progress [`Tracker::progress`] held back, unless the
+    /// transfer is paused (its pause was reported with the latest progress).
+    fn emit_owed_progress(&self) {
+        let owed = self
+            .shown
+            .lock()
+            .is_ok_and(|mut shown| std::mem::take(&mut shown.owed));
+        if owed && !*self.pause.borrow() {
+            let done = self.last_done.load(std::sync::atomic::Ordering::Relaxed);
+            self.emit(done, TransferStatus::Running);
+        }
     }
 
     /// Emits [`TransferStatus::Completed`], [`TransferStatus::Cancelled`] or
@@ -1411,6 +1464,60 @@ pub fn new_share_token() -> ShareToken {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Progress of a fast transfer reaches the interfaces a few times per
+    /// second: the first value and the end at once, held-back values later.
+    #[tokio::test(start_paused = true)]
+    async fn progress_events_are_limited() {
+        let events = Mutex::new(Vec::new());
+        let sink = |e: TransferEvent| events.lock().unwrap().push((e.done, e.status));
+        let peer = iroh::SecretKey::generate().public();
+        let tracker = Tracker::new(peer, "a.bin", 1000, Direction::Upload, &sink);
+        let running = |events: &Mutex<Vec<(u64, TransferStatus)>>| {
+            events
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(_, s)| *s == TransferStatus::Running)
+                .map(|(done, _)| *done)
+                .collect::<Vec<_>>()
+        };
+
+        tracker
+            .cancellable(async {
+                for done in 1..=500 {
+                    tracker.progress(done);
+                }
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert_eq!(running(&events), [1], "only the first of a burst");
+
+        tracker
+            .cancellable(async {
+                tracker.progress(600);
+                tokio::time::sleep(PROGRESS_INTERVAL * 3).await;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert_eq!(running(&events), [1, 600], "held back, then emitted");
+
+        pause_transfer(tracker.id(), true);
+        tracker
+            .cancellable(async {
+                tracker.progress(700);
+                tokio::time::sleep(PROGRESS_INTERVAL * 3).await;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        assert_eq!(running(&events), [1, 600], "nothing while paused");
+
+        tracker.progress(1000);
+        assert_eq!(running(&events), [1, 600, 1000], "the end at once");
+    }
 
     fn offer(size: u64) -> TransferOffer {
         TransferOffer {
