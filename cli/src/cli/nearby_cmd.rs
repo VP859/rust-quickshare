@@ -127,6 +127,33 @@ pub async fn run_pair(target: &str, auto_accept: bool) -> Result<()> {
     }
 }
 
+/// `ferry pairing [--minutes N] [--close]`: opens pairing for unknown devices
+/// for a while, or closes it. Needed only with `paired-only`; a running daemon
+/// or TUI reads the configuration for every request.
+///
+/// # Errors
+///
+/// Fails when the configuration cannot be loaded or saved.
+pub fn run_pairing(minutes: u32, close: bool) -> Result<()> {
+    let mut config = Config::load()?;
+    if close {
+        config.close_pairing();
+        config.save()?;
+        println!("{}", t!("pair.closed"));
+        return Ok(());
+    }
+    config.open_pairing(i64::from(minutes));
+    config.save()?;
+    let minutes = config
+        .pairing_until
+        .map_or(0, |until| (until - chrono::Utc::now()).num_minutes() + 1);
+    println!("{}", t!("pair.opened", minutes = minutes));
+    if !config.paired_only {
+        println!("{}", t!("pair.not_needed"));
+    }
+    Ok(())
+}
+
 /// `ferry peer add <TICKET|Node ID>`: stores the device and sends it a pairing
 /// request, so that after confirmation the other side trusts this device too.
 ///

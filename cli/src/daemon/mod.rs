@@ -76,6 +76,12 @@ impl DaemonHandler {
 }
 
 impl TransferHandler for DaemonHandler {
+    /// Reloads the configuration, so `ferry config` and `ferry pairing` apply
+    /// without a restart.
+    async fn admits(&self, peer: EndpointId, pairing: bool) -> bool {
+        Config::load().map_or(true, |c| c.admits(&peer.to_string(), pairing))
+    }
+
     /// Reloads the configuration for every offer, so `ferry peer` changes apply
     /// without a restart.
     async fn decide(&self, peer: EndpointId, _: &str, offer: &TransferOffer) -> OfferDecision {

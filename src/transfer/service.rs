@@ -36,7 +36,7 @@ use crate::pairing::{PAIR_DECISION_TIMEOUT, PairRequest, answer_pairing, clean_d
 use crate::protocol::codec::{read_msg, write_msg};
 use crate::protocol::messages::{
     BatchDecision, BatchOffer, Hello, MAX_BATCH_NAMES, MAX_FILE_NAME_LEN, MAX_TEXT_LEN,
-    PairResponse, ShareToken, TextDecision, TransferOffer,
+    PairResponse, ShareToken, TextDecision, TransferDecision, TransferOffer,
 };
 use crate::web::BrowserOffer;
 
@@ -279,6 +279,15 @@ pub trait TransferHandler: Send + Sync + 'static {
 
     /// Receives every state change of every transfer handled by [`serve`].
     fn on_event(&self, event: TransferEvent);
+
+    /// Whether a request from `peer` may reach the user at all: `pairing` is
+    /// `true` for a pairing request. A device that is not admitted gets a
+    /// refusal (nothing is asked or shown to the user).
+    /// The default admits everyone; interfaces follow
+    /// [`Config::paired_only`](crate::config::Config::paired_only).
+    fn admits(&self, _peer: EndpointId, _pairing: bool) -> impl Future<Output = bool> + Send {
+        async { true }
+    }
 
     /// Name of this device sent in pairing responses.
     fn device_name(&self) -> String {
@@ -814,6 +823,19 @@ async fn serve_streams<H: TransferHandler>(
     approval: &mut Option<BatchApproval>,
 ) -> Result<()> {
     while let Some((channel, hello)) = Channel::accept(conn).await? {
+        let pairing = matches!(hello, Hello::Pair { .. });
+        // Downloads by TICKET are the holder's right: the token is the secret.
+        if !matches!(hello, Hello::Pull { .. }) && !handler.admits(conn.remote_id(), pairing).await
+        {
+            info!(
+                "Declined a request from the unknown device {}",
+                conn.remote_id()
+            );
+            if let Err(e) = refuse(channel, &hello).await {
+                debug!("Could not tell the device about the refusal: {e:#}");
+            }
+            continue;
+        }
         let result = match hello {
             Hello::Push => handle_push(conn, channel, handler.as_ref(), gate, approval).await,
             Hello::Batch(batch) => handle_batch(conn, channel, &batch, handler.as_ref(), gate)
@@ -844,6 +866,25 @@ async fn serve_streams<H: TransferHandler>(
         }
     }
     debug!("Connection with {} finished", conn.remote_id());
+    Ok(())
+}
+
+/// Answers a request of a device that is not admitted ([`TransferHandler::admits`])
+/// with a refusal that looks like the user's, and closes the stream. A pairing
+/// request gets no answer at all, as when it arrives too often.
+async fn refuse(mut channel: Channel, hello: &Hello) -> Result<()> {
+    let reason = t!("service.paired_only").into_owned();
+    match hello {
+        Hello::Push => write_msg(&mut channel.send, &TransferDecision::Reject { reason }).await?,
+        Hello::Batch(_) => {
+            write_msg(&mut channel.send, &BatchDecision::Rejected { reason }).await?
+        }
+        Hello::Text { .. } => {
+            write_msg(&mut channel.send, &TextDecision::Rejected { reason }).await?;
+        }
+        Hello::Pair { .. } | Hello::Pull { .. } => return Ok(()),
+    }
+    channel.finish().await;
     Ok(())
 }
 

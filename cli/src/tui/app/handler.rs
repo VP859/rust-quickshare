@@ -107,6 +107,12 @@ impl TuiHandler {
 }
 
 impl TransferHandler for TuiHandler {
+    /// Reloads the configuration, so `ferry config` and `ferry pairing` apply
+    /// without a restart.
+    async fn admits(&self, peer: EndpointId, pairing: bool) -> bool {
+        Config::load().map_or(true, |c| c.admits(&peer.to_string(), pairing))
+    }
+
     /// Reloads the configuration per offer, so a changed download folder applies immediately.
     async fn decide(&self, peer: EndpointId, _: &str, offer: &TransferOffer) -> OfferDecision {
         let config = Config::load().unwrap_or_default();

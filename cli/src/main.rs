@@ -15,7 +15,7 @@ use crate::cli::args::{Cli, Commands};
 use crate::cli::history_cmd::run_history;
 use crate::cli::identity_cmd::run_identity;
 use crate::cli::integrate_cmd::run_integrate;
-use crate::cli::nearby_cmd::{run_discover, run_pair};
+use crate::cli::nearby_cmd::{run_discover, run_pair, run_pairing};
 use crate::cli::peer_cmd::handle_peer_cmd;
 use crate::cli::settings_cmd::{run_config, run_language, run_name, run_network};
 use crate::cli::transfer_cmd::{run_receive, run_send, run_send_text, run_show_ticket};
@@ -74,6 +74,7 @@ async fn main() -> Result<()> {
             target,
             auto_accept,
         } => run_pair(&target, auto_accept).await?,
+        Commands::Pairing { minutes, close } => run_pairing(minutes, close)?,
         Commands::Name { name } => run_name(name.as_deref())?,
         Commands::Language { code } => run_language(code.as_deref())?,
         Commands::Network { mode, relays } => run_network(mode.as_deref(), &relays)?,

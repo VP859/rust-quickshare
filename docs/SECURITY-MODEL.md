@@ -134,6 +134,16 @@ compromise of the libraries Ferry depends on (see [Trusted components](#trusted-
   for Auto-Accept devices. A silently replaced clipboard is easy to miss and could be pasted
   unknowingly (e.g. a changed bank account number).
 * A daemon without a terminal declines everything that would need a question.
+* **Only paired devices** (`paired-only`, *Settings → Privacy*, off by default): offers, batches
+  and texts from a device that is not paired are declined at once with "accepts files only from
+  paired devices"; the user sees nothing and nothing is asked. Pairing requests from unknown
+  devices get no answer, except while **pairing is open** (`ferry pairing`, a button in the GUI;
+  5 minutes by default, at most 30, then it closes by itself) – the code is still compared and
+  confirmed as usual. Pairing started *from* this device always works. This closes the gap that
+  anyone who knows your Node ID or has an old TICKET can ask: they can no longer even do that.
+  It does not hide the device (see hidden mode), does not cover downloads of a shared file by
+  its TICKET (the token is the secret), and does not apply to the LocalSend mode and browser
+  sessions, which have their own switches and always ask.
 * **Resuming after a broken connection** does not ask again: when the user accepted a file (or a
   batch) and its connection broke, the same device – identified by its key – may continue that
   exact file (same BLAKE3 hash) into the same folder, and the rest of the batch, within 10 minutes.
@@ -286,6 +296,8 @@ session, so a device without Ferry can download chosen files and send files with
 * **Trust is per device key.** Anyone who obtains `secret.key` (or an export) can pose as that
   device to its paired devices, including Auto-Accept ones. Remove a lost device from the trusted
   list on the other devices.
+* **Node ID as an address:** without `paired-only`, anyone who knows your Node ID can send
+  offers and pairing requests (you must still confirm). Switch it on to refuse them silently.
 * **Auto-Accept** means files from that device are saved without asking. If that device is
   compromised, it can fill your download folder.
 * **Six-digit codes** give a 10⁻⁶ chance per attempt to an active attacker in the middle; if you

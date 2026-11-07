@@ -180,8 +180,22 @@ test('the LocalSend compatibility mode is switched on in the privacy settings', 
   await app.locator('label.switch:has(#privacy-localsend)').click();
   await expect(toggle).toBeChecked();
   expect(await calls(app)).toContainEqual(['set_privacy', {
-    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: true, keep_history: true },
+    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: true, keep_history: true, paired_only: false, pairing_open: false },
   }]);
+});
+
+test('"only paired devices" shows the pairing window, which opens pairing for a while', async ({ app }) => {
+  await app.locator('#btn-settings').click();
+  await expect(app.locator('#pairing-window')).toBeHidden();
+  await app.locator('label.switch:has(#privacy-paired)').click();
+  await expect(app.locator('#privacy-paired')).toBeChecked();
+  expect(await calls(app)).toContainEqual(['set_privacy', {
+    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: true, paired_only: true, pairing_open: false },
+  }]);
+  await expect(app.locator('#pairing-window')).toBeVisible();
+  await expect(app.locator('#pairing-window-label')).toHaveText('Pairing is closed');
+  await app.locator('#btn-pairing-window').click();
+  expect(await calls(app)).toContainEqual(['set_pairing_open', { open: true }]);
 });
 
 test('a text goes through the recipient list and appears among the transfers', async ({ app }) => {
@@ -319,7 +333,7 @@ test('the speed limit and the history setting are saved', async ({ app }) => {
   await expect(app.locator('#privacy-history')).toBeChecked();
   await app.locator('label.switch:has(#privacy-history)').click();
   expect(await calls(app)).toContainEqual(['set_privacy', {
-    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: false },
+    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: false, paired_only: false, pairing_open: false },
   }]);
 });
 

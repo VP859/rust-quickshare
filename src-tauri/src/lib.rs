@@ -152,6 +152,7 @@ pub fn run() {
             set_quit_on_close,
             get_privacy,
             set_privacy,
+            set_pairing_open,
             get_device_name,
             set_device_name,
             get_language,

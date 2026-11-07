@@ -69,6 +69,16 @@ pub struct Config {
     /// Hide this device on the local network from everyone except paired devices.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hidden: bool,
+    /// Accept offers, texts and batches only from paired devices, and
+    /// pairing requests only while pairing is open ([`Config::open_pairing`]).
+    /// Others are declined without the user being asked. Off by default.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paired_only: bool,
+    /// Until when pairing requests from unknown devices are let through
+    /// although [`Config::paired_only`] is on; kept in the file so that the
+    /// command line can open it for a running daemon.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pairing_until: Option<DateTime<Utc>>,
     /// Copy texts from Auto-Accept devices to the clipboard without asking.
     /// Off by default: a text silently replacing the clipboard is easy to miss
     /// and could be pasted unknowingly (e.g. a changed account number).
@@ -263,6 +273,35 @@ impl Config {
                 || crate::transfer::risk::file_risk(file_name).is_none())
     }
 
+    /// Longest time pairing can be left open, in minutes.
+    pub const MAX_PAIRING_MINUTES: i64 = 30;
+
+    /// Lets unknown devices send pairing requests for `minutes` (at most
+    /// [`Config::MAX_PAIRING_MINUTES`]) although [`Config::paired_only`] is on.
+    /// The caller saves the configuration.
+    pub fn open_pairing(&mut self, minutes: i64) {
+        let minutes = minutes.clamp(1, Self::MAX_PAIRING_MINUTES);
+        self.pairing_until = Some(Utc::now() + chrono::Duration::minutes(minutes));
+    }
+
+    /// Closes pairing again before its time is up.
+    pub fn close_pairing(&mut self) {
+        self.pairing_until = None;
+    }
+
+    /// Whether pairing is open at the moment.
+    pub fn pairing_open(&self) -> bool {
+        self.pairing_until.is_some_and(|until| until > Utc::now())
+    }
+
+    /// Whether a request from `node_id` is let through to the user. Always,
+    /// unless [`Config::paired_only`] is on; then only paired devices, and
+    /// unknown ones only with a pairing request (`pairing`) while pairing is
+    /// open.
+    pub fn admits(&self, node_id: &str, pairing: bool) -> bool {
+        !self.paired_only || self.peers.contains_key(node_id) || (pairing && self.pairing_open())
+    }
+
     /// Like [`Config::auto_accepts_file`] for a batch announced with these (at
     /// most the first 20) `names`. Files of an accepted batch that are risky
     /// are asked about one by one anyway.
@@ -349,6 +388,32 @@ fn fallback_alias(node_id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn paired_only_lets_strangers_pair_only_while_pairing_is_open() {
+        let mut c = Config::default();
+        let known = iroh::SecretKey::generate().public();
+        let stranger = iroh::SecretKey::generate().public().to_string();
+        c.add_paired(known, "Known", None, false).unwrap();
+        let known = known.to_string();
+
+        assert!(c.admits(&stranger, false), "off: everyone asks");
+        c.paired_only = true;
+        assert!(c.admits(&known, false) && c.admits(&known, true));
+        assert!(!c.admits(&stranger, false) && !c.admits(&stranger, true));
+
+        c.open_pairing(5);
+        assert!(c.admits(&stranger, true), "pairing request while open");
+        assert!(!c.admits(&stranger, false), "but no files or texts");
+        c.close_pairing();
+        assert!(!c.admits(&stranger, true));
+
+        c.pairing_until = Some(Utc::now() - chrono::Duration::seconds(1));
+        assert!(!c.pairing_open(), "expired");
+        c.open_pairing(1000);
+        let left = c.pairing_until.unwrap() - Utc::now();
+        assert!(left <= chrono::Duration::minutes(Config::MAX_PAIRING_MINUTES));
+    }
 
     #[test]
     fn find_by_alias_and_remove() {

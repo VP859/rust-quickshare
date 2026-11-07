@@ -70,6 +70,10 @@ function showPrivacy() {
   $('privacy-exe').checked = privacy.auto_accept_executables;
   $('privacy-localsend').checked = privacy.localsend;
   $('privacy-history').checked = privacy.keep_history;
+  $('privacy-paired').checked = privacy.paired_only;
+  $('pairing-window').hidden = !privacy.paired_only;
+  $('pairing-window-label').textContent = t(privacy.pairing_open ? 'pairing_open' : 'pairing_closed');
+  $('btn-pairing-window').textContent = t(privacy.pairing_open ? 'pairing_close' : 'pairing_open_btn');
   renderModePill();
 }
 export async function loadPrivacy() {
@@ -89,6 +93,13 @@ $('privacy-hidden').onchange = (e) => savePrivacy({ hidden: e.target.checked });
 $('privacy-texts').onchange = (e) => savePrivacy({ auto_accept_texts: e.target.checked });
 $('privacy-exe').onchange = (e) => savePrivacy({ auto_accept_executables: e.target.checked });
 $('privacy-localsend').onchange = (e) => savePrivacy({ localsend: e.target.checked });
+$('privacy-paired').onchange = (e) => savePrivacy({ paired_only: e.target.checked });
+$('btn-pairing-window').onclick = async () => {
+  try {
+    await invoke('set_pairing_open', { open: !state.privacy.pairing_open });
+    await loadPrivacy();
+  } catch (e) { fail(e); }
+};
 $('privacy-history').onchange = (e) => savePrivacy({ keep_history: e.target.checked });
 
 // ---------- Device key in the system's secret store ----------

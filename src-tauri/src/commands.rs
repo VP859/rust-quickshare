@@ -1079,6 +1079,12 @@ pub struct PrivacySettings {
     /// Finished transfers are kept in the history.
     #[serde(default = "default_true")]
     keep_history: bool,
+    /// Offers, texts and pairing requests only from paired devices.
+    #[serde(default)]
+    paired_only: bool,
+    /// Pairing is open at the moment (shown only; see [`set_pairing_open`]).
+    #[serde(default)]
+    pairing_open: bool,
 }
 
 /// `true`, for settings that are on when the frontend does not send them.
@@ -1100,6 +1106,8 @@ pub async fn get_privacy(state: State<'_, AppState>) -> CmdResult<PrivacySetting
         auto_accept_executables: config.auto_accept_executables,
         localsend: config.localsend,
         keep_history: !config.disable_history,
+        paired_only: config.paired_only,
+        pairing_open: config.pairing_open(),
     })
 }
 
@@ -1123,6 +1131,7 @@ pub async fn set_privacy(
         config.auto_accept_executables = settings.auto_accept_executables;
         config.localsend = settings.localsend;
         config.disable_history = !settings.keep_history;
+        config.paired_only = settings.paired_only;
         config.save().map_err(err)?;
         ferry::history::enable_from_config(&config);
         state.sync_visibility(&config);
@@ -1134,6 +1143,26 @@ pub async fn set_privacy(
         return Err(e);
     }
     Ok(())
+}
+
+/// Minutes pairing stays open after the user opens it.
+const PAIRING_MINUTES: i64 = 5;
+
+/// Opens pairing for a few minutes (`open`) or closes it. Only unknown devices
+/// need it, and only with `paired_only` on.
+///
+/// # Errors
+///
+/// When the configuration cannot be saved.
+#[tauri::command]
+pub async fn set_pairing_open(open: bool, state: State<'_, AppState>) -> CmdResult<()> {
+    let mut config = state.config.lock().await;
+    if open {
+        config.open_pairing(PAIRING_MINUTES);
+    } else {
+        config.close_pairing();
+    }
+    config.save().map_err(err)
 }
 
 /// Restarts the application, e.g. to apply a new network mode (desktop only;

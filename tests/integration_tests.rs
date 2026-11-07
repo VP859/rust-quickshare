@@ -38,6 +38,10 @@ struct TestHandler {
     batch: Option<bool>,
     batches: Mutex<Vec<BatchOffer>>,
     decisions: AtomicUsize,
+    /// Devices let through; `None` admits everyone. A pairing request also
+    /// passes while `pairing_open` is set (like `Config::admits`).
+    admitted: Option<Vec<EndpointId>>,
+    pairing_open: std::sync::atomic::AtomicBool,
 }
 
 impl TestHandler {
@@ -52,6 +56,8 @@ impl TestHandler {
             batch: None,
             batches: Mutex::new(Vec::new()),
             decisions: AtomicUsize::new(0),
+            admitted: None,
+            pairing_open: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -77,6 +83,11 @@ impl TransferHandler for TestHandler {
                 reason: "test".into(),
             }
         }
+    }
+
+    async fn admits(&self, peer: EndpointId, pairing: bool) -> bool {
+        self.admitted.as_ref().is_none_or(|ids| ids.contains(&peer))
+            || (pairing && self.pairing_open.load(Ordering::SeqCst))
     }
 
     fn shared_file(&self, token: &ShareToken) -> Option<PreparedFile> {
@@ -931,4 +942,78 @@ async fn test_path_traversal_exploit_blocked() -> Result<()> {
         "path traversal protection accepted a malicious file name"
     );
     Ok(())
+}
+
+/// With "only paired devices" an unknown device gets a refusal for files,
+/// batches and texts, and the user is never asked; pairing requests are
+/// ignored until pairing is opened; a paired device is not affected.
+#[tokio::test(flavor = "multi_thread")]
+async fn unknown_devices_are_declined_when_only_paired_devices_are_admitted() -> Result<()> {
+    with_timeout(async {
+        let src = tempdir()?;
+        let dst = tempdir()?;
+        let path = src.path().join("hello.txt");
+        tokio::fs::write(&path, b"hello").await?;
+        let stranger = engine().await?;
+        let friend = engine().await?;
+
+        let mut handler = TestHandler::new(true, dst.path());
+        handler.admitted = Some(vec![friend.node_id()]);
+        let handler = Arc::new(handler);
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+
+        let sent = Mutex::new(Vec::new());
+        service::send_files(&stranger, addr.clone(), std::slice::from_ref(&path), &|e| {
+            sent.lock().unwrap().push(e);
+        })
+        .await?;
+        assert!(
+            matches!(sent.lock().unwrap().last().map(|e| &e.status),
+                Some(TransferStatus::Rejected { reason }) if reason.contains("paired")),
+            "{:?}",
+            sent.lock().unwrap().last()
+        );
+        let both = [path.clone(), path.clone()];
+        let sent = Mutex::new(Vec::new());
+        service::send_files(&stranger, addr.clone(), &both, &|e| {
+            sent.lock().unwrap().push(e)
+        })
+        .await?;
+        assert!(
+            sent.lock()
+                .unwrap()
+                .iter()
+                .all(|e| matches!(e.status, TransferStatus::Rejected { .. })),
+            "a batch is declined as a whole"
+        );
+        let decision = service::send_text(&stranger, addr.clone(), "hi").await?;
+        assert!(matches!(decision, TextDecision::Rejected { .. }));
+
+        let outcome = request_pairing(&stranger, addr.clone(), "Stranger", |_| {}).await;
+        assert!(outcome.is_err(), "no answer to a pairing request");
+        assert_eq!(
+            handler.decisions.load(Ordering::SeqCst),
+            0,
+            "nobody was asked"
+        );
+        assert!(handler.pair_requests.lock().unwrap().is_empty());
+        assert!(handler.texts.lock().unwrap().is_empty());
+        assert!(!dst.path().join("hello.txt").exists());
+
+        // A paired device is served as usual.
+        service::send_files(&friend, addr.clone(), std::slice::from_ref(&path), &|_| {}).await?;
+        assert_eq!(
+            tokio::fs::read(dst.path().join("hello.txt")).await?,
+            b"hello"
+        );
+
+        // Open pairing lets pairing requests through, but still no files.
+        handler.pairing_open.store(true, Ordering::SeqCst);
+        let outcome = request_pairing(&stranger, addr.clone(), "Stranger", |_| {}).await?;
+        assert!(matches!(outcome, PairOutcome::Accepted { .. }));
+        let decision = service::send_text(&stranger, addr, "hi").await?;
+        assert!(matches!(decision, TextDecision::Rejected { .. }));
+        Ok(())
+    })
+    .await
 }

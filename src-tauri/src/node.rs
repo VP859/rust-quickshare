@@ -288,6 +288,15 @@ impl GuiHandler {
 }
 
 impl TransferHandler for GuiHandler {
+    /// Looks at the configuration the settings change (`paired_only`, pairing window).
+    async fn admits(&self, peer: EndpointId, pairing: bool) -> bool {
+        self.state()
+            .config
+            .lock()
+            .await
+            .admits(&peer.to_string(), pairing)
+    }
+
     async fn decide(
         &self,
         peer: EndpointId,

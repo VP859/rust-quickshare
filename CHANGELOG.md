@@ -19,6 +19,11 @@ compatibility).
 
 ### Added
 
+- **Only paired devices** (`ferry config set paired-only true`, *Settings → Privacy*): offers,
+  batches, texts and pairing requests from unknown devices are declined without asking, so that
+  knowing a Node ID or having an old TICKET is no longer enough to ask. A new device is paired
+  from the device that has the setting, or after `ferry pairing` / *Open pairing* has opened
+  pairing for 5 minutes.
 - **Device key in the system keyring** (optional, desktop): `ferry identity storage system` or
   *Settings → Privacy* moves the key into the Secret Service (KWallet, GNOME Keyring) or the Windows
   Credential Manager, and `ferry identity storage file` back; the Node ID and pairings stay the

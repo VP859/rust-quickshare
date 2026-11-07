@@ -103,6 +103,16 @@ pub enum Commands {
         #[arg(long, default_value_t = false)]
         auto_accept: bool,
     },
+    /// Let unknown devices send pairing requests for a few minutes, although
+    /// `paired-only` is on (also for a running daemon or TUI); `--close` ends it.
+    Pairing {
+        /// How long pairing stays open, in minutes (at most 30).
+        #[arg(short, long, default_value_t = 5)]
+        minutes: u32,
+        /// Close pairing now.
+        #[arg(long, default_value_t = false)]
+        close: bool,
+    },
     /// Show or change the name of this device visible to others.
     Name {
         /// New device name.
@@ -167,6 +177,8 @@ pub enum SettingKey {
     DownloadDir,
     /// Hidden on the local network from unpaired devices (`true`/`false`).
     Hidden,
+    /// Accept files, texts and pairing only from paired devices (`true`/`false`).
+    PairedOnly,
     /// Copy texts from Auto-Accept devices without asking (`true`/`false`).
     AutoAcceptTexts,
     /// Accept programs, scripts and macro documents from Auto-Accept devices without asking (`true`/`false`).

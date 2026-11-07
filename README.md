@@ -121,6 +121,7 @@ ferry doctor                            # network and discovery diagnostics
 | Network mode | `network-mode internet` | `local` |
 | Download folder | `download-dir ~/Inbox` | system Downloads folder |
 | Hidden from unpaired devices | `hidden true` | `false` |
+| Only paired devices (unknown ones cannot even ask; `ferry pairing` opens pairing for a few minutes) | `paired-only true` | `false` |
 | Auto-accept programs and scripts from Auto-Accept devices | `auto-accept-executables true` | `false` (they ask) |
 | Copy texts from Auto-Accept devices without asking | `auto-accept-texts true` | `false` |
 | Desktop app quits when its window is closed | `quit-on-close true` | `false` (keeps running in the tray) |

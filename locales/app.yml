@@ -238,6 +238,9 @@ service.send_failed:
 service.pairing_ticket:
   en: "This TICKET does not contain a shared file – it is a device pairing TICKET"
   pl: "TICKET nie zawiera udostępnionego pliku – to TICKET parowania urządzenia"
+service.paired_only:
+  en: "This device accepts files only from paired devices"
+  pl: "To urządzenie przyjmuje pliki tylko od sparowanych urządzeń"
 service.busy:
   en: "Too many requests are waiting for an answer – try again later"
   pl: "Zbyt wiele próśb czeka na odpowiedź – spróbuj ponownie później"
@@ -534,6 +537,15 @@ pair.done:
 pair.send_hint:
   en: "Send files with: ferry send <file> --to \"%{alias}\""
   pl: "Wysyłka: ferry send <plik> --to \"%{alias}\""
+pair.opened:
+  en: "Pairing is open for %{minutes} min: unknown devices can send pairing requests, which you still have to confirm. Close it earlier with `ferry pairing --close`."
+  pl: "Parowanie jest otwarte na %{minutes} min: nieznane urządzenia mogą wysyłać prośby o parowanie, które nadal musisz potwierdzić. Zamkniesz je wcześniej poleceniem `ferry pairing --close`."
+pair.closed:
+  en: "Pairing is closed."
+  pl: "Parowanie zamknięte."
+pair.not_needed:
+  en: "Note: `paired-only` is off, so every device can ask anyway (`ferry config set paired-only true`)."
+  pl: "Uwaga: `paired-only` jest wyłączone, więc i tak każde urządzenie może pytać (`ferry config set paired-only true`)."
 pair.rejected:
   en: "The other device declined the pairing"
   pl: "Drugie urządzenie odrzuciło parowanie"
