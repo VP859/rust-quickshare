@@ -489,6 +489,12 @@ peer.updated:
 peer.removed:
   en: "[SUCCESS] Removed device '%{target}'"
   pl: "[SUKCES] Usunięto urządzenie '%{target}'"
+peer.removed_told:
+  en: "The device was told and no longer lists this one as paired."
+  pl: "Urządzenie zostało powiadomione i nie wyświetla już tego jako sparowanego."
+peer.removed_not_told:
+  en: "The device could not be reached: it keeps this one as paired until its user removes it."
+  pl: "Nie udało się połączyć z urządzeniem: dopóki jego użytkownik go nie usunie, nadal wyświetla to jako sparowane."
 peer.added:
   en: "[SUCCESS] Added device '%{alias}' (%{id}) (Auto-Accept: %{auto})."
   pl: "[SUKCES] Dodano urządzenie '%{alias}' (%{id}) (Auto-Accept: %{auto})."
@@ -763,6 +769,9 @@ tui.auto_off:
 tui.removed:
   en: "Removed device '%{alias}'"
   pl: "Usunięto urządzenie '%{alias}'"
+tui.unpaired_by_peer:
+  en: "A device removed this one; it was removed from the trusted devices"
+  pl: "Urządzenie usunęło to urządzenie; usunięto je także z zaufanych"
 tui.error:
   en: "Error: %{error}"
   pl: "Błąd: %{error}"

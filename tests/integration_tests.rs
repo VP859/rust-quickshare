@@ -41,6 +41,8 @@ struct TestHandler {
     /// Devices let through; `None` admits everyone. A pairing request also
     /// passes while `pairing_open` is set (like `Config::admits`).
     admitted: Option<Vec<EndpointId>>,
+    /// Devices that asked to be removed ([`Hello::Unpair`]).
+    unpaired: Mutex<Vec<EndpointId>>,
     pairing_open: std::sync::atomic::AtomicBool,
 }
 
@@ -57,6 +59,7 @@ impl TestHandler {
             batches: Mutex::new(Vec::new()),
             decisions: AtomicUsize::new(0),
             admitted: None,
+            unpaired: Mutex::new(Vec::new()),
             pairing_open: std::sync::atomic::AtomicBool::new(false),
         }
     }
@@ -83,6 +86,10 @@ impl TransferHandler for TestHandler {
                 reason: "test".into(),
             }
         }
+    }
+
+    async fn peer_unpaired(&self, peer: EndpointId) {
+        self.unpaired.lock().unwrap().push(peer);
     }
 
     async fn admits(&self, peer: EndpointId, pairing: bool) -> bool {
@@ -1252,6 +1259,32 @@ async fn unknown_devices_are_declined_when_only_paired_devices_are_admitted() ->
         assert!(matches!(outcome, PairOutcome::Accepted { .. }));
         let decision = service::send_text(&stranger, addr, "hi").await?;
         assert!(matches!(decision, TextDecision::Rejected { .. }));
+        Ok(())
+    })
+    .await
+}
+
+/// A device that removes another one tells it, and the other device hears
+/// exactly who asked (the authenticated sender), nobody else.
+#[tokio::test(flavor = "multi_thread")]
+async fn removing_a_device_tells_it_to_remove_the_sender_too() -> Result<()> {
+    with_timeout(async {
+        let dir = tempdir()?;
+        let handler = Arc::new(TestHandler::new(true, dir.path()));
+        let (_rx, addr) = start_receiver(handler.clone()).await?;
+        let remover = engine().await?;
+        service::send_unpair(&remover, addr.clone()).await?;
+        assert_eq!(*handler.unpaired.lock().unwrap(), [remover.node_id()]);
+
+        // The device is gone: this is an error, not a hang.
+        let gone = engine().await?;
+        let nobody = iroh::SecretKey::generate().public();
+        let result = tokio::time::timeout(
+            Duration::from_secs(20),
+            service::send_unpair(&gone, nobody.into()),
+        )
+        .await?;
+        assert!(result.is_err());
         Ok(())
     })
     .await

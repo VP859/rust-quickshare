@@ -289,6 +289,20 @@ impl GuiHandler {
 
 impl TransferHandler for GuiHandler {
     /// Looks at the configuration the settings change (`paired_only`, pairing window).
+    async fn peer_unpaired(&self, peer: EndpointId) {
+        let state = self.state();
+        let mut config = state.config.lock().await;
+        if config.peers.remove(&peer.to_string()).is_none() {
+            return;
+        }
+        if let Err(e) = config.save() {
+            warn!("Could not save after {peer} removed this device: {e:#}");
+        }
+        state.sync_visibility(&config);
+        drop(config);
+        let _ = self.app.emit("peers-changed", ());
+    }
+
     async fn admits(&self, peer: EndpointId, pairing: bool) -> bool {
         self.state()
             .config

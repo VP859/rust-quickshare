@@ -140,6 +140,13 @@ pub enum Hello {
     /// peer closes the connection, and the sender then reconnects and offers
     /// every file separately.
     Batch(BatchOffer),
+    /// The dialing peer removed this device from its trusted devices and asks
+    /// it to remove the dialing peer as well. It can only remove itself: the
+    /// device is the one authenticated by the connection.
+    ///
+    /// Added after [`Hello::Batch`]; an older peer closes the stream, and the
+    /// removal stays one-sided as before.
+    Unpair,
 }
 
 /// Announcement of several files sent together ([`Hello::Batch`]).

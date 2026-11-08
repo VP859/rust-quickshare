@@ -289,6 +289,14 @@ pub trait TransferHandler: Send + Sync + 'static {
         async { true }
     }
 
+    /// `peer` removed this device from its trusted devices and asked
+    /// ([`Hello::Unpair`]) to be removed here too. Implementations remove it
+    /// from the trusted devices and refresh their lists; the default does
+    /// nothing.
+    fn peer_unpaired(&self, _peer: EndpointId) -> impl Future<Output = ()> + Send {
+        async {}
+    }
+
     /// Name of this device sent in pairing responses.
     fn device_name(&self) -> String {
         crate::config::Config::load()
@@ -860,6 +868,11 @@ async fn serve_streams<H: TransferHandler>(
                 .await
             }
             Hello::Text { text } => handle_text(conn, channel, text, handler.as_ref(), gate).await,
+            Hello::Unpair => {
+                handler.peer_unpaired(conn.remote_id()).await;
+                channel.finish().await;
+                Ok(())
+            }
         };
         if let Err(e) = result {
             warn!("Transfer from {} failed: {e:#}", conn.remote_id());
@@ -882,7 +895,7 @@ async fn refuse(mut channel: Channel, hello: &Hello) -> Result<()> {
         Hello::Text { .. } => {
             write_msg(&mut channel.send, &TextDecision::Rejected { reason }).await?;
         }
-        Hello::Pair { .. } | Hello::Pull { .. } => return Ok(()),
+        Hello::Pair { .. } | Hello::Pull { .. } | Hello::Unpair => return Ok(()),
     }
     channel.finish().await;
     Ok(())
@@ -1480,6 +1493,28 @@ pub async fn send_text(
         },
     ));
     decision
+}
+
+/// Time [`send_unpair`] waits for the other device.
+const UNPAIR_TIMEOUT: Duration = Duration::from_secs(8);
+
+/// Tells a device that this one removed it from its trusted devices, so that
+/// the other device stops listing this one as paired. Best effort: a device
+/// that is offline or older keeps the pairing until its user removes it.
+///
+/// # Errors
+///
+/// Fails when the device cannot be reached in time.
+pub async fn send_unpair(engine: &NodeEngine, target: iroh::EndpointAddr) -> Result<()> {
+    tokio::time::timeout(UNPAIR_TIMEOUT, async {
+        let conn = engine.connect(target).await?;
+        let channel = Channel::open(&conn, &Hello::Unpair).await?;
+        channel.finish().await;
+        conn.close(0u32.into(), b"done");
+        Ok(())
+    })
+    .await
+    .with_context(|| t!("pairing.no_answer"))?
 }
 
 /// One-line preview of a text: line breaks and control characters become

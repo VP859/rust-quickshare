@@ -70,6 +70,11 @@ The dialing peer opens a bidirectional stream and sends a `Hello` frame. Variant
 | `Pair` [2] | `name: String`, `addr: EndpointAddr`, `commitment: [u8;32]` | pairing request |
 | `Text` [3] | `text: String` (≤ 32 KiB) | text for the clipboard |
 | `Batch` [4] | `count: u32`, `total_size: u64`, `names: Vec<String>` | several files follow; decide once |
+| `Unpair` [5] | – | the sender removed this device from its trusted devices; remove the sender too |
+
+`Unpair` has no answer; the receiver ends the stream. It can only remove the device authenticated by
+the connection, never another one, so it needs no confirmation. A device that is offline or older
+keeps the pairing until its user removes it.
 
 ### File transfer (`Push`, and `Pull` in the opposite direction)
 

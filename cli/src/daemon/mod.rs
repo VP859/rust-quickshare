@@ -82,6 +82,20 @@ impl TransferHandler for DaemonHandler {
         Config::load().map_or(true, |c| c.admits(&peer.to_string(), pairing))
     }
 
+    /// The other device removed this one: remove it here too.
+    async fn peer_unpaired(&self, peer: EndpointId) {
+        let removed = Config::load().and_then(|mut c| {
+            let was = c.peers.remove(&peer.to_string()).is_some();
+            if was {
+                c.save()?;
+            }
+            Ok(was)
+        });
+        if removed.unwrap_or(false) {
+            info!("{peer} removed this device; removed it from the trusted devices");
+        }
+    }
+
     /// Reloads the configuration for every offer, so `ferry peer` changes apply
     /// without a restart.
     async fn decide(&self, peer: EndpointId, _: &str, offer: &TransferOffer) -> OfferDecision {

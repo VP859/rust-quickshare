@@ -371,12 +371,12 @@ Ferry is **"vibe-coded"**: most of its code, tests and documentation were writte
 assistant – Claude, a model made by Anthropic – following the instructions of the author, who
 decides what Ferry should do, reviews and tests the results and publishes them. Treat the code
 accordingly: read it, test it, and report what you find.
-
+(
 <sub>Written with the help of Claude (Anthropic), at the author's request.</sub>
 
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
-[MIT license](LICENSE-MIT) at your option. Unless you explicitly state otherwise, any contribution
+)[MIT license](LICENSE-MIT) at your option. Unless you explicitly state otherwise, any contribution
 intentionally submitted for inclusion in Ferry by you, as defined in the Apache-2.0 license, shall
 be dual licensed as above, without any additional terms or conditions.

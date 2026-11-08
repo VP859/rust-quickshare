@@ -33,7 +33,7 @@ pub async fn handle_peer_cmd(cmd: PeerCommands) -> Result<()> {
             confirm,
             unconfirm,
         } => verify(&target, confirm, unconfirm),
-        PeerCommands::Remove { target } => remove(&target),
+        PeerCommands::Remove { target } => remove(&target).await,
     }
 }
 
@@ -146,13 +146,30 @@ fn edit(target: &str, alias: Option<String>, auto_accept: Option<bool>) -> Resul
 }
 
 /// `ferry peer remove`: removes a device by alias or Node ID.
-fn remove(target: &str) -> Result<()> {
+///
+/// The device is told about it when it can be reached, so it stops listing
+/// this one as paired.
+async fn remove(target: &str) -> Result<()> {
     let mut config = Config::load()?;
-    if config.remove_peer(target) {
-        config.save()?;
-        println!("{}", t!("peer.removed", target = target));
-    } else {
+    let address = config.resolve_target(target).ok();
+    if !config.remove_peer(target) {
         println!("{}", t!("peer.not_found", target = target));
+        return Ok(());
+    }
+    config.save()?;
+    println!("{}", t!("peer.removed", target = target));
+    if let Some(address) = address {
+        let told = async {
+            let engine = ferry::node::NodeEngine::with_persistent_identity().await?;
+            let result = ferry::transfer::service::send_unpair(&engine, address).await;
+            engine.close().await;
+            result
+        }
+        .await;
+        match told {
+            Ok(()) => println!("{}", t!("peer.removed_told")),
+            Err(_) => println!("{}", t!("peer.removed_not_told")),
+        }
     }
     Ok(())
 }

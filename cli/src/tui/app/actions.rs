@@ -235,11 +235,22 @@ impl App {
 
     /// Removes a trusted device after confirmation.
     pub fn confirm_remove(&mut self, node_id: &str) {
+        let mut target = None;
         let result = Config::load().and_then(|mut c| {
+            target = c.resolve_target(node_id).ok();
             let alias = c.peers.remove(node_id).map(|p| p.alias).unwrap_or_default();
             c.save()?;
             Ok(t!("tui.removed", alias = alias).into_owned())
         });
+        // Tell the other device (best effort), so that it stops listing this one.
+        if result.is_ok()
+            && let Some(target) = target
+        {
+            let engine = self.engine.clone();
+            tokio::spawn(async move {
+                let _ = ferry::transfer::service::send_unpair(&engine, target).await;
+            });
+        }
         self.after_config_change(result);
     }
 

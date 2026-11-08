@@ -113,6 +113,22 @@ impl TransferHandler for TuiHandler {
         Config::load().map_or(true, |c| c.admits(&peer.to_string(), pairing))
     }
 
+    /// The other device removed this one: remove it here too.
+    async fn peer_unpaired(&self, peer: EndpointId) {
+        let removed = Config::load().and_then(|mut c| {
+            let was = c.peers.remove(&peer.to_string()).is_some();
+            if was {
+                c.save()?;
+            }
+            Ok(was)
+        });
+        if removed.unwrap_or(false) {
+            let _ = self.tx.send(UiMessage::PeersChanged(
+                t!("tui.unpaired_by_peer").into_owned(),
+            ));
+        }
+    }
+
     /// Reloads the configuration per offer, so a changed download folder applies immediately.
     async fn decide(&self, peer: EndpointId, _: &str, offer: &TransferOffer) -> OfferDecision {
         let config = Config::load().unwrap_or_default();
