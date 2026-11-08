@@ -74,6 +74,7 @@ async fn main() -> Result<()> {
             target,
             auto_accept,
         } => run_pair(&target, auto_accept).await?,
+        Commands::Localsend { command } => cli::localsend_cmd::run(command).await?,
         Commands::Pairing { minutes, close } => run_pairing(minutes, close)?,
         Commands::Name { name } => run_name(name.as_deref())?,
         Commands::Language { code } => run_language(code.as_deref())?,

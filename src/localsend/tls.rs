@@ -98,6 +98,17 @@ impl Identity {
     }
 }
 
+impl Identity {
+    /// Certificate chain and key to present as a TLS client: LocalSend apps
+    /// ask the sender for its certificate (whose fingerprint the offer names).
+    pub fn client_auth(&self) -> (Vec<CertificateDer<'static>>, PrivateKeyDer<'static>) {
+        (
+            vec![CertificateDer::from(self.cert.clone())],
+            PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(self.key.clone())),
+        )
+    }
+}
+
 /// SHA-256 of `der` as uppercase hex, the LocalSend fingerprint format.
 pub fn fingerprint_of(der: &[u8]) -> String {
     Sha256::digest(der)

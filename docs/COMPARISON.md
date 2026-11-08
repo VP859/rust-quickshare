@@ -21,8 +21,8 @@ out of date.
 ## Where Ferry is worse
 
 - **No app for iPhone, iPad or Mac.** LocalSend and KDE Connect have one, AirDrop is built in. An
-  Apple device can send to Ferry through the LocalSend app or a browser session, but Ferry can
-  send to it only through a browser session.
+  Apple device exchanges files with Ferry through the LocalSend app (both ways) or a browser
+  session, without pairing and with LocalSend's weaker security.
 - **Not released yet, not in any app store.** There is no Flathub, F-Droid, winget or Play Store
   package (see the [roadmap](../ROADMAP.md)). LocalSend, KDE Connect and Warpinator are a click away
   in most stores and distributions.
@@ -33,8 +33,8 @@ out of date.
 - **Needs a shared network, or the internet.** Quick Share and AirDrop also work between two
   phones with no Wi-Fi at all, over Bluetooth and Wi-Fi Direct. Ferry needs both devices on the
   same network, or the internet mode and its relays.
-- **Only Ferry speaks Ferry's protocol.** Apart from receiving from LocalSend apps and browsers,
-  both sides need Ferry. A LocalSend user can talk to every LocalSend app on every platform.
+- **Only Ferry speaks Ferry's protocol.** Apart from LocalSend apps and browsers, both sides need
+  Ferry. A LocalSend user can talk to every LocalSend app on every platform.
 - **Does one thing.** KDE Connect also syncs the clipboard, shows phone notifications on the
   computer, controls media and works as a remote mouse. Ferry only moves files and text.
 - **The other side must have Ferry installed** for its full security. PairDrop works with nothing

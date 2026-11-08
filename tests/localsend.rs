@@ -820,3 +820,429 @@ fn gethostname() -> String {
         .unwrap();
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
+
+// ---------------------------------------------------------------------------
+// Sending to a LocalSend app (ferry::localsend::client)
+// ---------------------------------------------------------------------------
+
+/// The receiving side is Ferry's own LocalSend server, which the tests above
+/// check against the specification; here it stands for a LocalSend app.
+fn localsend_device(setup: &Setup, fingerprint: &str) -> ferry::localsend::client::LocalSendDevice {
+    ferry::localsend::client::LocalSendDevice {
+        alias: "Kate's iPhone".into(),
+        model: Some("iPhone".into()),
+        device_type: Some("mobile".into()),
+        fingerprint: fingerprint.into(),
+        address: SocketAddr::from((Ipv4Addr::LOCALHOST, setup.server.port())),
+        https: true,
+    }
+}
+
+fn own_device(dir: &Path) -> ferry::localsend::client::OwnDevice {
+    ferry::localsend::client::OwnDevice {
+        name: "Ferry Laptop".into(),
+        cert_dir: Some(dir.to_path_buf()),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn files_and_folders_are_sent_to_a_localsend_app() {
+    use ferry::localsend::client::{SendResult, send};
+    let dest = tempfile::tempdir().unwrap();
+    let interface = Interface::new(Answer::Accept(dest.path().to_path_buf()));
+    let setup = start(interface.clone()).await;
+    let device = localsend_device(&setup, setup.server.fingerprint());
+
+    let src = tempfile::tempdir().unwrap();
+    let photo = src.path().join("photo.jpg");
+    std::fs::write(&photo, vec![7u8; 700_000]).unwrap();
+    let folder = src.path().join("Trip");
+    std::fs::create_dir_all(folder.join("day1")).unwrap();
+    std::fs::write(folder.join("day1/a.txt"), b"hello").unwrap();
+    let mine = tempfile::tempdir().unwrap();
+
+    let events = Mutex::new(Vec::new());
+    let result = send(
+        &device,
+        &[photo, folder],
+        &own_device(mine.path()),
+        None,
+        &|e| events.lock().unwrap().push(e),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result, SendResult::Sent);
+    assert_eq!(
+        std::fs::read(dest.path().join("photo.jpg")).unwrap().len(),
+        700_000
+    );
+    assert_eq!(
+        std::fs::read(dest.path().join("Trip/day1/a.txt")).unwrap(),
+        b"hello"
+    );
+
+    let offer = interface.offers.lock().unwrap()[0].clone();
+    assert_eq!(offer.sender.alias, "Ferry Laptop");
+    assert_eq!(offer.count, 2);
+    let events = events.into_inner().unwrap();
+    let finals: Vec<_> = events.iter().filter(|e| e.status.is_final()).collect();
+    assert_eq!(finals.len(), 2);
+    assert!(
+        finals
+            .iter()
+            .all(|e| matches!(e.status, TransferStatus::Completed { .. })
+                && e.peer == "localsend:127.0.0.1"
+                && e.peer_name.as_deref() == Some("Kate's iPhone (iPhone)"))
+    );
+    assert!(
+        events
+            .iter()
+            .any(|e| e.status == TransferStatus::AwaitingDecision)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_declined_offer_is_reported_and_nothing_is_uploaded() {
+    use ferry::localsend::client::{SendResult, send};
+    let interface = Interface::new(Answer::Reject);
+    let setup = start(interface.clone()).await;
+    let device = localsend_device(&setup, setup.server.fingerprint());
+    let src = tempfile::tempdir().unwrap();
+    let file = src.path().join("a.bin");
+    std::fs::write(&file, b"x").unwrap();
+    let mine = tempfile::tempdir().unwrap();
+    let events = Mutex::new(Vec::new());
+    let result = send(&device, &[file], &own_device(mine.path()), None, &|e| {
+        events.lock().unwrap().push(e)
+    })
+    .await
+    .unwrap();
+    assert_eq!(result, SendResult::Rejected);
+    assert!(matches!(
+        events.lock().unwrap().last().map(|e| &e.status),
+        Some(TransferStatus::Rejected { .. })
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_device_with_another_certificate_than_announced_gets_nothing() {
+    use ferry::localsend::client::send;
+    let dest = tempfile::tempdir().unwrap();
+    let interface = Interface::new(Answer::Accept(dest.path().to_path_buf()));
+    let setup = start(interface.clone()).await;
+    // An impostor announced the name with its own fingerprint.
+    let device = localsend_device(&setup, &"AB".repeat(32));
+    let src = tempfile::tempdir().unwrap();
+    let file = src.path().join("secret.pdf");
+    std::fs::write(&file, b"secret").unwrap();
+    let mine = tempfile::tempdir().unwrap();
+    let error = send(&device, &[file], &own_device(mine.path()), None, &|_| {})
+        .await
+        .unwrap_err();
+    assert!(format!("{error:#}").contains("certificate"), "{error:#}");
+    assert!(
+        interface.offers.lock().unwrap().is_empty(),
+        "no offer reached it"
+    );
+    assert!(std::fs::read_dir(dest.path()).unwrap().next().is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_localsend_app_is_found_by_its_address() {
+    let setup = start(Interface::new(Answer::Reject)).await;
+    let mine = tempfile::tempdir().unwrap();
+    let device = ferry::localsend::client::LocalSendDevice::probe(
+        Ipv4Addr::LOCALHOST.into(),
+        Some(setup.server.port()),
+        &own_device(mine.path()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(device.alias, "Ferry Laptop");
+    assert!(device.https);
+    assert!(
+        device
+            .fingerprint
+            .eq_ignore_ascii_case(setup.server.fingerprint())
+    );
+    assert!(ferry::localsend::client::find("127.0.0.1").is_some());
+}
+
+/// A LocalSend app that, like newer versions, requires the sender's
+/// certificate (mutual TLS) and checks that it is the one the offer names; it
+/// may also ask for a PIN.
+struct StrictApp {
+    cert: Vec<u8>,
+    key: Vec<u8>,
+    pin: Option<&'static str>,
+    client_fingerprints: Mutex<Vec<String>>,
+    offered_fingerprint: Mutex<Option<String>>,
+    uploaded: Mutex<Vec<u8>>,
+}
+
+#[derive(Debug)]
+struct RequireClientCert(CryptoProvider);
+
+impl tokio_rustls::rustls::server::danger::ClientCertVerifier for RequireClientCert {
+    fn root_hint_subjects(&self) -> &[tokio_rustls::rustls::DistinguishedName] {
+        &[]
+    }
+    fn verify_client_cert(
+        &self,
+        _: &CertificateDer<'_>,
+        _: &[CertificateDer<'_>],
+        _: UnixTime,
+    ) -> Result<tokio_rustls::rustls::server::danger::ClientCertVerified, TlsError> {
+        Ok(tokio_rustls::rustls::server::danger::ClientCertVerified::assertion())
+    }
+    fn client_auth_mandatory(&self) -> bool {
+        true
+    }
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, TlsError> {
+        verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, TlsError> {
+        verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.0.signature_verification_algorithms.supported_schemes()
+    }
+}
+
+impl StrictApp {
+    fn new(pin: Option<&'static str>) -> Arc<Self> {
+        let key = rcgen::KeyPair::generate().unwrap();
+        let cert = rcgen::CertificateParams::default()
+            .self_signed(&key)
+            .unwrap();
+        Arc::new(Self {
+            cert: cert.der().to_vec(),
+            key: key.serialize_der(),
+            pin,
+            client_fingerprints: Mutex::default(),
+            offered_fingerprint: Mutex::default(),
+            uploaded: Mutex::default(),
+        })
+    }
+
+    fn fingerprint(&self) -> String {
+        ferry::localsend::tls::fingerprint_of(&self.cert)
+    }
+
+    /// Serves on a free port of 127.0.0.1; returns the port.
+    async fn start(self: &Arc<Self>) -> u16 {
+        use tokio_rustls::rustls::ServerConfig;
+        use tokio_rustls::rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+        let provider = ring::default_provider();
+        let config = ServerConfig::builder_with_provider(Arc::new(provider.clone()))
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_client_cert_verifier(Arc::new(RequireClientCert(provider)))
+            .with_single_cert(
+                vec![CertificateDer::from(self.cert.clone())],
+                PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(self.key.clone())),
+            )
+            .unwrap();
+        let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(config));
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .await
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let app = self.clone();
+        tokio::spawn(async move {
+            loop {
+                let Ok((tcp, _)) = listener.accept().await else {
+                    return;
+                };
+                let (acceptor, app) = (acceptor.clone(), app.clone());
+                tokio::spawn(async move {
+                    let Ok(tls) = acceptor.accept(tcp).await else {
+                        return;
+                    };
+                    if let Some(certs) = tls.get_ref().1.peer_certificates() {
+                        app.client_fingerprints
+                            .lock()
+                            .unwrap()
+                            .push(ferry::localsend::tls::fingerprint_of(certs[0].as_ref()));
+                    }
+                    let service = hyper::service::service_fn(move |req| {
+                        let app = app.clone();
+                        async move { Ok::<_, std::convert::Infallible>(app.answer(req).await) }
+                    });
+                    let _ = hyper::server::conn::http1::Builder::new()
+                        .serve_connection(TokioIo::new(tls), service)
+                        .await;
+                });
+            }
+        });
+        port
+    }
+
+    async fn answer(&self, req: Request<hyper::body::Incoming>) -> hyper::Response<Full<Bytes>> {
+        let reply = |status: StatusCode, body: String| {
+            hyper::Response::builder()
+                .status(status)
+                .body(Full::new(Bytes::from(body)))
+                .unwrap()
+        };
+        let query = req.uri().query().unwrap_or_default().to_string();
+        if let Some(pin) = self.pin
+            && req.uri().path().ends_with("prepare-upload")
+            && !query.contains(&format!("pin={pin}"))
+        {
+            return reply(StatusCode::UNAUTHORIZED, "PIN".into());
+        }
+        let path = req.uri().path().to_string();
+        let body = req.into_body().collect().await.unwrap().to_bytes();
+        if path.ends_with("prepare-upload") {
+            let offer: Value = serde_json::from_slice(&body).unwrap();
+            *self.offered_fingerprint.lock().unwrap() =
+                offer["info"]["fingerprint"].as_str().map(str::to_string);
+            let files: serde_json::Map<String, Value> = offer["files"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(|id| (id.clone(), json!(format!("token-{id}"))))
+                .collect();
+            return reply(
+                StatusCode::OK,
+                json!({ "sessionId": "s1", "files": files }).to_string(),
+            );
+        }
+        if path.ends_with("upload") {
+            self.uploaded.lock().unwrap().extend_from_slice(&body);
+            return reply(StatusCode::OK, String::new());
+        }
+        reply(StatusCode::NOT_FOUND, String::new())
+    }
+}
+
+fn strict_device(app: &StrictApp, port: u16) -> ferry::localsend::client::LocalSendDevice {
+    ferry::localsend::client::LocalSendDevice {
+        alias: "Phone".into(),
+        model: None,
+        device_type: Some("mobile".into()),
+        fingerprint: app.fingerprint(),
+        address: SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+        https: true,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_app_that_requires_the_senders_certificate_gets_it() {
+    let app = StrictApp::new(None);
+    let port = app.start().await;
+    let src = tempfile::tempdir().unwrap();
+    let file = src.path().join("photo.jpg");
+    std::fs::write(&file, vec![9u8; 300_000]).unwrap();
+    let mine = tempfile::tempdir().unwrap();
+    let result = ferry::localsend::client::send(
+        &strict_device(&app, port),
+        &[file],
+        &own_device(mine.path()),
+        None,
+        &|_| {},
+    )
+    .await
+    .unwrap();
+    assert_eq!(result, ferry::localsend::client::SendResult::Sent);
+    assert_eq!(app.uploaded.lock().unwrap().len(), 300_000);
+    let own = ferry::localsend::tls::Identity::load_or_create(mine.path()).unwrap();
+    let seen = app.client_fingerprints.lock().unwrap().clone();
+    assert!(!seen.is_empty() && seen.iter().all(|f| *f == own.fingerprint()));
+    assert_eq!(
+        app.offered_fingerprint.lock().unwrap().clone(),
+        Some(own.fingerprint())
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pin_is_asked_for_and_sent() {
+    use ferry::localsend::client::{PinRequired, send};
+    let app = StrictApp::new(Some("4711"));
+    let port = app.start().await;
+    let src = tempfile::tempdir().unwrap();
+    let file = src.path().join("a.txt");
+    std::fs::write(&file, b"hi").unwrap();
+    let mine = tempfile::tempdir().unwrap();
+    let device = strict_device(&app, port);
+    let me = own_device(mine.path());
+    let missing = send(&device, std::slice::from_ref(&file), &me, None, &|_| {})
+        .await
+        .unwrap_err();
+    assert_eq!(
+        missing.downcast_ref::<PinRequired>(),
+        Some(&PinRequired { wrong: false })
+    );
+    let wrong = send(
+        &device,
+        std::slice::from_ref(&file),
+        &me,
+        Some("0000"),
+        &|_| {},
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        wrong.downcast_ref::<PinRequired>(),
+        Some(&PinRequired { wrong: true })
+    );
+    send(&device, &[file], &me, Some("4711"), &|_| {})
+        .await
+        .unwrap();
+    assert_eq!(*app.uploaded.lock().unwrap(), b"hi");
+}
+
+/// While scanning, LocalSend apps that answer with `register` (as they do,
+/// instead of a multicast answer) are listed. Uses the fixed port 53317 and
+/// announces on the local network, so it is not run by default.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "uses port 53317 and multicast on the local network"]
+async fn apps_that_answer_a_scan_with_register_are_listed() {
+    if std::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 53317)).is_err() {
+        eprintln!("port 53317 is taken (a running Ferry or LocalSend); its server answers instead");
+        return;
+    }
+    let engine = NodeEngine::new(SecretKey::generate()).await.unwrap();
+    let mine = tempfile::tempdir().unwrap();
+    let me = own_device(mine.path());
+    let scan = tokio::spawn(async move {
+        ferry::localsend::client::scan(&engine, &me, std::time::Duration::from_secs(2)).await
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let answer = json!({
+        "alias": "Answering Phone", "version": "2.1", "deviceModel": "Pixel",
+        "deviceType": "mobile", "fingerprint": "ANSWERING", "port": 53317,
+        "protocol": "https", "download": false
+    });
+    let reply = call(53317, None, "POST", "register", answer.to_string())
+        .await
+        .unwrap();
+    assert_eq!(reply.status, StatusCode::OK);
+    assert_eq!(reply.json()["alias"], "Ferry Laptop");
+    let found = scan.await.unwrap().unwrap();
+    assert!(
+        found.iter().any(|d| d.alias == "Answering Phone"),
+        "{found:?}"
+    );
+}

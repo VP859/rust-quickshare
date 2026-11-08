@@ -276,8 +276,21 @@ deliberately runs with **LocalSend's** security model, which is weaker than Ferr
 * **Separate identity:** the LocalSend certificate is not derived from the Ferry key; LocalSend
   devices never see the Node ID and cannot link the device to its Ferry identity (except through
   the announced name and the IP address).
-* Only receiving is implemented: Ferry never sends files to LocalSend devices, and the LocalSend
-  download API (sharing through a browser) is not offered.
+* **Sending to LocalSend apps** (`src/localsend/client.rs`, without the mode) has the mirror
+  weakness: the **receiver is not authenticated**. A LocalSend app is known by what it announces
+  on multicast (or by the address the user typed); anyone on the local network can announce any
+  name. Ferry pins the certificate fingerprint of the announcement, so the connection goes to the
+  device that announced it and not to someone who only answers at the same address, and refuses
+  to send when the certificate differs – but it cannot know *who* announced it. The interfaces say
+  so before sending. Searching (`ferry localsend scan`, *Search for LocalSend apps*) announces this
+  device's name and the compatibility-mode certificate fingerprint to every LocalSend app on the
+  network; it happens only when the user asks, and for its few seconds a server on TCP 53317
+  answers only `register` and `info` (when the compatibility mode is off). An address typed by the
+  user is trusted on first use: its certificate is taken as it comes. Ferry presents the
+  compatibility mode's certificate as a TLS client certificate, as newer LocalSend apps require;
+  it is the one whose fingerprint the offer names, not the Ferry key. A PIN, for apps that require
+  one, is sent in the query of the encrypted request, as the official app does.
+* The LocalSend download API (sharing through a browser) is not offered.
 
 ### Browser sessions
 

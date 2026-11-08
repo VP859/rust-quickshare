@@ -57,9 +57,9 @@ The images are made from the real interfaces with example data (`tests/gui/scree
   session and leads to it.
 - **Every interface** – desktop and Android app (Tauri), terminal UI, command line and a
   background daemon; English and Polish.
-- **Receive from iPhone and Mac** – an optional [LocalSend](https://localsend.org) compatibility
-  mode lets the LocalSend app (iOS, macOS, Android, Windows, Linux) send files to Ferry
-  ([below](#localsend-compatibility-mode)).
+- **iPhone and Mac through LocalSend** – send files and folders to the
+  [LocalSend](https://localsend.org) app (iOS, macOS, Android, Windows, Linux), and with an optional
+  compatibility mode receive from it ([below](#localsend-compatibility-mode)).
 
 ## Install
 
@@ -268,7 +268,16 @@ LocalSend's list of nearby devices like another LocalSend device.
   declines), marks the offer as *LocalSend · not verified* with the sender's IP address, warns about
   programs and scripts, and makes a declined sender wait before it can offer again. The transfer is
   encrypted with TLS, but the sender is not authenticated.
-- Only receiving is supported. Sending to LocalSend devices is not.
+- **Sending to LocalSend apps** works without the mode: in the GUI they are listed under *Nearby*
+  (*Search* also looks for them) and in the recipient list, on the command line
+  `ferry localsend scan` and `ferry localsend send FILE… --to NAME` (or `--to 192.168.1.20` when
+  multicast does not get through). An app that requires a PIN gets it from a dialog, or from
+  `--pin` / a prompt on the command line. Searching listens on port 53317 for a few seconds, as
+  LocalSend apps answer there; when the compatibility mode runs (in the GUI, the TUI or the daemon),
+  its server takes the answers, and a search from the command line then finds fewer apps. The same weakness applies the
+  other way round: the **receiver's name is not verified**, anyone on the network can announce
+  "Kate's iPhone". Ferry only checks that the app presents the certificate it announced, says so
+  before sending, and searching shows your device name to the LocalSend apps on the network.
 - It uses port **53317** (TCP for the transfers, UDP multicast `224.0.0.167` for discovery); allow
   both in the firewall: `sudo firewall-cmd --permanent --add-port=53317/tcp --add-port=53317/udp &&
   sudo firewall-cmd --reload`. The LocalSend app itself cannot run on the same computer at the same
@@ -294,16 +303,16 @@ Ferry's data is excluded from Android backups – a new phone pairs again.
 | Interfaces | GUI, terminal UI, CLI, daemon | GUI, CLI | GUI and many integrations | GUI | web page | CLI |
 
 The table reflects the other projects as we understand them (2026); they change, so check their
-documentation. Ferry can receive from LocalSend apps ([above](#localsend-compatibility-mode)) and
-from any browser ([above](#browser-sessions-no-app-on-the-other-device)). KDE Connect does much more
+documentation. Ferry can send to and receive from LocalSend apps
+([above](#localsend-compatibility-mode)) and exchange files with any browser ([above](#browser-sessions-no-app-on-the-other-device)). KDE Connect does much more
 than transfers (notifications, remote input, media control); Ferry only moves files and text.
 [docs/COMPARISON.md](docs/COMPARISON.md) goes into more detail, including **where Ferry is worse**
 and which tool to choose instead.
 
 ## Limitations
 
-- **No iOS or macOS app.** iPhones and Macs can send to Ferry through LocalSend or a browser
-  session, but Ferry cannot send to them except through a browser session.
+- **No iOS or macOS app.** iPhones and Macs exchange files with Ferry through the LocalSend app or
+  a browser session, both without pairing and with weaker security than between two Ferry devices.
 - **Not audited, and largely written with an AI assistant** (see [below](#how-ferry-is-made)).
   It has many tests, fuzzing and a written security model, but no independent review yet.
 - **Metadata is visible.** Who talks to whom, when and how much can be seen on the local network

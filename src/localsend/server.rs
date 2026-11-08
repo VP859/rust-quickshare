@@ -198,6 +198,7 @@ impl<H: TransferHandler> Server<H> {
         match read_json::<DeviceInfo>(req, MAX_REGISTER_BODY).await {
             Ok(device) => {
                 debug!("LocalSend device '{}' at {ip}", device.clean_alias());
+                super::client::remember_info(&device, ip, &self.info.fingerprint);
                 json(StatusCode::OK, &self.own_info())
             }
             Err(status) => message(status, "Invalid body"),

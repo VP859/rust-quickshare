@@ -4,6 +4,7 @@
 //   peers.js      trusted devices, device menu, safety number
 //   nearby.js     devices on the local network, pairing, default device name
 //   send.js       choosing a recipient, sharing by TICKET, drag and drop
+//   localsend.js  LocalSend apps (iPhone, Mac): list, search, sending, PIN
 //   texts.js      sending and receiving texts and links
 //   transfers.js  the transfers list and incoming offers
 //   settings.js   the settings dialog
@@ -14,6 +15,7 @@ import { fail, toast } from './dom.js';
 import './history.js';
 import { applyStaticText, t } from './i18n.js';
 import { ensureDeviceName, listenNearbyAndPairing, pairRequests, renderNearby, setNearby, showNextPairRequest, updateDiscoveryHint } from './nearby.js';
+import { listenLocalSend } from './localsend.js';
 import { loadNodeInfo, renderNodeStatus } from './node.js';
 import { checkOnline, refreshPeers, renderPeers } from './peers.js';
 import { chooseRecipient, setupDragDrop } from './send.js';
@@ -78,6 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
   await listenNearbyAndPairing();
+  await listenLocalSend();
   await setupDragDrop();
   await refreshPeers();
   await ensureDeviceName();

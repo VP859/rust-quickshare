@@ -96,6 +96,9 @@ section > header h2 { font-size: 14px; font-weight: 600; }
 .list.menu-open { overflow: visible; }
 .row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; position: relative; transition: background .12s; }
 .row + .row { border-top: 1px solid var(--border); }
+.subsection { margin-top: 18px; }
+.subhead { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.hint.caution { color: var(--warn); }
 .row.clickable { cursor: pointer; }
 .row.clickable:hover, .row.drag-over { background: var(--hover); }
 .row.drag-over { box-shadow: inset 3px 0 0 var(--accent); }
@@ -162,6 +165,7 @@ select {
 .background-status li.ok::before { content: "✓"; color: var(--ok); }
 .safety-number { display: grid; grid-template-columns: repeat(4, auto); justify-content: space-between; gap: 6px 10px; padding: 14px; font: 600 17px var(--mono); letter-spacing: .06em; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); -webkit-user-select: text; user-select: text; }
 .tag.verified { color: var(--ok); }
+.row .sub .tag.unverified { color: var(--warn); }
 .risk-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--bad); border-radius: var(--radius); background: var(--bad-soft); color: var(--bad); font-size: 13px; font-weight: 500; }
 .compat-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--warn); border-radius: var(--radius); color: var(--warn); font-size: 13px; font-weight: 500; }
 .relay-field { display: grid; gap: 6px; margin-top: 8px; }
@@ -189,6 +193,10 @@ select {
 .qr svg { width: 100%; height: auto; display: block; }
 .pair-code { font: 600 30px var(--mono); letter-spacing: .14em; text-align: center; padding: 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); -webkit-user-select: text; user-select: text; }
 .recipients { display: flex; flex-direction: column; gap: 6px; }
+.recipient-group { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.recipient-group > .label { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); padding: 8px 2px 0; }
+.recipient-group > .compat-warning { font-size: 12.5px; font-weight: 450; }
+.recipient-group > button { align-self: flex-start; }
 .recipient { display: flex; align-items: center; gap: 8px; }
 .recipient input[type="checkbox"] { width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
 .recipient button.row { flex: 1; }

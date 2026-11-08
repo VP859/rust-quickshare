@@ -19,6 +19,13 @@ compatibility).
 
 ### Added
 
+- **Sending to LocalSend apps** (iPhone, iPad, Mac, and every other LocalSend device): files and
+  folders, with the recipient list's *LocalSend apps* section in the GUI and `ferry localsend scan`
+  / `ferry localsend send FILE… --to NAME|IP [--pin PIN]` on the command line. LocalSend apps also
+  appear under *Nearby* in the GUI and *Search* finds them; a PIN is asked for when an app requires
+  one; Ferry presents its certificate to apps that require the sender's (mutual TLS). The server
+  certificate must be the announced one; the receiver's name is not verified, which the interfaces
+  say before sending.
 - **Sealed discovery answers**: a hidden device now answers its paired devices in a packet
   encrypted with a secret made at pairing, so nothing in it (name, Node ID, operating system,
   marker) is readable on the network. Devices paired earlier are answered in the clear until they

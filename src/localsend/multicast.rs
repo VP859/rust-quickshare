@@ -83,7 +83,11 @@ pub fn bind(port: u16) -> std::io::Result<UdpSocket> {
 }
 
 /// Sends `bytes` to the group through loopback and every local interface.
-async fn send_to_group(socket: &UdpSocket, bytes: &[u8], interfaces: &BTreeSet<Ipv4Addr>) {
+pub(super) async fn send_to_group(
+    socket: &UdpSocket,
+    bytes: &[u8],
+    interfaces: &BTreeSet<Ipv4Addr>,
+) {
     let group = SocketAddr::from(SocketAddrV4::new(MULTICAST_GROUP, super::PORT));
     for iface in std::iter::once(&Ipv4Addr::LOCALHOST).chain(interfaces) {
         if socket2::SockRef::from(socket)
@@ -98,7 +102,11 @@ async fn send_to_group(socket: &UdpSocket, bytes: &[u8], interfaces: &BTreeSet<I
 
 /// Joins the group on loopback and every local interface not joined yet;
 /// returns whether a new one was joined.
-fn join(engine: &NodeEngine, socket: &UdpSocket, joined: &mut BTreeSet<Ipv4Addr>) -> bool {
+pub(super) fn join(
+    engine: &NodeEngine,
+    socket: &UdpSocket,
+    joined: &mut BTreeSet<Ipv4Addr>,
+) -> bool {
     let mut new = false;
     let current: Vec<Ipv4Addr> = crate::discovery::local_networks(Some(engine))
         .into_iter()
@@ -175,6 +183,10 @@ pub(super) async fn run(
                     tokio::time::sleep(Duration::from_millis(100)).await;
                     continue;
                 };
+                // Every LocalSend app heard is a possible recipient.
+                if let Ok(info) = serde_json::from_slice::<DeviceInfo>(&buf[..len]) {
+                    super::client::remember_info(&info, from.ip(), &announcer.info.fingerprint);
+                }
                 if !announcer.should_answer(&buf[..len]) {
                     continue;
                 }

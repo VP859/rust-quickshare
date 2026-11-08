@@ -24,9 +24,13 @@
 //! off by default, offers are always asked about (never Auto-Accept) and
 //! labelled as coming from LocalSend, there is one session at a time, and an
 //! address whose offer was declined must wait before offering again. The
-//! Ferry identity (Node ID) is never shown to LocalSend devices. Sending to
-//! LocalSend devices is not supported.
+//! Ferry identity (Node ID) is never shown to LocalSend devices.
+//!
+//! **Sending** to LocalSend apps is in [`client`]: it works without the
+//! server, uses the same certificate, and has the same weakness – the
+//! receiver's name is not verified.
 
+pub mod client;
 pub mod dto;
 pub mod multicast;
 mod server;

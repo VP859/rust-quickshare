@@ -3,6 +3,7 @@
 import { $, close, el, emptyState, fail, icon, open, toast } from './dom.js';
 import { t } from './i18n.js';
 import { refreshPeers, renderPeers } from './peers.js';
+import { isScanning, localSendRow, onLocalSendChange, scanLocalSend, sendToLocalSend } from './localsend.js';
 import { sendFiles } from './send.js';
 import { isTrusted, platformIcon, platformLabel, state } from './state.js';
 import { invoke, isMobile, listen, pickFiles } from './tauri.js';
@@ -44,6 +45,23 @@ export function renderNearby() {
   }
 }
 
+/** LocalSend apps below the Ferry devices, with a warning that their names are not verified. */
+function renderLocalSendNearby() {
+  const block = $('nearby-localsend-block');
+  const box = $('nearby-localsend');
+  box.replaceChildren();
+  block.hidden = !state.localsend.length && !isScanning();
+  $('localsend-count').textContent = state.localsend.length;
+  if (block.hidden) return;
+  if (!state.localsend.length) box.append(emptyState('wifi', t('localsend_searching')));
+  for (const d of state.localsend) {
+    const send = el('button', { onclick: async () => { try { await sendToLocalSend(await pickFiles(), d); } catch (e) { fail(e); } } },
+      icon('send', 'sm'), el('span', { class: 'label-text' }, t('send_file')));
+    box.append(localSendRow(d, null, send));
+  }
+}
+onLocalSendChange(renderLocalSendNearby);
+
 export async function updateDiscoveryHint() {
   let hint = null;
   try { hint = await invoke('discovery_health'); } catch {}
@@ -80,8 +98,10 @@ async function pairWith(d) {
   }
 }
 $('btn-pairing-close').onclick = () => { pairingWith = null; close('modal-pairing'); };
+// Searches for Ferry devices and LocalSend apps (which hear this device's name).
 $('btn-nearby-refresh').onclick = async () => {
   try { await invoke('refresh_nearby'); toast(t('searching')); } catch (e) { fail(e); }
+  scanLocalSend();
 };
 
 // ---------- Pairing requests from other devices ----------

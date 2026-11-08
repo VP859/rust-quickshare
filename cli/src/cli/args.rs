@@ -31,6 +31,12 @@ pub enum Commands {
         #[arg(short, long)]
         to: Vec<String>,
     },
+    /// Send files to LocalSend apps (iPhone, iPad, Mac, …) and find them on the local network.
+    Localsend {
+        /// LocalSend subcommand.
+        #[command(subcommand)]
+        command: LocalsendCommands,
+    },
     /// Add "Send with Ferry" to the file managers of this user (Dolphin, Nautilus, Nemo; Linux).
     Integrate {
         /// Remove the entries again.
@@ -297,5 +303,31 @@ pub enum PeerCommands {
     Remove {
         /// Alias or Node ID.
         target: String,
+    },
+}
+
+/// Subcommands of `ferry localsend`.
+#[derive(Subcommand, Debug)]
+pub enum LocalsendCommands {
+    /// List the LocalSend apps on the local network. Announces this device's
+    /// name to them once, so they answer.
+    Scan {
+        /// Seconds to wait for answers.
+        #[arg(short, long, default_value_t = 3)]
+        timeout: u64,
+    },
+    /// Send files and folders to a LocalSend app. Its name is not verified:
+    /// anyone on the network can announce any name.
+    Send {
+        /// Files and folders to send (folders keep their structure).
+        #[arg(required = true, num_args = 1..)]
+        files: Vec<PathBuf>,
+        /// Name or IP address (`192.168.1.20` or `192.168.1.20:53317`) of the
+        /// LocalSend app, as listed by `ferry localsend scan`.
+        #[arg(short, long)]
+        to: String,
+        /// PIN, for apps that require one.
+        #[arg(long)]
+        pin: Option<String>,
     },
 }

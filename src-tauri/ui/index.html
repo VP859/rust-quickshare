@@ -76,6 +76,11 @@
     </header>
     <p class="hint" data-i18n="nearby_hint"></p>
     <div class="list" id="nearby"></div>
+    <div class="subsection" id="nearby-localsend-block" hidden>
+      <h3 class="subhead"><span data-i18n="localsend_apps"></span><span class="count" id="localsend-count">0</span></h3>
+      <p class="hint caution" data-i18n="localsend_unverified_short"></p>
+      <div class="list" id="nearby-localsend"></div>
+    </div>
     <p class="hint warn" id="nearby-hint" hidden></p>
   </section>
 
@@ -137,6 +142,12 @@
       <p class="muted small" id="recipient-files"></p>
       <div class="recipients" id="recipients"></div>
       <button class="primary" id="btn-send-selected" hidden></button>
+      <div class="recipient-group" id="localsend-section" hidden>
+        <div class="label" data-i18n="localsend_apps"></div>
+        <p class="compat-warning" data-i18n="localsend_unverified"></p>
+        <div class="recipients" id="localsend-recipients"></div>
+        <button class="ghost" id="btn-localsend-scan"><svg class="i sm"><use href="#i-refresh"/></svg><span data-i18n="localsend_search"></span></button>
+      </div>
       <button id="btn-share-ticket"><svg class="i sm"><use href="#i-link"/></svg><span data-i18n="share_by_ticket"></span></button>
       <button id="btn-share-web"><svg class="i sm"><use href="#i-globe"/></svg><span data-i18n="share_in_browser"></span></button>
     </div>
@@ -193,6 +204,18 @@
         <button class="danger" id="btn-web-stop" data-i18n="web_stop"></button>
         <button class="primary" id="btn-web-copy" data-i18n="copy"></button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-localsend-pin" role="dialog" aria-modal="true" aria-labelledby="localsend-pin-title">
+  <div class="modal">
+    <div class="modal-head"><h3 id="localsend-pin-title"></h3><button class="ghost icon" data-close="modal-localsend-pin" data-i18n-aria="close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <p class="muted small" data-i18n="localsend_pin_hint"></p>
+      <p class="risk-warning" id="localsend-pin-wrong" role="alert" data-i18n="localsend_pin_wrong" hidden></p>
+      <div class="field"><label for="localsend-pin" data-i18n="localsend_pin"></label><input id="localsend-pin" type="password" inputmode="numeric" autocomplete="off"></div>
+      <div class="modal-actions"><button id="btn-pin-cancel" data-i18n="cancel"></button><button class="primary" id="btn-pin-send" data-i18n="send_file"></button></div>
     </div>
   </div>
 </div>

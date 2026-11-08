@@ -215,6 +215,7 @@ test('a text goes through the recipient list and appears among the transfers', a
   const recipients = app.locator('#modal-recipient');
   await expect(recipients).toHaveClass(/active/);
   await expect(app.locator('#btn-share-ticket')).toBeHidden();
+  await expect(app.locator('#localsend-section')).toBeHidden();
   await recipients.getByRole('button', { name: /Laptop/ }).click();
   await expect(recipients).not.toHaveClass(/active/);
   expect(await calls(app)).toContainEqual(['send_text', { text: 'https://example.org/x', target: PEER }]);
@@ -390,6 +391,56 @@ test('files from "Send with Ferry" in a file manager open the recipient list', a
   await expect(app.locator('#recipient-files')).toContainText('a.jpg, b.jpg');
   await dialog.getByRole('button', { name: /Laptop/ }).click();
   expect(await calls(app)).toContainEqual(['send_files', { paths: ['/home/me/Photos/a.jpg', '/home/me/Photos/b.jpg'], target: PEER }]);
+});
+
+test('files can go to a LocalSend app, with a warning that its name is not verified', async ({ app }) => {
+  await app.evaluate(() => window.__respond('take_shared_files', ['/home/me/a.jpg']));
+  await emit(app, 'share-files', null);
+  const dialog = app.locator('#modal-recipient');
+  await expect(dialog).toHaveClass(/active/);
+  await expect(app.locator('#localsend-section')).toBeVisible();
+  await expect(app.locator('#localsend-section .compat-warning')).toContainText('not verified');
+  const row = app.locator('#localsend-recipients').getByRole('button', { name: /Kate's iPhone/ });
+  await expect(row).toContainText('192.168.1.20');
+  await app.locator('#btn-localsend-scan').click();
+  expect(await calls(app)).toContainEqual(['scan_localsend', {}]);
+  await expect(app.locator('#localsend-recipients')).toContainText('None found yet');
+});
+
+test('a LocalSend app that was heard is a recipient', async ({ app }) => {
+  await app.evaluate(() => window.__respond('take_shared_files', ['/home/me/a.jpg']));
+  await emit(app, 'share-files', null);
+  await app.locator('#localsend-recipients').getByRole('button', { name: /Kate's iPhone/ }).click();
+  expect(await calls(app)).toContainEqual(['send_to_localsend', { paths: ['/home/me/a.jpg'], fingerprint: 'AB12', pin: null }]);
+  await expect(app.locator('#modal-recipient')).not.toHaveClass(/active/);
+});
+
+test('LocalSend apps are listed among nearby devices as not verified, and the search finds them too', async ({ app }) => {
+  const block = app.locator('#nearby-localsend-block');
+  const list = app.locator('#nearby-localsend');
+  await expect(block).toBeVisible();
+  await expect(list).toContainText("Kate's iPhone");
+  await expect(list).toContainText('LocalSend · not verified');
+  await expect(block.locator('.hint')).toContainText('names are not verified');
+  await expect(app.locator('#localsend-count')).toHaveText('1');
+  await app.locator('#btn-nearby-refresh').click();
+  expect(await calls(app)).toContainEqual(['refresh_nearby', {}]);
+  expect(await calls(app)).toContainEqual(['scan_localsend', {}]);
+  // A device answering later appears without another search.
+  await emit(app, 'localsend-nearby', [{ alias: 'Mac mini', model: 'Mac', device_type: 'desktop', fingerprint: 'CD34', address: '192.168.1.30:53317', https: true }]);
+  await expect(list).toContainText('Mac mini');
+});
+
+test('a LocalSend app that asks for a PIN gets it, and a wrong one is said so', async ({ app }) => {
+  await emit(app, 'localsend-pin', { fingerprint: 'AB12', alias: "Kate's iPhone (iPhone)", paths: ['/home/me/a.jpg'], wrong: true });
+  const dialog = app.locator('#modal-localsend-pin');
+  await expect(dialog).toHaveClass(/active/);
+  await expect(app.locator('#localsend-pin-title')).toContainText("Kate's iPhone");
+  await expect(app.locator('#localsend-pin-wrong')).toBeVisible();
+  await app.locator('#localsend-pin').fill('4711');
+  await app.locator('#btn-pin-send').click();
+  await expect(dialog).not.toHaveClass(/active/);
+  expect(await calls(app)).toContainEqual(['send_to_localsend', { paths: ['/home/me/a.jpg'], fingerprint: 'AB12', pin: '4711' }]);
 });
 
 test('the device key can be moved into the system keyring', async ({ app }) => {

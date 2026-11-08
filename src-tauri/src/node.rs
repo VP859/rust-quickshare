@@ -651,6 +651,14 @@ fn start_discovery(app: &AppHandle, engine: &NodeEngine, config: &Config) {
     if state.discovery.set(discovery).is_err() {
         return;
     }
+    // LocalSend apps heard (announcements, `register`, searches) as they come.
+    let mut localsend = ferry::localsend::client::changes();
+    let forward = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while localsend.changed().await.is_ok() {
+            let _ = forward.emit("localsend-nearby", ferry::localsend::client::nearby());
+        }
+    });
     let app = app.clone();
     let engine = engine.clone();
     tauri::async_runtime::spawn(async move {

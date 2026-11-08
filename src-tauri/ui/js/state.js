@@ -11,6 +11,8 @@ export const state = {
   online: new Map(),
   /** Devices found on the local network (`nearby` events). */
   nearby: [],
+  /** LocalSend apps heard on the local network (`localsend-nearby` events). */
+  localsend: [],
   /** The network mode the node runs in and the saved one. */
   network: { active: 'local', saved: 'local' },
   /** Privacy settings (`get_privacy`). */

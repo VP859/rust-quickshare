@@ -703,6 +703,11 @@ impl<'a> Tracker<'a> {
         &self.base.id
     }
 
+    /// Size of the transfer in bytes (0 when unknown).
+    pub fn total(&self) -> u64 {
+        self.base.total
+    }
+
     /// Emits an event with the given progress and status.
     pub fn emit(&self, done: u64, status: TransferStatus) {
         if let Ok(mut shown) = self.shown.lock() {

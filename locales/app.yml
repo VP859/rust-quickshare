@@ -608,6 +608,60 @@ daemon.no_auto_text:
 daemon.no_auto_executable:
   en: "'%{alias}' sent a program or script; those are never saved without a question, and this daemon has no terminal (set auto_accept_executables to allow it)"
   pl: "'%{alias}' wysyła program lub skrypt; takie pliki nigdy nie są zapisywane bez pytania, a ten demon nie ma terminala (ustaw auto_accept_executables, aby to dopuścić)"
+localsend.scanning:
+  en: "Looking for LocalSend apps (this device's name is announced to them)…"
+  pl: "Szukam aplikacji LocalSend (nazwa tego urządzenia jest im ogłaszana)…"
+localsend.none_found:
+  en: "No LocalSend app answered. Open LocalSend on the other device and keep it in front, or give its IP address with --to."
+  pl: "Żadna aplikacja LocalSend nie odpowiedziała. Otwórz LocalSend na drugim urządzeniu i zostaw ją na ekranie albo podaj jej adres IP w --to."
+localsend.send_hint:
+  en: "Send with: ferry localsend send FILE… --to NAME"
+  pl: "Wyślij poleceniem: ferry localsend send PLIK… --to NAZWA"
+localsend.not_found:
+  en: "No LocalSend app named '%{name}' answered; try `ferry localsend scan` or its IP address"
+  pl: "Nie odpowiedziała aplikacja LocalSend o nazwie '%{name}'; spróbuj `ferry localsend scan` albo jej adresu IP"
+localsend.unverified:
+  en: "Warning: '%{name}' is a LocalSend app. LocalSend has no pairing, so its name is not verified: anyone on this network can use any name."
+  pl: "Uwaga: '%{name}' to aplikacja LocalSend. LocalSend nie ma parowania, więc jej nazwa nie jest weryfikowana: każdy w tej sieci może użyć dowolnej nazwy."
+localsend.waiting:
+  en: "Waiting for '%{name}' to accept…"
+  pl: "Czekam, aż '%{name}' przyjmie pliki…"
+localsend.sent:
+  en: "Sent to '%{name}'."
+  pl: "Wysłano do '%{name}'."
+localsend.rejected:
+  en: "'%{name}' declined the files."
+  pl: "'%{name}' odrzuciło pliki."
+localsend.not_localsend:
+  en: "No LocalSend app answers at %{address}"
+  pl: "Pod adresem %{address} nie odpowiada żadna aplikacja LocalSend"
+localsend.no_decision:
+  en: "The other device did not answer in time"
+  pl: "Drugie urządzenie nie odpowiedziało na czas"
+localsend.pin_required:
+  en: "The LocalSend app asks for a PIN (set in its settings)"
+  pl: "Aplikacja LocalSend wymaga PIN-u (ustawionego w jej ustawieniach)"
+localsend.pin_wrong:
+  en: "The LocalSend app did not accept the PIN"
+  pl: "Aplikacja LocalSend nie przyjęła PIN-u"
+localsend.pin_prompt:
+  en: "PIN of '%{name}': "
+  pl: "PIN urządzenia '%{name}': "
+localsend.busy:
+  en: "The LocalSend app is busy with another transfer"
+  pl: "Aplikacja LocalSend jest zajęta innym przesyłaniem"
+localsend.too_many:
+  en: "The LocalSend app refuses for now after a declined offer; try again in a moment"
+  pl: "Aplikacja LocalSend chwilowo odmawia po odrzuconej ofercie; spróbuj za chwilę"
+localsend.http_error:
+  en: "The LocalSend app answered with an error (HTTP %{status})"
+  pl: "Aplikacja LocalSend odpowiedziała błędem (HTTP %{status})"
+localsend.unreachable:
+  en: "Cannot connect to the LocalSend app at %{address}"
+  pl: "Nie można połączyć się z aplikacją LocalSend pod adresem %{address}"
+localsend.wrong_certificate:
+  en: "'%{name}' presented another certificate than it announced; nothing was sent (another device may pose as it)"
+  pl: "'%{name}' przedstawiło inny certyfikat niż ogłosiło; nic nie wysłano (inne urządzenie może się pod nie podszywać)"
 localsend.port_taken:
   en: "LocalSend compatibility mode cannot use TCP port %{port} – is the LocalSend app running on this computer?"
   pl: "Tryb zgodności z LocalSend nie może użyć portu TCP %{port} – czy na tym komputerze działa aplikacja LocalSend?"

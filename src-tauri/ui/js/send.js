@@ -4,6 +4,7 @@ import { $, baseName, close, dotClass, el, emptyState, fail, icon, initials, ope
 import { t } from './i18n.js';
 import { showTicket } from './node.js';
 import { openPeerModal } from './peers.js';
+import { isScanning, loadLocalSend, localSendRow, onLocalSendChange, scanLocalSend, sendToLocalSend } from './localsend.js';
 import { isTrusted, platformIcon, platformLabel, state } from './state.js';
 import { invoke, pickFiles, pickFolder, scanQr, T } from './tauri.js';
 import { sendText } from './texts.js';
@@ -76,6 +77,9 @@ export function chooseRecipient(paths, text = null, isFolder = false) {
     box.append(recipientRow([icon(platformIcon(d.platform)), el('span', { class: 'dot ok' })], d.name, platformLabel(d.platform),
       d.node_id));
   }
+  // LocalSend apps take files and folders, not texts.
+  $('localsend-section').hidden = text !== null;
+  if (text === null) { renderLocalSendRecipients(); loadLocalSend(); }
   // A TICKET shares exactly one file, so it is not offered for texts and folders.
   $('btn-share-ticket').style.display = text !== null || pendingIsFolder ? 'none' : '';
   $('btn-share-ticket').disabled = paths.length !== 1;
@@ -84,6 +88,19 @@ export function chooseRecipient(paths, text = null, isFolder = false) {
   $('btn-share-web').style.display = text !== null || pendingIsFolder ? 'none' : '';
   open('modal-recipient');
 }
+// ---------- LocalSend apps (iPhone, Mac, …) ----------
+function renderLocalSendRecipients() {
+  const box = $('localsend-recipients');
+  box.replaceChildren();
+  if (!state.localsend.length) box.append(el('p', { class: 'muted small' }, t(isScanning() ? 'localsend_searching' : 'localsend_none')));
+  for (const d of state.localsend) {
+    box.append(localSendRow(d, () => { close('modal-recipient'); sendToLocalSend(pendingFiles, d); }));
+  }
+  $('btn-localsend-scan').disabled = isScanning();
+}
+onLocalSendChange(renderLocalSendRecipients);
+$('btn-localsend-scan').onclick = scanLocalSend;
+
 $('btn-share-web').onclick = () => {
   close('modal-recipient');
   startWebShare(pendingFiles);
