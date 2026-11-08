@@ -51,6 +51,10 @@ const PAIR_STEP_TIMEOUT: Duration = Duration::from_secs(15);
 /// A random 32-byte pairing nonce.
 pub type PairNonce = [u8; 32];
 
+/// Secret shared by two paired devices, with which a hidden device encrypts
+/// its answers to local network discovery ([`crate::discovery`]).
+pub type DiscoveryKey = [u8; 32];
+
 /// Pairing request passed to the user interface for confirmation.
 #[derive(Debug, Clone)]
 pub struct PairRequest {
@@ -62,6 +66,9 @@ pub struct PairRequest {
     pub code: String,
     /// Requester's address; `None` if it did not match the authenticated Node ID.
     pub addr: Option<EndpointAddr>,
+    /// Secret for discovery, the same on both devices; store it with
+    /// [`Config::add_paired`](crate::config::Config::add_paired).
+    pub discovery_key: DiscoveryKey,
 }
 
 /// Result of [`request_pairing`].
@@ -73,6 +80,8 @@ pub enum PairOutcome {
         name: String,
         /// Its address, if provided and valid.
         addr: Option<EndpointAddr>,
+        /// Secret for discovery, the same on both devices.
+        discovery_key: DiscoveryKey,
     },
     /// The other device declined.
     Rejected,
@@ -162,6 +171,24 @@ pub fn pairing_code(
     format!("{:03} {:03}", n / 1000, n % 1000)
 }
 
+/// The [`DiscoveryKey`] of one pairing attempt, derived from both Node IDs and
+/// both nonces. The nonces travel only inside the authenticated, encrypted
+/// connection, so only the two devices (and nobody who merely watches the
+/// network or sees the six-digit code) can compute it.
+fn discovery_key(
+    initiator: &EndpointId,
+    responder: &EndpointId,
+    initiator_nonce: &PairNonce,
+    responder_nonce: &PairNonce,
+) -> DiscoveryKey {
+    let mut hasher = blake3::Hasher::new_derive_key("ferry discovery key v1");
+    hasher.update(initiator.as_bytes());
+    hasher.update(responder.as_bytes());
+    hasher.update(initiator_nonce);
+    hasher.update(responder_nonce);
+    *hasher.finalize().as_bytes()
+}
+
 /// Number of five-digit groups in a [safety number](safety_number).
 const SAFETY_GROUPS: usize = 12;
 
@@ -209,7 +236,8 @@ pub fn safety_number(a: &EndpointId, b: &EndpointId) -> String {
 }
 
 /// Responder side of the nonce exchange: sends [`PairChallenge`], reads and
-/// checks [`PairReveal`] and returns the verification code.
+/// checks [`PairReveal`] and returns the verification code and the
+/// [`DiscoveryKey`].
 ///
 /// # Errors
 ///
@@ -220,7 +248,7 @@ pub(crate) async fn answer_pairing(
     me: &EndpointId,
     requester: &EndpointId,
     requester_commitment: &[u8; 32],
-) -> Result<String> {
+) -> Result<(String, DiscoveryKey)> {
     let mine = new_nonce()?;
     write_msg(&mut channel.send, &PairChallenge { nonce: mine }).await?;
     let reveal: PairReveal = tokio::time::timeout(PAIR_STEP_TIMEOUT, read_msg(&mut channel.recv))
@@ -230,7 +258,10 @@ pub(crate) async fn answer_pairing(
     if commitment(requester, &reveal.nonce) != blake3::Hash::from_bytes(*requester_commitment) {
         return Err(ProtocolViolation(t!("pairing.bad_commitment").into_owned()).into());
     }
-    Ok(pairing_code(requester, me, &reveal.nonce, &mine))
+    Ok((
+        pairing_code(requester, me, &reveal.nonce, &mine),
+        discovery_key(requester, me, &reveal.nonce, &mine),
+    ))
 }
 
 /// Sends a pairing request to `target` and waits for the user's decision there.
@@ -280,6 +311,7 @@ pub async fn request_pairing(
         PairOutcome::Accepted {
             name: clean_device_name(&response.name),
             addr: response.addr.filter(|a| a.id == peer),
+            discovery_key: discovery_key(&me, &peer, &mine, &challenge.nonce),
         }
     } else {
         PairOutcome::Rejected
@@ -319,6 +351,20 @@ mod tests {
                 .split(' ')
                 .all(|g| g.len() == 5 && g.bytes().all(|b| b.is_ascii_digit()))
         );
+    }
+
+    #[test]
+    fn discovery_key_is_shared_and_depends_on_every_input() {
+        let a = iroh::SecretKey::generate().public();
+        let b = iroh::SecretKey::generate().public();
+        let key = discovery_key(&a, &b, &[1; 32], &[2; 32]);
+        assert_eq!(key, discovery_key(&a, &b, &[1; 32], &[2; 32]));
+        assert_ne!(key, discovery_key(&b, &a, &[1; 32], &[2; 32]));
+        assert_ne!(key, discovery_key(&a, &b, &[9; 32], &[2; 32]));
+        assert_ne!(key, discovery_key(&a, &b, &[1; 32], &[9; 32]));
+        // Not the six digits shown to the user, and not the code's hash.
+        let code = pairing_code(&a, &b, &[1; 32], &[2; 32]);
+        assert!(!code.is_empty() && key.iter().any(|b| *b != 0));
     }
 
     #[test]

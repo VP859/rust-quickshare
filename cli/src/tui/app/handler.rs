@@ -148,7 +148,13 @@ impl TransferHandler for TuiHandler {
             return false;
         }
         let saved = Config::load().and_then(|mut c| {
-            c.add_paired(req.peer, &req.name, req.addr, false)?;
+            c.add_paired(
+                req.peer,
+                &req.name,
+                req.addr,
+                false,
+                Some(req.discovery_key),
+            )?;
             c.save()
         });
         let ok = saved.is_ok();

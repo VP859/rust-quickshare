@@ -183,11 +183,27 @@ Node IDs (earlier versions of Ferry) could be matched offline in seconds by gene
   Hidden mode is about **local network discovery only**. It does not make the device unreachable:
   someone who already knows its Node ID or has an old TICKET can still connect and ask, and in
   internet mode the Node ID stays registered with n0's lookup service and reachable through the
-  relay. The device keeps listening on UDP 47823 and 47824, so a network scan can still notice
-  that something answers there.
+  relay. The device keeps listening on UDP 47823 and 47824 (or a random port, see below), so a network
+  scan can still notice that something answers there.
+* **Sealed answers:** pairing gives both devices a secret key that nobody else can compute. A
+  hidden device answers a paired device in a packet encrypted and authenticated with it
+  ([PROTOCOL.md](PROTOCOL.md#sealed-answers-of-hidden-devices)), so someone who listens on the
+  Wi-Fi sees no name, no Node ID, no operating system and no Ferry marker – only that some packet
+  went from one address to another (and the announcement of the paired device, if that one is
+  visible). Devices paired before this existed are answered in the clear until they are paired
+  again. The secret is kept in `config.toml`, which only its owner can read.
+* **The operating system** is not put in announcements unless you choose to (`announce-platform`);
+  it only picks an icon on other devices. Paired devices get it in sealed answers.
+* **Random port** (`random-port`, off by default): direct connections listen on a random UDP port
+  instead of 47824, so a scan for that port finds nothing. Other devices learn the port from
+  announcements and TICKETs. Discovery on 47823 stays (visible devices need it) and a firewall must
+  allow the program instead of a port, so this is a small gain, not invisibility.
 
 ### Data at rest
 
+* `config.toml` is written with `0600` permissions on Unix, because it holds the secrets shared with
+  paired devices (for sealed discovery answers). They reveal that a hidden device is nearby, and
+  nothing more: files and connections do not depend on them.
 * `secret.key` is created with `0600` permissions on Unix and in the per-user application data
   folder on Windows and Android. It is not encrypted with a password; full-disk encryption
   protects it at rest.

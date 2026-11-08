@@ -129,6 +129,9 @@ pub struct Network {
     pub mode: NetworkMode,
     /// Relays of [`NetworkMode::Relay`]; ignored in the other modes.
     pub relays: Vec<RelayUrl>,
+    /// Listen on a random UDP port instead of [`QUIC_PORT`]
+    /// ([`Config::random_port`](crate::config::Config::random_port)).
+    pub random_port: bool,
 }
 
 impl From<NetworkMode> for Network {
@@ -136,6 +139,7 @@ impl From<NetworkMode> for Network {
         Self {
             mode,
             relays: Vec::new(),
+            random_port: false,
         }
     }
 }
@@ -163,6 +167,7 @@ impl Network {
         Ok(Self {
             mode: config.network_mode,
             relays,
+            random_port: config.random_port,
         })
     }
 }
@@ -278,14 +283,20 @@ impl NodeEngine {
 
     /// Binds a new endpoint with the given identity and [`Network`] (with the
     /// relays of [`NetworkMode::Relay`]), on IPv4 port [`QUIC_PORT`] when it
-    /// is free.
+    /// is free, or on a random port with [`Network::random_port`].
     ///
     /// # Errors
     ///
     /// Fails when the endpoint cannot bind its UDP sockets, or in
     /// [`NetworkMode::Relay`] without relays.
     pub async fn with_network(secret_key: SecretKey, network: Network) -> Result<Self> {
-        Self::bind_in(secret_key, network, QUIC_PORT..=QUIC_PORT).await
+        // Port 0 lets the system pick a free port.
+        let ports = if network.random_port {
+            0..=0
+        } else {
+            QUIC_PORT..=QUIC_PORT
+        };
+        Self::bind_in(secret_key, network, ports).await
     }
 
     /// A node with a **new, random identity** for sharing one file by TICKET.

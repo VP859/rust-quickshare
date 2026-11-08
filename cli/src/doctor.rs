@@ -129,7 +129,11 @@ async fn check_discovery() {
                 )
             );
             for d in &devices {
-                println!("      • {} ({})", d.name, d.platform);
+                if d.platform.is_empty() {
+                    println!("      • {}", d.name);
+                } else {
+                    println!("      • {} ({})", d.name, d.platform);
+                }
             }
             if let Some(hint) = health.hint() {
                 println!("      {hint}");

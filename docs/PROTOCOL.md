@@ -180,6 +180,38 @@ Announcement { timestamp: u64, name: String, platform: String, addr: EndpointAdd
 * The first announcement from a new device is answered directly (unicast, `reply = true`; replies
   are not answered), so it is enough for packets to get through in one direction. A hidden device
   answers only its paired devices and never announces itself.
+* `platform` is `std::env::consts::OS` (`linux`, `windows`, `android`) or empty. A device puts it in
+  announcements only when its user chose to show it, and in sealed answers always.
+
+### Sealed answers of hidden devices
+
+A hidden device that shares a **discovery key** with the paired device it answers does not send the
+`SignedBeacon` in the clear but a sealed packet (at most 2048 + 48 bytes), which has no marker and
+nothing else a bystander can recognize:
+
+```text
+packet = nonce (16 random bytes) ‖ ciphertext ‖ tag (32 bytes)
+ciphertext = SignedBeacon ⊕ BLAKE3-keyed-XOF(K_enc, nonce)      (as many bytes as the beacon)
+tag        = BLAKE3-keyed-hash(K_mac, nonce ‖ ciphertext)
+K_enc = BLAKE3-derive-key("ferry discovery encryption v1",     key)
+K_mac = BLAKE3-derive-key("ferry discovery authentication v1", key)
+```
+
+The receiver (a device that sees a datagram that is not a valid `SignedBeacon`) tries the keys of its
+paired devices, checks the tag in constant time before it decrypts, and accepts the beacon inside only
+when it has `reply = true`, a valid signature and age, and `addr.id` is the device whose key opened
+it. Only answers are sealed; announcements stay readable, since they go to everyone. A paired device
+without a key (paired before keys existed) is answered in the clear.
+
+The **discovery key** is made at pairing, on both devices, from what only they know (`a`, `b`,
+`n_a`, `n_b` as above, exchanged inside the encrypted connection):
+
+```text
+key = BLAKE3-derive-key("ferry discovery key v1", a ‖ b ‖ n_a ‖ n_b)
+```
+
+The keyed BLAKE3 construction is used instead of an AEAD cipher so that no new dependency is needed;
+BLAKE3 in keyed mode is a PRF and a MAC, and the encrypt-then-MAC composition is standard.
 
 ## TICKET
 

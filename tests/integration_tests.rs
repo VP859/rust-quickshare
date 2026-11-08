@@ -573,6 +573,7 @@ async fn hidden_device_is_seen_only_by_paired_devices() -> Result<()> {
                 Visibility {
                     hidden: true,
                     trusted: [friend.node_id()].into(),
+                    ..Visibility::default()
                 },
             ),
         )?;
@@ -599,6 +600,239 @@ async fn hidden_device_is_seen_only_by_paired_devices() -> Result<()> {
                 .await
                 .is_none(),
             "a stranger does not"
+        );
+        Ok(())
+    })
+    .await
+}
+
+/// A hidden device answers a paired device that shares a secret with it in a
+/// packet that holds nothing recognizable (no marker, name or Node ID), which
+/// only that device can read; a paired device without a secret still gets the
+/// plain answer.
+#[tokio::test(flavor = "multi_thread")]
+async fn hidden_device_answers_with_a_packet_nobody_else_can_read() -> Result<()> {
+    use ferry::discovery::{Announcement, sign_announcement, verify_announcement};
+    with_timeout(async {
+        let (hidden, friend, old_friend) = (engine().await?, engine().await?, engine().await?);
+        let ph = free_udp_port()?;
+        let secret = [42u8; 32];
+        let _dh = Discovery::start(
+            hidden.clone(),
+            "Secret Name",
+            DiscoveryOptions {
+                port: ph,
+                targets: Some(vec![]),
+                visibility: Visibility {
+                    hidden: true,
+                    trusted: [friend.node_id(), old_friend.node_id()].into(),
+                    keys: [(friend.node_id(), secret)].into(),
+                    ..Visibility::default()
+                },
+            },
+        )?;
+
+        // What a paired device's own announcement looks like to the hidden one.
+        let ask = |engine: &NodeEngine| {
+            let announcement = Announcement {
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+                name: "Friend".into(),
+                platform: String::new(),
+                addr: engine.node_id().into(),
+                quic_ports: vec![1],
+                reply: false,
+            };
+            sign_announcement(engine.endpoint().secret_key(), &announcement).unwrap()
+        };
+        let listen = |engine: &NodeEngine| -> Result<(tokio::net::UdpSocket, Vec<u8>)> {
+            let socket = std::net::UdpSocket::bind("127.0.0.1:0")?;
+            socket.set_nonblocking(true)?;
+            Ok((tokio::net::UdpSocket::from_std(socket)?, ask(engine)))
+        };
+        let answer = |socket: tokio::net::UdpSocket, request: Vec<u8>| async move {
+            socket
+                .send_to(&request, std::net::SocketAddr::from(([127, 0, 0, 1], ph)))
+                .await?;
+            let mut buf = vec![0u8; 4096];
+            let (len, _) =
+                tokio::time::timeout(Duration::from_secs(5), socket.recv_from(&mut buf)).await??;
+            buf.truncate(len);
+            anyhow::Ok(buf)
+        };
+        let now = || {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        };
+
+        let (socket, request) = listen(&friend)?;
+        let sealed = answer(socket, request).await?;
+        assert!(
+            verify_announcement(&sealed, now()).is_none(),
+            "not a plain announcement"
+        );
+        let contains =
+            |haystack: &[u8], needle: &[u8]| haystack.windows(needle.len()).any(|w| w == needle);
+        assert!(!contains(&sealed, b"FRYd"), "no marker");
+        assert!(!contains(&sealed, b"Secret Name"), "no name");
+        assert!(
+            !contains(&sealed, hidden.node_id().as_bytes()),
+            "no Node ID"
+        );
+
+        let (socket, request) = listen(&old_friend)?;
+        let plain = answer(socket, request).await?;
+        let beacon = verify_announcement(&plain, now()).expect("plain answer without a secret");
+        assert_eq!(beacon.name, "Secret Name");
+        assert_eq!(beacon.platform, "", "no operating system in a plain packet");
+        Ok(())
+    })
+    .await
+}
+
+/// The paired device that has the secret finds the hidden one by its answer
+/// (with the operating system, which only it can read); one with a wrong
+/// secret does not.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_paired_device_reads_the_sealed_answer_of_a_hidden_one() -> Result<()> {
+    with_timeout(async {
+        let (hidden, friend, wrong) = (engine().await?, engine().await?, engine().await?);
+        let (ph, pf, pw) = (free_udp_port()?, free_udp_port()?, free_udp_port()?);
+        let secret = [5u8; 32];
+        let opts = |listen: u16, to: u16, visibility: Visibility| DiscoveryOptions {
+            port: listen,
+            targets: Some(vec![([127, 0, 0, 1], to).into()]),
+            visibility,
+        };
+        let _dh = Discovery::start(
+            hidden.clone(),
+            "Hidden",
+            opts(
+                ph,
+                pf,
+                Visibility {
+                    hidden: true,
+                    trusted: [friend.node_id(), wrong.node_id()].into(),
+                    keys: [(friend.node_id(), secret), (wrong.node_id(), [6; 32])].into(),
+                    ..Visibility::default()
+                },
+            ),
+        )?;
+        let df = Discovery::start(
+            friend.clone(),
+            "Friend",
+            opts(
+                pf,
+                ph,
+                Visibility {
+                    keys: [(hidden.node_id(), secret)].into(),
+                    ..Visibility::default()
+                },
+            ),
+        )?;
+        let dw = Discovery::start(
+            wrong.clone(),
+            "Wrong",
+            opts(
+                pw,
+                ph,
+                Visibility {
+                    keys: [(hidden.node_id(), [9; 32])].into(),
+                    ..Visibility::default()
+                },
+            ),
+        )?;
+        let hidden_id = hidden.node_id().to_string();
+        let found = df
+            .wait_for(&hidden_id, Duration::from_secs(10))
+            .await
+            .expect("the paired device with the secret sees the hidden one");
+        assert_eq!(found.name, "Hidden");
+        assert_eq!(found.platform, std::env::consts::OS);
+        assert!(
+            dw.wait_for(&hidden_id, Duration::from_secs(6))
+                .await
+                .is_none(),
+            "a wrong secret cannot read the answer"
+        );
+        Ok(())
+    })
+    .await
+}
+
+/// The operating system is announced only when the device is set to do so.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_operating_system_is_announced_only_on_request() -> Result<()> {
+    with_timeout(async {
+        let (quiet, open, listener) = (engine().await?, engine().await?, engine().await?);
+        let (pq, po, pl) = (free_udp_port()?, free_udp_port()?, free_udp_port()?);
+        let to_listener = |port: u16, visibility: Visibility| DiscoveryOptions {
+            port,
+            targets: Some(vec![([127, 0, 0, 1], pl).into()]),
+            visibility,
+        };
+        let _dq = Discovery::start(
+            quiet.clone(),
+            "Quiet",
+            to_listener(pq, Visibility::default()),
+        )?;
+        let _do = Discovery::start(
+            open.clone(),
+            "Open",
+            to_listener(
+                po,
+                Visibility {
+                    announce_platform: true,
+                    ..Visibility::default()
+                },
+            ),
+        )?;
+        let dl = Discovery::start(
+            listener.clone(),
+            "Listener",
+            DiscoveryOptions {
+                port: pl,
+                targets: Some(vec![]),
+                visibility: Visibility::default(),
+            },
+        )?;
+        let quiet = dl
+            .wait_for(&quiet.node_id().to_string(), Duration::from_secs(10))
+            .await
+            .expect("found");
+        let open = dl
+            .wait_for(&open.node_id().to_string(), Duration::from_secs(10))
+            .await
+            .expect("found");
+        assert_eq!(quiet.platform, "");
+        assert_eq!(open.platform, std::env::consts::OS);
+        Ok(())
+    })
+    .await
+}
+
+/// With a random port the device does not listen on the fixed one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_random_port_is_not_the_fixed_one() -> Result<()> {
+    with_timeout(async {
+        let network = ferry::node::Network {
+            random_port: true,
+            ..ferry::node::Network::default()
+        };
+        let node = NodeEngine::with_network(load_or_generate_secret_key(None)?, network).await?;
+        let ports: Vec<u16> = node
+            .endpoint()
+            .bound_sockets()
+            .iter()
+            .map(|a| a.port())
+            .collect();
+        assert!(
+            !ports.is_empty() && !ports.contains(&ferry::node::QUIC_PORT),
+            "{ports:?}"
         );
         Ok(())
     })
@@ -632,8 +866,13 @@ async fn pairing_with_one_button_accept_and_reject() -> Result<()> {
             assert_eq!(req.code, shown, "both screens show the same code");
 
             match outcome {
-                PairOutcome::Accepted { name, addr } => {
+                PairOutcome::Accepted {
+                    name,
+                    addr,
+                    discovery_key,
+                } => {
                     assert!(accept);
+                    assert_eq!(discovery_key, req.discovery_key, "both devices get one key");
                     assert_eq!(name, "Test Receiver");
                     assert_eq!(addr.map(|a| a.id), Some(rx.node_id()));
                 }

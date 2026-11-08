@@ -112,8 +112,18 @@ pub async fn run_pair(target: &str, auto_accept: bool) -> Result<()> {
     engine.close().await;
 
     match result? {
-        PairOutcome::Accepted { name, addr: remote } => {
-            config.add_paired(addr.id, &name, remote.or(Some(addr.clone())), auto_accept)?;
+        PairOutcome::Accepted {
+            name,
+            addr: remote,
+            discovery_key,
+        } => {
+            config.add_paired(
+                addr.id,
+                &name,
+                remote.or(Some(addr.clone())),
+                auto_accept,
+                Some(discovery_key),
+            )?;
             config.save()?;
             let alias = config
                 .find_peer(&addr.id.to_string())
@@ -206,8 +216,18 @@ pub async fn run_peer_add(
     .await;
     engine.close().await;
     match result {
-        Ok(PairOutcome::Accepted { addr: remote, .. }) => {
-            config.add_paired(addr.id, &saved_alias, remote, auto_accept)?;
+        Ok(PairOutcome::Accepted {
+            addr: remote,
+            discovery_key,
+            ..
+        }) => {
+            config.add_paired(
+                addr.id,
+                &saved_alias,
+                remote,
+                auto_accept,
+                Some(discovery_key),
+            )?;
             config.save()?;
             println!("{}", t!("pair.mutual"));
         }

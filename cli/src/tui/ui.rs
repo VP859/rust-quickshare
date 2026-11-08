@@ -207,7 +207,11 @@ fn render_nearby(f: &mut Frame, app: &App, area: Rect) {
                 Span::styled("● ", Style::default().fg(Color::Green)),
                 Span::raw(d.name.clone()),
                 Span::styled(
-                    format!("  ({})", d.platform),
+                    if d.platform.is_empty() {
+                        String::new()
+                    } else {
+                        format!("  ({})", d.platform)
+                    },
                     Style::default().fg(Color::DarkGray),
                 ),
             ];

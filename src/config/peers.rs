@@ -28,6 +28,11 @@ pub struct PeerInfo {
     /// on the local network.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ticket: Option<String>,
+    /// Secret shared with the device at pairing (hex), with which a hidden
+    /// device encrypts its answers to discovery; none for devices paired
+    /// before it existed (they are answered in the clear).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discovery_key: Option<String>,
 }
 
 /// Contents of `config.toml`.
@@ -69,6 +74,18 @@ pub struct Config {
     /// Hide this device on the local network from everyone except paired devices.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hidden: bool,
+    /// Announce the operating system on the local network (it only chooses an
+    /// icon on the other devices). Off by default; a hidden device tells it
+    /// to its paired devices anyway, since only they can read the answer.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub announce_platform: bool,
+    /// Listen for direct connections on a random UDP port instead of the fixed
+    /// [`QUIC_PORT`](crate::node::QUIC_PORT), so a scan of that port does not
+    /// find the device. Other devices learn the port from announcements and
+    /// TICKETs; a firewall rule must then allow the program, not a port.
+    /// Applies at the next start.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub random_port: bool,
     /// Accept offers, texts and batches only from paired devices, and
     /// pairing requests only while pairing is open ([`Config::open_pairing`]).
     /// Others are declined without the user being asked. Off by default.
@@ -134,7 +151,15 @@ impl Config {
         let path = Self::file_path()?;
         let content = toml::to_string_pretty(self).with_context(|| t!("config.serialize"))?;
         let tmp = path.with_extension("toml.tmp");
-        std::fs::write(&tmp, content).with_context(|| t!("config.write"))?;
+        // The file holds the secrets shared with paired devices: only the owner reads it.
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        options
+            .open(&tmp)
+            .and_then(|mut file| std::io::Write::write_all(&mut file, content.as_bytes()))
+            .with_context(|| t!("config.write"))?;
         std::fs::rename(&tmp, &path).with_context(|| t!("config.write"))?;
         Ok(())
     }
@@ -170,6 +195,7 @@ impl Config {
         name: &str,
         addr: Option<EndpointAddr>,
         auto_accept: bool,
+        discovery_key: Option<crate::pairing::DiscoveryKey>,
     ) -> Result<()> {
         let key = node_id.to_string();
         let ticket = match addr.filter(|a| a.id == node_id) {
@@ -188,8 +214,34 @@ impl Config {
                 (alias, auto_accept)
             }
         };
-        self.upsert_peer(key, alias, auto_accept, ticket);
+        let discovery_key = discovery_key
+            .map(|k| crate::transfer::short_hex(&k))
+            .or_else(|| self.peers.get(&key).and_then(|p| p.discovery_key.clone()));
+        self.upsert_peer(key.clone(), alias, auto_accept, ticket);
+        if let Some(peer) = self.peers.get_mut(&key) {
+            peer.discovery_key = discovery_key;
+        }
         Ok(())
+    }
+
+    /// The [`DiscoveryKeys`](crate::pairing::DiscoveryKey) of the paired devices
+    /// that have one, by Node ID.
+    pub fn discovery_keys(&self) -> HashMap<EndpointId, crate::pairing::DiscoveryKey> {
+        self.peers
+            .iter()
+            .filter_map(|(id, peer)| {
+                let id = EndpointId::from_str(id).ok()?;
+                let hex = peer.discovery_key.as_deref()?;
+                let mut key = [0u8; 32];
+                if hex.len() != 64 {
+                    return None;
+                }
+                for (byte, pair) in key.iter_mut().zip(hex.as_bytes().chunks(2)) {
+                    *byte = u8::from_str_radix(std::str::from_utf8(pair).ok()?, 16).ok()?;
+                }
+                Some((id, key))
+            })
+            .collect()
     }
 
     /// Adds a device without a known address.
@@ -209,6 +261,7 @@ impl Config {
         let added_at = existing.map(|p| p.added_at).unwrap_or_else(Utc::now);
         // Re-adding a device keeps what the user already verified.
         let verified = existing.is_some_and(|p| p.verified);
+        let discovery_key = existing.and_then(|p| p.discovery_key.clone());
         self.peers.insert(
             node_id,
             PeerInfo {
@@ -217,6 +270,7 @@ impl Config {
                 added_at,
                 verified,
                 ticket,
+                discovery_key,
             },
         );
     }
@@ -389,12 +443,44 @@ fn fallback_alias(node_id: &str) -> String {
 mod tests {
     use super::*;
 
+    /// The configuration holds secrets shared with paired devices.
+    #[cfg(unix)]
+    #[test]
+    fn the_file_is_readable_only_by_its_owner_and_keeps_the_keys() -> Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("config.toml");
+        let mut c = Config::default();
+        let id = iroh::SecretKey::generate().public();
+        c.add_paired(id, "Friend", None, false, Some([0xAB; 32]))?;
+        // `save` writes to the configuration folder; write the same way here.
+        let content = toml::to_string_pretty(&c)?;
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        std::io::Write::write_all(&mut options.open(&path)?, content.as_bytes())?;
+        assert_eq!(
+            std::fs::metadata(&path)?.permissions().mode() & 0o777,
+            0o600
+        );
+
+        let loaded: Config = toml::from_str(&std::fs::read_to_string(&path)?)?;
+        assert_eq!(loaded.discovery_keys().get(&id), Some(&[0xAB; 32]));
+        // Pairing again without a key keeps the old one; with one, replaces it.
+        let mut again = loaded;
+        again.add_paired(id, "Friend", None, false, None)?;
+        assert_eq!(again.discovery_keys().get(&id), Some(&[0xAB; 32]));
+        again.add_paired(id, "Friend", None, false, Some([0xCD; 32]))?;
+        assert_eq!(again.discovery_keys().get(&id), Some(&[0xCD; 32]));
+        Ok(())
+    }
+
     #[test]
     fn paired_only_lets_strangers_pair_only_while_pairing_is_open() {
         let mut c = Config::default();
         let known = iroh::SecretKey::generate().public();
         let stranger = iroh::SecretKey::generate().public().to_string();
-        c.add_paired(known, "Known", None, false).unwrap();
+        c.add_paired(known, "Known", None, false, None).unwrap();
         let known = known.to_string();
 
         assert!(c.admits(&stranger, false), "off: everyone asks");
@@ -430,16 +516,16 @@ mod tests {
     fn add_paired_keeps_user_settings() -> Result<()> {
         let mut c = Config::default();
         let id = iroh::SecretKey::generate().public();
-        c.add_paired(id, "Office\nLaptop", Some(id.into()), false)?;
+        c.add_paired(id, "Office\nLaptop", Some(id.into()), false, None)?;
         let key = id.to_string();
         assert_eq!(c.peers[&key].alias, "Office Laptop");
         assert!(c.peers[&key].ticket.is_some());
         c.peers.get_mut(&key).unwrap().alias = "My laptop".into();
-        c.add_paired(id, "Other name", None, true)?;
+        c.add_paired(id, "Other name", None, true, None)?;
         assert_eq!(c.peers[&key].alias, "My laptop");
         assert!(c.peers[&key].auto_accept);
         let other = iroh::SecretKey::generate().public();
-        c.add_paired(other, "X", Some(id.into()), false)?;
+        c.add_paired(other, "X", Some(id.into()), false, None)?;
         assert!(c.peers[&other.to_string()].ticket.is_none());
         Ok(())
     }

@@ -228,7 +228,13 @@ impl TransferHandler for DaemonHandler {
             return false;
         }
         let saved = Config::load().and_then(|mut c| {
-            c.add_paired(req.peer, &req.name, req.addr, false)?;
+            c.add_paired(
+                req.peer,
+                &req.name,
+                req.addr,
+                false,
+                Some(req.discovery_key),
+            )?;
             c.save()
         });
         match saved {

@@ -280,11 +280,19 @@ fn start_pairing_after_add(app: AppHandle, node_id: String, alias: String, auto_
         }
         .await;
         let (ok, message) = match outcome {
-            Ok((addr, PairOutcome::Accepted { addr: remote, .. })) => {
+            Ok((
+                addr,
+                PairOutcome::Accepted {
+                    addr: remote,
+                    discovery_key,
+                    ..
+                },
+            )) => {
                 let mut config = state.config.lock().await;
                 let saved = config
-                    .add_paired(addr.id, &alias, remote, auto_accept)
+                    .add_paired(addr.id, &alias, remote, auto_accept, Some(discovery_key))
                     .and_then(|()| config.save());
+                state.sync_visibility(&config);
                 match saved {
                     Ok(()) => (true, t!("tui.paired_mutual", name = &alias).into_owned()),
                     Err(e) => (
@@ -741,10 +749,20 @@ pub async fn pair_device(
         .await
         .map_err(|e| format!("{e:#}"))?
     {
-        PairOutcome::Accepted { name, addr: remote } => {
+        PairOutcome::Accepted {
+            name,
+            addr: remote,
+            discovery_key,
+        } => {
             let mut config = state.config.lock().await;
             config
-                .add_paired(addr.id, &name, remote.or(Some(addr.clone())), false)
+                .add_paired(
+                    addr.id,
+                    &name,
+                    remote.or(Some(addr.clone())),
+                    false,
+                    Some(discovery_key),
+                )
                 .map_err(err)?;
             config.save().map_err(err)?;
             state.sync_visibility(&config);
@@ -1085,6 +1103,13 @@ pub struct PrivacySettings {
     /// Pairing is open at the moment (shown only; see [`set_pairing_open`]).
     #[serde(default)]
     pairing_open: bool,
+    /// The operating system is announced to everyone on the local network.
+    #[serde(default)]
+    announce_platform: bool,
+    /// Random port for direct connections instead of the fixed one (applies
+    /// at the next start).
+    #[serde(default)]
+    random_port: bool,
 }
 
 /// `true`, for settings that are on when the frontend does not send them.
@@ -1108,6 +1133,8 @@ pub async fn get_privacy(state: State<'_, AppState>) -> CmdResult<PrivacySetting
         keep_history: !config.disable_history,
         paired_only: config.paired_only,
         pairing_open: config.pairing_open(),
+        announce_platform: config.announce_platform,
+        random_port: config.random_port,
     })
 }
 
@@ -1132,6 +1159,8 @@ pub async fn set_privacy(
         config.localsend = settings.localsend;
         config.disable_history = !settings.keep_history;
         config.paired_only = settings.paired_only;
+        config.announce_platform = settings.announce_platform;
+        config.random_port = settings.random_port;
         config.save().map_err(err)?;
         ferry::history::enable_from_config(&config);
         state.sync_visibility(&config);

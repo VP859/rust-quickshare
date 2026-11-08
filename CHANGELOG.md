@@ -19,6 +19,14 @@ compatibility).
 
 ### Added
 
+- **Sealed discovery answers**: a hidden device now answers its paired devices in a packet
+  encrypted with a secret made at pairing, so nothing in it (name, Node ID, operating system,
+  marker) is readable on the network. Devices paired earlier are answered in the clear until they
+  are paired again. `config.toml` is now readable only by its owner, since it holds these secrets.
+- **Operating system not announced** unless `ferry config set announce-platform true` (*Settings →
+  Privacy*): on other devices it only chooses an icon.
+- **Random port** (`ferry config set random-port true`, *Settings → Privacy*): direct connections
+  no longer listen on the fixed UDP port 47824.
 - **Only paired devices** (`ferry config set paired-only true`, *Settings → Privacy*): offers,
   batches, texts and pairing requests from unknown devices are declined without asking, so that
   knowing a Node ID or having an old TICKET is no longer enough to ask. A new device is paired

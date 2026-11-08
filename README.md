@@ -121,6 +121,8 @@ ferry doctor                            # network and discovery diagnostics
 | Network mode | `network-mode internet` | `local` |
 | Download folder | `download-dir ~/Inbox` | system Downloads folder |
 | Hidden from unpaired devices | `hidden true` | `false` |
+| Show the operating system on the local network (it picks an icon) | `announce-platform true` | `false` |
+| Random port for direct connections instead of 47824 (after a restart) | `random-port true` | `false` |
 | Only paired devices (unknown ones cannot even ask; `ferry pairing` opens pairing for a few minutes) | `paired-only true` | `false` |
 | Auto-accept programs and scripts from Auto-Accept devices | `auto-accept-executables true` | `false` (they ask) |
 | Copy texts from Auto-Accept devices without asking | `auto-accept-texts true` | `false` |

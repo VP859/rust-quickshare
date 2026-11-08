@@ -179,6 +179,10 @@ pub enum SettingKey {
     Hidden,
     /// Accept files, texts and pairing only from paired devices (`true`/`false`).
     PairedOnly,
+    /// Tell everyone on the local network which operating system this is (`true`/`false`).
+    AnnouncePlatform,
+    /// Listen on a random port instead of the fixed 47824; applies at the next start (`true`/`false`).
+    RandomPort,
     /// Copy texts from Auto-Accept devices without asking (`true`/`false`).
     AutoAcceptTexts,
     /// Accept programs, scripts and macro documents from Auto-Accept devices without asking (`true`/`false`).

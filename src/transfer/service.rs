@@ -1011,18 +1011,20 @@ async fn handle_pair<H: TransferHandler>(
     let Some(_permit) = gate.enter(peer) else {
         anyhow::bail!("pairing request from {peer} ignored: too many open requests");
     };
-    let code = match answer_pairing(&mut channel, &engine.node_id(), &peer, commitment).await {
-        Ok(code) => code,
-        Err(e) => {
-            gate.block_pairing(peer);
-            return Err(e);
-        }
-    };
+    let (code, discovery_key) =
+        match answer_pairing(&mut channel, &engine.node_id(), &peer, commitment).await {
+            Ok(answer) => answer,
+            Err(e) => {
+                gate.block_pairing(peer);
+                return Err(e);
+            }
+        };
     let request = PairRequest {
         peer,
         name: clean_device_name(name),
         code,
         addr: (addr.id == peer).then_some(addr),
+        discovery_key,
     };
     info!("Pairing request from '{}' ({peer})", request.name);
     let accepted = tokio::time::timeout(PAIR_DECISION_TIMEOUT, handler.confirm_pair(request))

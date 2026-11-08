@@ -378,10 +378,20 @@ impl App {
                 let _ = tx.send(UiMessage::Status(status));
             };
             let status = match request_pairing(&engine, addr.clone(), &my_name, show_code).await {
-                Ok(PairOutcome::Accepted { name, addr: remote }) => {
+                Ok(PairOutcome::Accepted {
+                    name,
+                    addr: remote,
+                    discovery_key,
+                }) => {
                     let alias = keep_alias.unwrap_or(name);
                     let saved = Config::load().and_then(|mut c| {
-                        c.add_paired(id, &alias, remote.or(Some(addr)), false)?;
+                        c.add_paired(
+                            id,
+                            &alias,
+                            remote.or(Some(addr)),
+                            false,
+                            Some(discovery_key),
+                        )?;
                         c.save()
                     });
                     match saved {

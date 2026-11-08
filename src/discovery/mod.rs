@@ -36,7 +36,7 @@ use tracing::{debug, info, warn};
 
 use crate::config::Config;
 use crate::node::NodeEngine;
-use crate::pairing::clean_device_name;
+use crate::pairing::{DiscoveryKey, clean_device_name};
 
 /// UDP port of discovery packets; must be allowed by firewalls on the LAN.
 pub const DISCOVERY_PORT: u16 = 47823;
@@ -54,6 +54,12 @@ const DEVICE_TTL: Duration = Duration::from_secs(17);
 const MAX_DEVICES: usize = 256;
 /// Largest accepted announcement in bytes.
 const MAX_BEACON_LEN: usize = 2048;
+/// Bytes [`seal`] adds to an announcement: nonce and authentication tag.
+const SEAL_OVERHEAD: usize = SEAL_NONCE_LEN + SEAL_TAG_LEN;
+/// Length of the random nonce at the start of a sealed packet.
+const SEAL_NONCE_LEN: usize = 16;
+/// Length of the authentication tag at the end of a sealed packet.
+const SEAL_TAG_LEN: usize = 32;
 /// Largest number of QUIC ports taken from one announcement.
 const MAX_QUIC_PORTS: usize = 4;
 /// Announcements whose timestamp differs from the local clock by more than
@@ -119,6 +125,12 @@ pub struct Visibility {
     pub hidden: bool,
     /// Paired devices, which see this device even when it is hidden.
     pub trusted: HashSet<EndpointId>,
+    /// Secrets shared with paired devices at pairing. A hidden device encrypts
+    /// its answers to a device that has one (see `docs/PROTOCOL.md`) and tries them all
+    /// on a packet it cannot read.
+    pub keys: HashMap<EndpointId, DiscoveryKey>,
+    /// Put the operating system in announcements that everyone can read.
+    pub announce_platform: bool,
 }
 
 impl Visibility {
@@ -127,6 +139,8 @@ impl Visibility {
         Self {
             hidden: config.hidden,
             trusted: config.trusted_ids().collect(),
+            keys: config.discovery_keys(),
+            announce_platform: config.announce_platform,
         }
     }
 
@@ -515,7 +529,7 @@ pub(crate) fn bind(port: u16) -> std::io::Result<std::net::UdpSocket> {
 /// Background task: announces periodically and on demand, answers new
 /// devices and forgets devices that stopped announcing.
 async fn run(engine: NodeEngine, socket: UdpSocket, opts: DiscoveryOptions, shared: Arc<Shared>) {
-    let mut buf = vec![0u8; MAX_BEACON_LEN];
+    let mut buf = vec![0u8; MAX_BEACON_LEN + SEAL_OVERHEAD];
     let mut tick = tokio::time::interval(ANNOUNCE_INTERVAL);
     let mut joined = BTreeSet::new();
     if opts.targets.is_none() {
@@ -551,14 +565,96 @@ fn unix_now() -> u64 {
         .unwrap_or(0)
 }
 
+/// Encryption and authentication keys of a [`DiscoveryKey`] (separate keys for
+/// separate purposes).
+fn seal_keys(key: &DiscoveryKey) -> ([u8; 32], [u8; 32]) {
+    (
+        blake3::derive_key("ferry discovery encryption v1", key),
+        blake3::derive_key("ferry discovery authentication v1", key),
+    )
+}
+
+/// The authentication tag of a sealed packet: a keyed BLAKE3 hash of the nonce
+/// and the ciphertext.
+fn seal_tag(mac_key: &[u8; 32], nonce_and_ciphertext: &[u8]) -> blake3::Hash {
+    blake3::Hasher::new_keyed(mac_key)
+        .update(nonce_and_ciphertext)
+        .finalize()
+}
+
+/// Encrypts `plain` (a signed announcement) for the device that shares `key`
+/// with this one: `nonce ‖ ciphertext ‖ tag`, with nothing recognizable in it,
+/// so a hidden device's answer looks like random bytes to everyone else.
+///
+/// The ciphertext is `plain` XOR the BLAKE3 output (extendable, keyed with the
+/// encryption key) for the random nonce, the tag a keyed BLAKE3 hash of nonce
+/// and ciphertext (encrypt-then-MAC); BLAKE3 in keyed mode is a PRF and a MAC.
+/// `None` only when the system has no random numbers.
+fn seal(key: &DiscoveryKey, plain: &[u8]) -> Option<Vec<u8>> {
+    let (enc_key, mac_key) = seal_keys(key);
+    let mut out = vec![0u8; SEAL_NONCE_LEN];
+    getrandom::fill(&mut out).ok()?;
+    let mut stream = vec![0u8; plain.len()];
+    blake3::Hasher::new_keyed(&enc_key)
+        .update(&out)
+        .finalize_xof()
+        .fill(&mut stream);
+    out.extend(plain.iter().zip(&stream).map(|(p, s)| p ^ s));
+    let tag = seal_tag(&mac_key, &out);
+    out.extend_from_slice(tag.as_bytes());
+    Some(out)
+}
+
+/// Decrypts a packet made by [`seal`] with `key`; `None` when it was not made
+/// with this key or was changed on the way.
+fn open_sealed(key: &DiscoveryKey, packet: &[u8]) -> Option<Vec<u8>> {
+    if packet.len() <= SEAL_OVERHEAD {
+        return None;
+    }
+    let (enc_key, mac_key) = seal_keys(key);
+    let (signed, tag) = packet.split_at(packet.len() - SEAL_TAG_LEN);
+    // `blake3::Hash` compares in constant time.
+    if seal_tag(&mac_key, signed) != blake3::Hash::from_bytes(tag.try_into().ok()?) {
+        return None;
+    }
+    let (nonce, cipher) = signed.split_at(SEAL_NONCE_LEN);
+    let mut stream = vec![0u8; cipher.len()];
+    blake3::Hasher::new_keyed(&enc_key)
+        .update(nonce)
+        .finalize_xof()
+        .fill(&mut stream);
+    Some(cipher.iter().zip(&stream).map(|(c, s)| c ^ s).collect())
+}
+
+/// Reads a packet that is not a plain announcement: tries the secrets of the
+/// paired devices and returns the announcement inside, if it is a valid
+/// answer from the device whose secret opened it.
+fn decode_sealed(visibility: &Visibility, data: &[u8], now: u64) -> Option<Announcement> {
+    visibility.keys.iter().find_map(|(owner, key)| {
+        let beacon = decode_beacon(&open_sealed(key, data)?, now)?;
+        // Only answers are sent sealed, and only by the owner of the secret.
+        (beacon.reply && beacon.addr.id == *owner).then_some(beacon)
+    })
+}
+
 /// Serializes and signs the current announcement; `None` if it would not fit
-/// in one datagram.
-fn encode_beacon(engine: &NodeEngine, shared: &Shared, reply: bool) -> Option<Vec<u8>> {
+/// in one datagram. `private` is for a packet only a paired device can read.
+fn encode_beacon(
+    engine: &NodeEngine,
+    shared: &Shared,
+    reply: bool,
+    private: bool,
+) -> Option<Vec<u8>> {
     let endpoint = engine.endpoint();
+    let platform = if private || shared.visibility.read().is_ok_and(|v| v.announce_platform) {
+        std::env::consts::OS.to_string()
+    } else {
+        String::new()
+    };
     let beacon = Announcement {
         timestamp: unix_now(),
         name: shared.name.read().map(|n| n.clone()).unwrap_or_default(),
-        platform: std::env::consts::OS.to_string(),
+        platform,
         addr: endpoint.addr(),
         quic_ports: endpoint
             .bound_sockets()
@@ -673,7 +769,7 @@ async fn announce(
     if shared.visibility.read().is_ok_and(|v| v.hidden) {
         return;
     }
-    let Some(bytes) = encode_beacon(engine, shared, false) else {
+    let Some(bytes) = encode_beacon(engine, shared, false, false) else {
         return;
     };
     let mut lan = LanSendStats::default();
@@ -806,7 +902,11 @@ async fn handle_packet(
     data: &[u8],
     from: SocketAddr,
 ) {
-    let Some(beacon) = decode_beacon(data, unix_now()) else {
+    let now = unix_now();
+    let Some(beacon) = decode_beacon(data, now).or_else(|| {
+        let visibility = shared.visibility.read().ok()?;
+        decode_sealed(&visibility, data, now)
+    }) else {
         return;
     };
     if beacon.addr.id == engine.node_id() {
@@ -864,14 +964,23 @@ async fn handle_packet(
     // A visible device answers new devices only (it announces itself anyway).
     // A hidden one never announces, so it answers every announcement of a
     // device it trusts: one lost answer must not hide it until the next start.
-    let hidden = shared.visibility.read().is_ok_and(|v| v.hidden);
-    if (changed || hidden)
-        && !reply
-        && shared.visibility.read().is_ok_and(|v| v.answers(&id))
-        && let Some(bytes) = encode_beacon(engine, shared, true)
-        && let Err(e) = socket.send_to(&bytes, from).await
-    {
-        debug!("Could not answer {from}: {e}");
+    let (hidden, key) = shared
+        .visibility
+        .read()
+        .map(|v| (v.hidden, v.keys.get(&id).copied()))
+        .unwrap_or_default();
+    if (changed || hidden) && !reply && shared.visibility.read().is_ok_and(|v| v.answers(&id)) {
+        // A hidden device answers a paired device that has a secret with a
+        // packet nobody else can read; without one (paired before secrets
+        // existed) in the clear.
+        let sealing = hidden.then_some(key).flatten();
+        let bytes = encode_beacon(engine, shared, true, sealing.is_some())
+            .and_then(|plain| sealing.map_or(Some(plain.clone()), |k| seal(&k, &plain)));
+        if let Some(bytes) = bytes
+            && let Err(e) = socket.send_to(&bytes, from).await
+        {
+            debug!("Could not answer {from}: {e}");
+        }
     }
 }
 
@@ -1129,6 +1238,67 @@ mod tests {
     }
 
     #[test]
+    fn sealed_packets_are_unreadable_and_tamper_proof() {
+        let key = [7u8; 32];
+        let plain = b"FRYd some signed announcement with a name and a Node ID".to_vec();
+        let packet = seal(&key, &plain).unwrap();
+        assert_eq!(packet.len(), plain.len() + SEAL_OVERHEAD);
+        assert!(
+            !packet.windows(4).any(|w| w == MAGIC),
+            "no recognizable marker in the packet"
+        );
+        assert_eq!(open_sealed(&key, &packet), Some(plain.clone()));
+        assert_ne!(
+            packet,
+            seal(&key, &plain).unwrap(),
+            "a new nonce every time"
+        );
+        assert_eq!(open_sealed(&[8; 32], &packet), None, "another secret");
+        for i in 0..packet.len() {
+            let mut bad = packet.clone();
+            bad[i] ^= 1;
+            assert_eq!(open_sealed(&key, &bad), None, "byte {i} changed");
+        }
+        assert_eq!(open_sealed(&key, &packet[..packet.len() - 1]), None);
+        assert_eq!(open_sealed(&key, &[]), None);
+        assert_eq!(open_sealed(&key, &[0; SEAL_OVERHEAD]), None);
+    }
+
+    #[test]
+    fn only_answers_of_the_owner_of_the_secret_are_accepted() {
+        let (owner, other) = (iroh::SecretKey::generate(), iroh::SecretKey::generate());
+        let key = [3u8; 32];
+        let visibility = Visibility {
+            keys: [(owner.public(), key)].into(),
+            ..Visibility::default()
+        };
+        let now = unix_now();
+        let announcement = |key: &iroh::SecretKey, reply| Announcement {
+            timestamp: now,
+            name: "Hidden".into(),
+            platform: String::new(),
+            addr: key.public().into(),
+            quic_ports: vec![1],
+            reply,
+        };
+        let sealed = |signer: &iroh::SecretKey, reply| {
+            let plain = sign_announcement(signer, &announcement(signer, reply)).unwrap();
+            seal(&key, &plain).unwrap()
+        };
+        assert!(decode_sealed(&visibility, &sealed(&owner, true), now).is_some());
+        assert!(
+            decode_sealed(&visibility, &sealed(&owner, false), now).is_none(),
+            "only answers are sent sealed"
+        );
+        assert!(
+            decode_sealed(&visibility, &sealed(&other, true), now).is_none(),
+            "a device with the secret cannot speak for another one"
+        );
+        assert!(decode_sealed(&visibility, &sealed(&owner, true), now + 10_000).is_none());
+        assert!(decode_sealed(&Visibility::default(), &sealed(&owner, true), now).is_none());
+    }
+
+    #[test]
     fn hidden_devices_answer_only_trusted_ones() {
         let friend = iroh::SecretKey::generate().public();
         let stranger = iroh::SecretKey::generate().public();
@@ -1137,6 +1307,7 @@ mod tests {
         let hidden = Visibility {
             hidden: true,
             trusted: [friend].into(),
+            ..Visibility::default()
         };
         assert!(hidden.answers(&friend));
         assert!(!hidden.answers(&stranger));

@@ -31,6 +31,7 @@ async fn node(relay: &RelayUrl) -> NodeEngine {
     let network = Network {
         mode: NetworkMode::Relay,
         relays: vec![relay.clone()],
+        random_port: false,
     };
     NodeEngine::with_network(SecretKey::generate(), network)
         .await
@@ -112,6 +113,7 @@ async fn the_relay_mode_does_not_start_without_a_relay() {
     let network = Network {
         mode: NetworkMode::Relay,
         relays: Vec::new(),
+        random_port: false,
     };
     assert!(
         NodeEngine::with_network(SecretKey::generate(), network)

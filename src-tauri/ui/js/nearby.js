@@ -39,7 +39,7 @@ export function renderNearby() {
       el('div', { class: 'avatar' }, icon(platformIcon(d.platform)), el('span', { class: 'dot ok' })),
       el('div', { class: 'body' },
         el('div', { class: 'title' }, d.name),
-        el('div', { class: 'sub' }, platformLabel(d.platform), peer ? [' · ', el('span', { class: 'tag' }, t('paired_as', { name: peer.alias }))] : '')),
+        el('div', { class: 'sub' }, platformLabel(d.platform), peer ? [d.platform ? ' · ' : '', el('span', { class: 'tag' }, t('paired_as', { name: peer.alias }))] : '')),
       trailing));
   }
 }

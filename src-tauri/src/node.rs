@@ -518,7 +518,13 @@ impl TransferHandler for GuiHandler {
         let state = self.state();
         let mut config = state.config.lock().await;
         let saved = config
-            .add_paired(req.peer, &req.name, req.addr, false)
+            .add_paired(
+                req.peer,
+                &req.name,
+                req.addr,
+                false,
+                Some(req.discovery_key),
+            )
             .and_then(|()| config.save());
         state.sync_visibility(&config);
         drop(config);
