@@ -23,8 +23,10 @@ compatibility).
   goes out again to the same Ferry device or to a recipient chosen now (GUI), or with
   `ferry history --send-again N`; the history keeps the path of sent files for this.
 - **Send the clipboard** from the tray menu: the text opens ready to be sent to a chosen device.
-- **Accessibility tests** (`tests/gui/accessibility.spec.js`): names, labels, dialogs and WCAG AA
-  contrast of the GUI and the browser session page in both themes, and the keyboard. Their first run
+- **Accessibility tests** (`tests/gui/accessibility.spec.js`): axe-core (WCAG 2.0–2.2 A and AA) and
+  an own audit of names, labels, dialogs and contrast of the GUI and the browser session page in
+  both themes, and the keyboard. axe also found icon-only buttons without a name on phones and a
+  device row that was a button holding other buttons; both are fixed. Their first run
   found too little contrast for secondary text, warnings and the dark theme's buttons; the colours
   were adjusted. The history tabs follow the ARIA tab pattern (arrow keys), animations stop with
   *reduce motion*, and the frontend check refuses a translation key written twice.
@@ -200,6 +202,9 @@ compatibility).
 
 ### Changed
 
+- **The desktop window uses its width**: from 1100 px on, sending and the transfers are on the
+  left and the devices on the right, instead of one narrow column in the middle of a large window.
+  Narrow windows and phones keep the single column. The README images show the new layout.
 - Progress of a transfer reaches the interfaces at most about ten times per second (the first value,
   pauses and the end at once) instead of after every chunk: a 1 GiB transfer on a fast link now
   makes about 30 events on each side instead of about 1260, so the GUI redraws the transfer list

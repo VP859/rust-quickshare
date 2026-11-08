@@ -29,7 +29,9 @@ export function audit(rootSelector) {
     }
     const wrapping = e.closest('label');
     if (wrapping && wrapping !== e) return wrapping.textContent.trim();
-    if (['BUTTON', 'A'].includes(e.tagName) || e.getAttribute('role') === 'tab') return (e.textContent || '').trim() || (e.getAttribute('title') || '').trim();
+    // innerText: only what is rendered (a label hidden on small screens is no name).
+    // biome-ignore lint/performance/useDomNodeTextContent: the rendered text is exactly what is checked here.
+    if (['BUTTON', 'A'].includes(e.tagName) || e.getAttribute('role') === 'tab') return (e.innerText || '').trim() || (e.getAttribute('title') || '').trim();
     return (e.getAttribute('title') || e.getAttribute('placeholder') || '').trim();
   };
   for (const e of root.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, [role=tab], [role=switch]')) {
@@ -52,7 +54,7 @@ export function audit(rootSelector) {
   }
   for (const svg of root.querySelectorAll('svg.i')) {
     const button = svg.closest('button, a');
-    if (button && !nameOf(button)) problems.push(`icon-only control without name: ${whatIs(button)}`);
+    if (button && visible(button) && !nameOf(button)) problems.push(`icon-only control without name: ${whatIs(button)}`);
   }
 
   // Contrast of text against what is behind it.

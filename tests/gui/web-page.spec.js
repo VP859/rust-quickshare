@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test as base, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { audit } from './audit.js';
 
 const PAGE = join(import.meta.dirname, '..', '..', 'src', 'web', 'page');
@@ -111,5 +112,7 @@ for (const scheme of ['light', 'dark']) {
     await session.goto(BASE);
     await expect(session.locator('#files li')).toHaveCount(1);
     expect(await session.evaluate(audit, null)).toEqual([]);
+    const { violations } = await new AxeBuilder({ page: session }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+    expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
   });
 }

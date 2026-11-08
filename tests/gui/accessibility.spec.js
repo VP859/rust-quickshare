@@ -2,9 +2,11 @@
 // dialogs are labelled, text has enough contrast (WCAG 2.2 AA) in the light
 // and the dark theme, and everything works with the keyboard.
 //
-// The checks run in the page on what is actually rendered (computed colours,
-// visible elements), for the main screen and for the dialogs, with the example
-// data of fixtures.js.
+// Two independent checks run on what is actually rendered, for the main
+// screen and every dialog, with the example data of fixtures.js: axe-core
+// (the WCAG 2.0–2.2 A and AA rules) and Ferry's own audit (audit.js), which
+// also covers what axe leaves to people, like icon-only buttons in lists.
+import AxeBuilder from '@axe-core/playwright';
 import { audit } from './audit.js';
 import { emit, expect, test } from './fixtures.js';
 
@@ -16,6 +18,14 @@ async function fillScreen(app) {
   await emit(app, 'transfer', { ...base, id: 't1', file_name: 'photo.jpg', done: 500_000, status: { kind: 'running' } });
   await emit(app, 'transfer', { ...base, id: 't2', file_name: 'notes.txt', done: 2_000_000, status: { kind: 'completed', path: '/home/me/notes.txt' } });
   await emit(app, 'transfer', { ...base, id: 't3', file_name: 'big.iso', done: 0, status: { kind: 'failed', error: 'connection lost' } });
+}
+
+/** Violations of the WCAG 2.0–2.2 A and AA rules found by axe-core in `selector`. */
+export async function axeViolations(page, selector) {
+  let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']);
+  if (selector) builder = builder.include(selector);
+  const { violations } = await builder.analyze();
+  return violations.map((v) => `${v.id}: ${v.help} – ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
 }
 
 /** The dialogs to check, with how to open them. */
@@ -38,6 +48,7 @@ for (const scheme of ['light', 'dark']) {
     test('the main screen has names, labels and enough contrast', async ({ app }) => {
       await fillScreen(app);
       expect(await app.evaluate(audit, null)).toEqual([]);
+      expect(await axeViolations(app)).toEqual([]);
     });
 
     for (const [name, openDialog] of Object.entries(DIALOGS)) {
@@ -47,6 +58,7 @@ for (const scheme of ['light', 'dark']) {
         await expect(dialog).toBeVisible();
         const id = await dialog.getAttribute('id');
         expect(await app.evaluate(audit, `#${id} .modal`)).toEqual([]);
+        expect(await axeViolations(app, `#${id}`)).toEqual([]);
       });
     }
   });

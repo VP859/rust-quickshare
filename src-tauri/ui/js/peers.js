@@ -38,9 +38,10 @@ export function renderPeers() {
       onclick: (e) => { e.stopPropagation(); sendToPeer(p); } }, icon('send', 'sm'));
     const menuBtn = el('button', { class: 'ghost icon', 'aria-label': t('device_options'), title: t('device_options'),
       onclick: (e) => { e.stopPropagation(); showMenu(row, p); } }, icon('more'));
-    const row = el('div', { class: 'row clickable device', tabindex: '0', 'data-node': p.node_id, role: 'button', 'aria-label': label,
-        onclick: () => sendToPeer(p),
-        onkeydown: (e) => { if (e.key === 'Enter' && e.target === row) sendToPeer(p); } },
+    // Clicking anywhere on the row sends, as a shortcut for the mouse; the
+    // keyboard and screen readers use the send button, the row itself is no
+    // control (a control holding other controls cannot be announced well).
+    const row = el('div', { class: 'row clickable device', 'data-node': p.node_id, onclick: () => sendToPeer(p) },
       el('div', { class: 'avatar' }, initials(p.alias), el('span', { class: dotClass(reachable) })),
       el('div', { class: 'body' },
         el('div', { class: 'title' }, p.alias),

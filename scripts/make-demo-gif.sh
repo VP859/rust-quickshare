@@ -8,7 +8,7 @@
 set -eu
 dir="${1:-docs/images}"
 ffmpeg -loglevel error -y -framerate 2 -i "$dir/frames/%03d.png" \
-  -vf "crop=760:720:260:0,scale=640:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=none" \
+  -vf "scale=800:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96[p];[b][p]paletteuse=dither=none" \
   "$dir/demo.gif"
 rm -r "$dir/frames"
 echo "$dir/demo.gif"

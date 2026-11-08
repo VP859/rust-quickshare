@@ -45,7 +45,7 @@
     <button class="pill mode-pill" id="mode-pill" hidden></button>
     <span class="spacer"></span>
     <div class="actions">
-      <button class="ghost" id="btn-my-ticket"><svg class="i"><use href="#i-qr"/></svg><span class="label-text" data-i18n="my_ticket"></span></button>
+      <button class="ghost" id="btn-my-ticket" data-i18n-aria="my_ticket"><svg class="i"><use href="#i-qr"/></svg><span class="label-text" data-i18n="my_ticket"></span></button>
       <button class="ghost icon" id="btn-settings" data-i18n-aria="settings" data-i18n-title="settings"><svg class="i"><use href="#i-sliders"/></svg></button>
     </div>
   </div>
@@ -68,32 +68,35 @@
     </div>
   </section>
 
-  <section>
-    <header>
-      <h2 data-i18n="nearby"></h2><span class="count" id="nearby-count">0</span>
-      <span class="spacer"></span>
-      <button class="ghost" id="btn-nearby-refresh"><svg class="i sm"><use href="#i-refresh"/></svg><span data-i18n="search"></span></button>
-    </header>
-    <p class="hint" data-i18n="nearby_hint"></p>
-    <div class="list" id="nearby"></div>
-    <div class="subsection" id="nearby-localsend-block" hidden>
-      <h3 class="subhead"><span data-i18n="localsend_apps"></span><span class="count" id="localsend-count">0</span></h3>
-      <p class="hint caution" data-i18n="localsend_unverified_short"></p>
-      <div class="list" id="nearby-localsend"></div>
-    </div>
-    <p class="hint warn" id="nearby-hint" hidden></p>
-  </section>
+  <!-- Devices: next to the transfers on wide windows, between them on narrow ones. -->
+  <div class="side">
+    <section>
+      <header>
+        <h2 data-i18n="nearby"></h2><span class="count" id="nearby-count">0</span>
+        <span class="spacer"></span>
+        <button class="ghost" id="btn-nearby-refresh"><svg class="i sm"><use href="#i-refresh"/></svg><span data-i18n="search"></span></button>
+      </header>
+      <p class="hint" data-i18n="nearby_hint"></p>
+      <div class="list" id="nearby"></div>
+      <div class="subsection" id="nearby-localsend-block" hidden>
+        <h3 class="subhead"><span data-i18n="localsend_apps"></span><span class="count" id="localsend-count">0</span></h3>
+        <p class="hint caution" data-i18n="localsend_unverified_short"></p>
+        <div class="list" id="nearby-localsend"></div>
+      </div>
+      <p class="hint warn" id="nearby-hint" hidden></p>
+    </section>
 
-  <section>
-    <header>
-      <h2 data-i18n="trusted"></h2><span class="count" id="peers-count">0</span>
-      <span class="spacer"></span>
-      <button id="btn-add-peer"><svg class="i sm"><use href="#i-plus"/></svg><span data-i18n="add_device"></span></button>
-    </header>
-    <div class="list" id="peers"></div>
-  </section>
+    <section>
+      <header>
+        <h2 data-i18n="trusted"></h2><span class="count" id="peers-count">0</span>
+        <span class="spacer"></span>
+        <button id="btn-add-peer"><svg class="i sm"><use href="#i-plus"/></svg><span data-i18n="add_device"></span></button>
+      </header>
+      <div class="list" id="peers"></div>
+    </section>
+  </div>
 
-  <section>
+  <section id="transfers-section">
     <header>
       <h2 data-i18n="transfers"></h2>
       <span class="spacer"></span>

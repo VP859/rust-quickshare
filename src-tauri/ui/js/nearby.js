@@ -28,7 +28,7 @@ export function renderNearby() {
   }
   for (const d of nearby) {
     const peer = peers.find(p => p.node_id === d.node_id);
-    const send = el('button', { onclick: (e) => { e.stopPropagation(); sendToDevice(d.node_id, peer?.alias ?? d.name); } },
+    const send = el('button', { 'aria-label': t('send_to', { name: peer?.alias ?? d.name }), onclick: (e) => { e.stopPropagation(); sendToDevice(d.node_id, peer?.alias ?? d.name); } },
       icon('send', 'sm'), el('span', { class: 'label-text' }, t('send_file')));
     const text = el('button', { class: 'ghost icon', title: t('send_text'), 'aria-label': t('send_text'),
       onclick: (e) => { e.stopPropagation(); composeText(d.node_id, peer?.alias ?? d.name); } }, icon('text', 'sm'));
@@ -55,7 +55,7 @@ function renderLocalSendNearby() {
   if (block.hidden) return;
   if (!state.localsend.length) box.append(emptyState('wifi', t('localsend_searching')));
   for (const d of state.localsend) {
-    const send = el('button', { onclick: async () => { try { await sendToLocalSend(await pickFiles(), d); } catch (e) { fail(e); } } },
+    const send = el('button', { 'aria-label': t('send_to', { name: d.alias }), onclick: async () => { try { await sendToLocalSend(await pickFiles(), d); } catch (e) { fail(e); } } },
       icon('send', 'sm'), el('span', { class: 'label-text' }, t('send_file')));
     box.append(localSendRow(d, null, send));
   }

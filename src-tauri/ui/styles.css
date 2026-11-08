@@ -67,7 +67,8 @@ a:hover { text-decoration: underline; }
 .logo svg.i { width: 18px; height: 18px; stroke-width: 2.4; }
 .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; color: var(--muted); background: var(--surface); max-width: 46vw; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .topbar .actions { display: flex; gap: 4px; }
-.mode-pill { cursor: pointer; font: inherit; font-size: 12px; }
+#node-pill { flex-shrink: 8; min-width: 0; } /* gives way first on narrow screens */
+.mode-pill { cursor: pointer; font: inherit; font-size: 12px; flex-shrink: 1; min-width: 0; }
 .mode-pill.internet { color: var(--warn); border-color: var(--warn); }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
@@ -236,9 +237,27 @@ body.mobile .desktop-only { display: none !important; }
   .modal-overlay { align-items: flex-end; padding: 0; }
   .modal { max-width: none; border-radius: 16px 16px 0 0; border-bottom: none; padding-bottom: env(safe-area-inset-bottom); transform: translateY(24px); }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
 /* Less movement for people who asked their system for it. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
+}
+
+/* Wide windows: two columns – sending and transfers on the left, the devices
+   on the right – instead of one narrow column in the middle of the screen.
+   The right column spans both rows, so the transfers start right below the
+   drop zone however long the device lists are. */
+.side { display: flex; flex-direction: column; gap: 28px; }
+@media (min-width: 1100px) {
+  .topbar-inner, footer { max-width: 1280px; }
+  main {
+    max-width: 1280px; display: grid; gap: 28px 32px; align-items: start;
+    grid-template-columns: minmax(0, 1.4fr) minmax(340px, 1fr); grid-template-rows: auto 1fr;
+  }
+  #dropzone { grid-column: 1; grid-row: 1; }
+  .side { grid-column: 2; grid-row: 1 / span 2; }
+  #transfers-section { grid-column: 1; grid-row: 2; }
+}
+@media (min-width: 1800px) {
+  .topbar-inner, main, footer { max-width: 1440px; }
 }
