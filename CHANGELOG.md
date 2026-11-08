@@ -144,8 +144,9 @@ compatibility).
 ### Fixed
 
 - Removing a trusted device now tells it (`Unpair`), so it stops listing the remover as paired
-  instead of keeping a pairing the other side no longer honours. A device that is offline or older
-  keeps it until its user removes it.
+  instead of keeping a pairing the other side no longer honours. A device that is offline is
+  remembered for 30 days and told as soon as it appears on the local network (GUI, TUI and daemon);
+  an older version keeps the pairing until its user removes it.
 - The history of transfers could lose entries when two transfers ended at the same moment (both
   ends of a transfer inside one process, or a file sent to several devices): their lines were
   written in pieces and could be mixed into one damaged line, which was then skipped. Entries are

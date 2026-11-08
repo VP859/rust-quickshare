@@ -493,8 +493,8 @@ peer.removed_told:
   en: "The device was told and no longer lists this one as paired."
   pl: "Urządzenie zostało powiadomione i nie wyświetla już tego jako sparowanego."
 peer.removed_not_told:
-  en: "The device could not be reached: it keeps this one as paired until its user removes it."
-  pl: "Nie udało się połączyć z urządzeniem: dopóki jego użytkownik go nie usunie, nadal wyświetla to jako sparowane."
+  en: "The device could not be reached; it will be told when it appears on the local network (for 30 days)."
+  pl: "Nie udało się połączyć z urządzeniem; zostanie powiadomione, gdy pojawi się w sieci lokalnej (przez 30 dni)."
 peer.added:
   en: "[SUCCESS] Added device '%{alias}' (%{id}) (Auto-Accept: %{auto})."
   pl: "[SUKCES] Dodano urządzenie '%{alias}' (%{id}) (Auto-Accept: %{auto})."

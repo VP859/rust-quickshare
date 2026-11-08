@@ -239,6 +239,7 @@ impl App {
         let result = Config::load().and_then(|mut c| {
             target = c.resolve_target(node_id).ok();
             let alias = c.peers.remove(node_id).map(|p| p.alias).unwrap_or_default();
+            c.queue_unpair(node_id);
             c.save()?;
             Ok(t!("tui.removed", alias = alias).into_owned())
         });
@@ -247,8 +248,14 @@ impl App {
             && let Some(target) = target
         {
             let engine = self.engine.clone();
+            let node_id = node_id.to_string();
             tokio::spawn(async move {
-                let _ = ferry::transfer::service::send_unpair(&engine, target).await;
+                if ferry::transfer::service::send_unpair(&engine, target)
+                    .await
+                    .is_ok()
+                {
+                    crate::cli::peer_cmd::forget_unpair(&node_id);
+                }
             });
         }
         self.after_config_change(result);

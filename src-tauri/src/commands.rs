@@ -393,11 +393,17 @@ pub async fn update_peer(
 ///
 /// When the configuration cannot be saved.
 #[tauri::command]
-pub async fn remove_peer(node_id: String, state: State<'_, AppState>) -> CmdResult<()> {
+pub async fn remove_peer(
+    node_id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<()> {
     let target = {
         let mut config = state.config.lock().await;
         let target = config.resolve_target(&node_id).ok();
-        config.peers.remove(&node_id);
+        if config.peers.remove(&node_id).is_some() {
+            config.queue_unpair(&node_id);
+        }
         config.save().map_err(err)?;
         state.sync_visibility(&config);
         target
@@ -406,9 +412,12 @@ pub async fn remove_peer(node_id: String, state: State<'_, AppState>) -> CmdResu
     // paired. Best effort and in the background: it may be offline.
     if let (Some(target), Ok(engine)) = (target, state.engine().await) {
         let engine = engine.clone();
+        let app = app.clone();
         tokio::spawn(async move {
-            if let Err(e) = ferry::transfer::service::send_unpair(&engine, target).await {
-                tracing::debug!("Could not tell the removed device: {e:#}");
+            match ferry::transfer::service::send_unpair(&engine, target).await {
+                Ok(()) => crate::node::forget_unpair(&app, &node_id).await,
+                // It is told when it appears on the local network.
+                Err(e) => tracing::debug!("Could not tell the removed device yet: {e:#}"),
             }
         });
     }

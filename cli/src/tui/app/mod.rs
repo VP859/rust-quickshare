@@ -295,6 +295,11 @@ impl App {
             }
             UiMessage::Transfer(ev) => self.update_transfer(ev),
             UiMessage::Nearby(devices) => {
+                let engine = self.engine.clone();
+                let seen = devices.clone();
+                tokio::spawn(async move {
+                    crate::cli::peer_cmd::deliver_pending_unpairs(&engine, &seen).await;
+                });
                 self.nearby = devices;
                 self.clamp_selection();
             }

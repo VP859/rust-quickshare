@@ -652,12 +652,41 @@ fn start_discovery(app: &AppHandle, engine: &NodeEngine, config: &Config) {
         return;
     }
     let app = app.clone();
+    let engine = engine.clone();
     tauri::async_runtime::spawn(async move {
         while watch.changed().await.is_ok() {
             let devices = watch.borrow_and_update().clone();
+            // Removed devices that appeared are told about their removal.
+            let pending = app
+                .state::<AppState>()
+                .config
+                .lock()
+                .await
+                .pending_unpair_ids();
+            if !pending.is_empty() {
+                let (app, engine, devices) = (app.clone(), engine.clone(), devices.clone());
+                tauri::async_runtime::spawn(async move {
+                    for id in
+                        ferry::transfer::service::deliver_unpairs(&engine, &devices, &pending).await
+                    {
+                        forget_unpair(&app, &id).await;
+                    }
+                });
+            }
             let _ = app.emit("nearby", devices);
         }
     });
+}
+
+/// Stops waiting to tell the removed device `node_id` (it was told).
+pub async fn forget_unpair(app: &AppHandle, node_id: &str) {
+    let state = app.state::<AppState>();
+    let mut config = state.config.lock().await;
+    if config.pending_unpair.remove(node_id).is_some()
+        && let Err(e) = config.save()
+    {
+        warn!("Could not save the configuration: {e:#}");
+    }
 }
 
 /// Starts or stops the LocalSend compatibility mode to match the

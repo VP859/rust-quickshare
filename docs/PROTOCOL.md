@@ -72,9 +72,11 @@ The dialing peer opens a bidirectional stream and sends a `Hello` frame. Variant
 | `Batch` [4] | `count: u32`, `total_size: u64`, `names: Vec<String>` | several files follow; decide once |
 | `Unpair` [5] | – | the sender removed this device from its trusted devices; remove the sender too |
 
-`Unpair` has no answer; the receiver ends the stream. It can only remove the device authenticated by
-the connection, never another one, so it needs no confirmation. A device that is offline or older
-keeps the pairing until its user removes it.
+`Unpair` has no answer; the receiver ends its side of the stream once it has acted, which tells the
+sender that it was done. It can only remove the device authenticated by the connection, never another
+one, so it needs no confirmation. A device that cannot be reached is remembered
+(`pending_unpair` in the configuration, 30 days, at most 64) and told when it appears among the
+nearby devices; one that is older keeps the pairing until its user removes it.
 
 ### File transfer (`Push`, and `Pull` in the opposite direction)
 

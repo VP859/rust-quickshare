@@ -86,6 +86,12 @@ pub struct Config {
     /// Applies at the next start.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub random_port: bool,
+    /// Devices removed from the trusted devices that could not be told about it
+    /// yet ([`Hello::Unpair`](crate::protocol::messages::Hello::Unpair)), with
+    /// the time of removal. They are told when they appear on the local
+    /// network, and forgotten after [`Config::UNPAIR_KEPT_DAYS`] days.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub pending_unpair: std::collections::BTreeMap<String, DateTime<Utc>>,
     /// Accept offers, texts and batches only from paired devices, and
     /// pairing requests only while pairing is open ([`Config::open_pairing`]).
     /// Others are declined without the user being asked. Off by default.
@@ -262,6 +268,8 @@ impl Config {
         // Re-adding a device keeps what the user already verified.
         let verified = existing.is_some_and(|p| p.verified);
         let discovery_key = existing.and_then(|p| p.discovery_key.clone());
+        // A device that is trusted again does not need to be told it was removed.
+        self.pending_unpair.remove(&node_id);
         self.peers.insert(
             node_id,
             PeerInfo {
@@ -325,6 +333,31 @@ impl Config {
         self.find_peer(node_id).is_some_and(|p| p.auto_accept)
             && (self.auto_accept_executables
                 || crate::transfer::risk::file_risk(file_name).is_none())
+    }
+
+    /// Days a removed device is waited for ([`Config::pending_unpair`]).
+    pub const UNPAIR_KEPT_DAYS: i64 = 30;
+    /// Most removed devices waited for.
+    const MAX_PENDING_UNPAIR: usize = 64;
+
+    /// Remembers that the removed device `node_id` still has to be told.
+    /// Entries older than [`Config::UNPAIR_KEPT_DAYS`] are dropped.
+    pub fn queue_unpair(&mut self, node_id: &str) {
+        let oldest = Utc::now() - chrono::Duration::days(Self::UNPAIR_KEPT_DAYS);
+        self.pending_unpair.retain(|_, at| *at > oldest);
+        if self.pending_unpair.len() < Self::MAX_PENDING_UNPAIR {
+            self.pending_unpair.insert(node_id.to_string(), Utc::now());
+        }
+    }
+
+    /// The removed devices that still have to be told.
+    pub fn pending_unpair_ids(&self) -> Vec<String> {
+        let oldest = Utc::now() - chrono::Duration::days(Self::UNPAIR_KEPT_DAYS);
+        self.pending_unpair
+            .iter()
+            .filter(|(_, at)| **at > oldest)
+            .map(|(id, _)| id.clone())
+            .collect()
     }
 
     /// Longest time pairing can be left open, in minutes.
@@ -499,6 +532,36 @@ mod tests {
         c.open_pairing(1000);
         let left = c.pairing_until.unwrap() - Utc::now();
         assert!(left <= chrono::Duration::minutes(Config::MAX_PAIRING_MINUTES));
+    }
+
+    #[test]
+    fn removed_devices_wait_to_be_told_until_they_are_trusted_again_or_too_old() {
+        let mut c = Config::default();
+        let id = iroh::SecretKey::generate().public();
+        let key = id.to_string();
+        assert!(c.pending_unpair_ids().is_empty());
+        c.queue_unpair(&key);
+        assert_eq!(c.pending_unpair_ids(), std::slice::from_ref(&key));
+
+        c.add_paired(id, "Back again", None, false, None).unwrap();
+        assert!(c.pending_unpair_ids().is_empty(), "trusted again");
+
+        c.queue_unpair(&key);
+        c.pending_unpair.insert(
+            key.clone(),
+            Utc::now() - chrono::Duration::days(Config::UNPAIR_KEPT_DAYS + 1),
+        );
+        assert!(c.pending_unpair_ids().is_empty(), "too old");
+        c.queue_unpair("other");
+        assert!(
+            !c.pending_unpair.contains_key(&key),
+            "old entries are dropped"
+        );
+
+        for i in 0..100 {
+            c.queue_unpair(&format!("device{i}"));
+        }
+        assert!(c.pending_unpair.len() <= 64);
     }
 
     #[test]

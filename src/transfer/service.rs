@@ -1508,13 +1508,53 @@ const UNPAIR_TIMEOUT: Duration = Duration::from_secs(8);
 pub async fn send_unpair(engine: &NodeEngine, target: iroh::EndpointAddr) -> Result<()> {
     tokio::time::timeout(UNPAIR_TIMEOUT, async {
         let conn = engine.connect(target).await?;
-        let channel = Channel::open(&conn, &Hello::Unpair).await?;
-        channel.finish().await;
+        let Channel { mut send, mut recv } = Channel::open(&conn, &Hello::Unpair).await?;
+        send.finish()?;
+        // The other device ends its side once it has acted on the request.
+        let answer = recv.read(&mut [0u8; 1]).await;
         conn.close(0u32.into(), b"done");
-        Ok(())
+        match answer {
+            Ok(None) => Ok(()),
+            Ok(Some(_)) => anyhow::bail!(t!("pairing.interrupted")),
+            Err(e) => Err(e).with_context(|| t!("pairing.interrupted")),
+        }
     })
     .await
     .with_context(|| t!("pairing.no_answer"))?
+}
+
+/// Tells the removed devices among `nearby` ([`crate::config::Config::pending_unpair`])
+/// that this device removed them, now that they can be reached. Returns the
+/// Node IDs that were told; the caller forgets them. A device already being
+/// told by another call is skipped.
+pub async fn deliver_unpairs(
+    engine: &NodeEngine,
+    nearby: &[crate::discovery::NearbyDevice],
+    pending: &[String],
+) -> Vec<String> {
+    static IN_PROGRESS: LazyLock<Mutex<std::collections::HashSet<String>>> =
+        LazyLock::new(Mutex::default);
+    let mut told = Vec::new();
+    for device in nearby.iter().filter(|d| pending.contains(&d.node_id)) {
+        let fresh = IN_PROGRESS
+            .lock()
+            .is_ok_and(|mut busy| busy.insert(device.node_id.clone()));
+        if !fresh {
+            continue;
+        }
+        let result = send_unpair(engine, device.addr.clone()).await;
+        if let Ok(mut busy) = IN_PROGRESS.lock() {
+            busy.remove(&device.node_id);
+        }
+        match result {
+            Ok(()) => {
+                info!("Told the removed device {} about it", device.node_id);
+                told.push(device.node_id.clone());
+            }
+            Err(e) => debug!("Could not tell {} yet: {e:#}", device.node_id),
+        }
+    }
+    told
 }
 
 /// One-line preview of a text: line breaks and control characters become

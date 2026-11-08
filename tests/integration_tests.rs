@@ -1289,3 +1289,35 @@ async fn removing_a_device_tells_it_to_remove_the_sender_too() -> Result<()> {
     })
     .await
 }
+
+/// A removed device that could not be told is told once it shows up among
+/// the nearby devices; only the ones waiting for it, and only once reachable.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_removed_device_is_told_when_it_appears() -> Result<()> {
+    with_timeout(async {
+        let dir = tempdir()?;
+        let handler = Arc::new(TestHandler::new(true, dir.path()));
+        let (rx, addr) = start_receiver(handler.clone()).await?;
+        let remover = engine().await?;
+        let device = |name: &str, addr: iroh::EndpointAddr| ferry::discovery::NearbyDevice {
+            node_id: addr.id.to_string(),
+            name: name.into(),
+            platform: String::new(),
+            id: addr.id,
+            addr,
+        };
+        let other = device("Other", iroh::SecretKey::generate().public().into());
+        let target = device("Removed", addr);
+        let nearby = [other.clone(), target.clone()];
+
+        let told = service::deliver_unpairs(&remover, &nearby, &[]).await;
+        assert!(told.is_empty(), "nobody is waiting");
+        let told =
+            service::deliver_unpairs(&remover, &nearby, std::slice::from_ref(&target.node_id))
+                .await;
+        assert_eq!(told, [rx.node_id().to_string()]);
+        assert_eq!(*handler.unpaired.lock().unwrap(), [remover.node_id()]);
+        Ok(())
+    })
+    .await
+}

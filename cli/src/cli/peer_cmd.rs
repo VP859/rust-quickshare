@@ -152,9 +152,13 @@ fn edit(target: &str, alias: Option<String>, auto_accept: Option<bool>) -> Resul
 async fn remove(target: &str) -> Result<()> {
     let mut config = Config::load()?;
     let address = config.resolve_target(target).ok();
+    let key = config.find_key(target);
     if !config.remove_peer(target) {
         println!("{}", t!("peer.not_found", target = target));
         return Ok(());
+    }
+    if let Some(key) = &key {
+        config.queue_unpair(key);
     }
     config.save()?;
     println!("{}", t!("peer.removed", target = target));
@@ -167,9 +171,40 @@ async fn remove(target: &str) -> Result<()> {
         }
         .await;
         match told {
-            Ok(()) => println!("{}", t!("peer.removed_told")),
+            Ok(()) => {
+                println!("{}", t!("peer.removed_told"));
+                if let Some(key) = &key {
+                    forget_unpair(key);
+                }
+            }
             Err(_) => println!("{}", t!("peer.removed_not_told")),
         }
     }
     Ok(())
+}
+
+/// Stops waiting to tell the removed device `node_id` (it was told).
+pub fn forget_unpair(node_id: &str) {
+    if let Ok(mut config) = Config::load()
+        && config.pending_unpair.remove(node_id).is_some()
+    {
+        let _ = config.save();
+    }
+}
+
+/// Tells the removed devices among `nearby` that they were removed, when they
+/// are waiting for it (`config.pending_unpair`), and forgets those told.
+pub async fn deliver_pending_unpairs(
+    engine: &ferry::node::NodeEngine,
+    nearby: &[ferry::discovery::NearbyDevice],
+) {
+    let pending = Config::load()
+        .map(|c| c.pending_unpair_ids())
+        .unwrap_or_default();
+    if pending.is_empty() {
+        return;
+    }
+    for id in ferry::transfer::service::deliver_unpairs(engine, nearby, &pending).await {
+        forget_unpair(&id);
+    }
 }

@@ -387,6 +387,17 @@ pub async fn run_daemon(downloads_dir: Option<PathBuf>) -> Result<()> {
     )
     .inspect_err(|e| warn!("Local network discovery disabled: {e:#}"))
     .ok();
+    // Removed devices that appear on the network are told about their removal.
+    if let Some(discovery) = &_discovery {
+        let mut watch = discovery.subscribe();
+        let engine = engine.clone();
+        tokio::spawn(async move {
+            while watch.changed().await.is_ok() {
+                let devices = watch.borrow_and_update().clone();
+                crate::cli::peer_cmd::deliver_pending_unpairs(&engine, &devices).await;
+            }
+        });
+    }
 
     // Kept alive until the daemon stops.
     let _localsend = if config.localsend {
