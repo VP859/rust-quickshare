@@ -19,6 +19,15 @@ compatibility).
 
 ### Added
 
+- **Send again from the history**: a file that was sent (or received) and is still on this device
+  goes out again to the same Ferry device or to a recipient chosen now (GUI), or with
+  `ferry history --send-again N`; the history keeps the path of sent files for this.
+- **Send the clipboard** from the tray menu: the text opens ready to be sent to a chosen device.
+- **Accessibility tests** (`tests/gui/accessibility.spec.js`): names, labels, dialogs and WCAG AA
+  contrast of the GUI and the browser session page in both themes, and the keyboard. Their first run
+  found too little contrast for secondary text, warnings and the dark theme's buttons; the colours
+  were adjusted. The history tabs follow the ARIA tab pattern (arrow keys), animations stop with
+  *reduce motion*, and the frontend check refuses a translation key written twice.
 - **Sending to LocalSend apps** (iPhone, iPad, Mac, and every other LocalSend device): files and
   folders, with the recipient list's *LocalSend apps* section in the GUI and `ferry localsend scan`
   / `ferry localsend send FILE… --to NAME|IP [--pin PIN]` on the command line. LocalSend apps also

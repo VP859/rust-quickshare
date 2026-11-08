@@ -185,7 +185,7 @@ async fn finished_transfers_are_kept_in_the_history() {
     let (sender, receiver, addr, _dst) = pair().await;
     let src = tempfile::tempdir().unwrap();
     let (path, _) = file(src.path(), "kept.txt", 1234);
-    service::send_files(&sender, addr, &[path], &|_| {})
+    service::send_files(&sender, addr, std::slice::from_ref(&path), &|_| {})
         .await
         .unwrap();
     // The receiver finishes just after the sender got its confirmation.
@@ -205,11 +205,21 @@ async fn finished_transfers_are_kept_in_the_history() {
             .iter()
             .all(|e| e.file_name == "kept.txt" && e.status == "completed" && e.size == 1234)
     );
-    assert!(entries.iter().any(|e| e.direction == Direction::Upload));
+    // Both can be sent again: the sent file and the received one.
+    let upload = entries
+        .iter()
+        .find(|e| e.direction == Direction::Upload)
+        .unwrap();
+    assert_eq!(upload.local_file(), Some(path.clone()));
+    assert_eq!(upload.ferry_peer(), Some(receiver.node_id()));
+    let download = entries
+        .iter()
+        .find(|e| e.direction == Direction::Download)
+        .unwrap();
     assert!(
-        entries
-            .iter()
-            .any(|e| e.direction == Direction::Download && e.detail.is_some())
+        download
+            .local_file()
+            .is_some_and(|p| p.ends_with("kept.txt"))
     );
     assert_eq!(ferry::history::search(entries, "KEPT").len(), 2);
 

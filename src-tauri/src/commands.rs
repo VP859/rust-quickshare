@@ -1068,6 +1068,20 @@ pub fn pause_transfer(id: String, paused: bool) -> bool {
     service::pause_transfer(&id, paused)
 }
 
+/// A history entry with what can be done with it again.
+#[derive(Serialize)]
+pub struct HistoryRow {
+    /// The entry as recorded.
+    #[serde(flatten)]
+    entry: ferry::history::HistoryEntry,
+    /// The file on this device (sent or received) when it still exists: it
+    /// can be sent again.
+    local_file: Option<String>,
+    /// The other device is a Ferry device (not LocalSend or a browser), so
+    /// the file can be sent to it again directly.
+    ferry_peer: bool,
+}
+
 /// Finished transfers, newest first, filtered by `query` and `kind`
 /// (`file` or `text`; anything else: both); at most 500.
 ///
@@ -1075,10 +1089,7 @@ pub fn pause_transfer(id: String, paused: bool) -> bool {
 ///
 /// When the history file cannot be read.
 #[tauri::command]
-pub fn get_history(
-    query: Option<String>,
-    kind: Option<String>,
-) -> CmdResult<Vec<ferry::history::HistoryEntry>> {
+pub fn get_history(query: Option<String>, kind: Option<String>) -> CmdResult<Vec<HistoryRow>> {
     use ferry::history::HistoryKind;
     let path = ferry::history::default_path().map_err(err)?;
     let entries = ferry::history::load(&path).map_err(err)?;
@@ -1089,7 +1100,14 @@ pub fn get_history(
         _ => {}
     }
     entries.truncate(500);
-    Ok(entries)
+    Ok(entries
+        .into_iter()
+        .map(|entry| HistoryRow {
+            local_file: entry.local_file().map(|p| p.display().to_string()),
+            ferry_peer: entry.ferry_peer().is_some(),
+            entry,
+        })
+        .collect())
 }
 
 /// Deletes the history of transfers.

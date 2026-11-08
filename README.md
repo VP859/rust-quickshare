@@ -53,8 +53,11 @@ The images are made from the real interfaces with example data (`tests/gui/scree
 - **"Send with Ferry" in the file manager** – Dolphin, Nautilus and Nemo on Linux, *Send to* in
   Windows File Explorer ([below](#send-with-ferry-from-the-file-manager)).
 - **History** – a searchable list of finished files and texts, kept only on this device (texts
-  without their content); it can be cleared or turned off. The transfers list shows the current
-  session and leads to it.
+  without their content); it can be cleared or turned off. A file from it can be sent again to the
+  same device or to another one (`ferry history --send-again N`). The transfers list shows the
+  current session and leads to it.
+- **Accessible** – every control works with the keyboard and has a name for screen readers, and
+  text keeps WCAG AA contrast in the light and the dark theme; automated tests check it.
 - **Every interface** – desktop and Android app (Tauri), terminal UI, command line and a
   background daemon; English and Polish.
 - **iPhone and Mac through LocalSend** – send files and folders to the
@@ -166,7 +169,8 @@ Panels: **[1] Trusted**, **[2] Nearby**, **[3] Transfers** (`Tab` or `1 2 3` to 
 | Windows | `dist/windows/install-autostart.ps1` | Task Scheduler task at logon |
 
 A daemon without a terminal accepts files **only** from devices with Auto-Accept. The desktop app
-has its own *Start at login* switch. Closing its window keeps it running in the system tray, or
+has its own *Start at login* switch; its tray menu can also send the clipboard (*Send the
+clipboard…* opens the text, ready for a device). Closing its window keeps it running in the system tray, or
 quits it if you choose so in *Settings → Receiving*; starting Ferry again always brings back the
 running window instead of opening a second one.
 

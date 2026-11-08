@@ -66,6 +66,9 @@ pub struct HistoryEntry {
     /// Where it was saved, or why it failed or was declined.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    /// The file on this device that was sent (uploads), so it can be sent again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 impl HistoryEntry {
@@ -88,6 +91,7 @@ impl HistoryEntry {
             size: event.total,
             status: status.to_string(),
             detail,
+            source: None,
         })
     }
 
@@ -114,6 +118,7 @@ impl HistoryEntry {
             size: size as u64,
             status: status.to_string(),
             detail,
+            source: None,
         }
     }
 
@@ -164,16 +169,43 @@ pub fn enable_from_config(config: &crate::config::Config) {
     );
 }
 
-/// Appends the transfer of a final `event` when recording is on. Called for
-/// every final event by the transfer tracker; failures are only logged.
-pub fn record(event: &TransferEvent) {
+/// Appends the transfer of a final `event` when recording is on; `source` is
+/// the file that was sent, for an upload. Called for every final event by the
+/// transfer tracker; failures are only logged.
+pub fn record(event: &TransferEvent, source: Option<&Path>) {
     let Some(path) = target().clone() else {
         return;
     };
-    let Some(entry) = HistoryEntry::from_event(event) else {
+    let Some(mut entry) = HistoryEntry::from_event(event) else {
         return;
     };
+    if event.direction == Direction::Upload {
+        entry.source = source.map(|s| s.display().to_string());
+    }
     record_entry(&path, entry);
+}
+
+impl HistoryEntry {
+    /// The file on this device this entry is about, if it still exists: the
+    /// file that was sent, or the file that was received and saved.
+    pub fn local_file(&self) -> Option<PathBuf> {
+        if self.kind != HistoryKind::File {
+            return None;
+        }
+        let path = match self.direction {
+            Direction::Upload => self.source.as_deref(),
+            Direction::Download if self.status == "completed" => self.detail.as_deref(),
+            Direction::Download => None,
+        }?;
+        let path = PathBuf::from(path);
+        path.is_file().then_some(path)
+    }
+
+    /// The Node ID of the other device when it is a Ferry device (not a
+    /// LocalSend app or a browser), to which a file can be sent again.
+    pub fn ferry_peer(&self) -> Option<iroh::EndpointId> {
+        self.peer.parse().ok()
+    }
 }
 
 /// Records a text sent or received ([`HistoryEntry::text`]) when recording is on.
@@ -364,6 +396,56 @@ mod tests {
         clear(&path).unwrap();
         assert!(load(&path).unwrap().is_empty());
         clear(&path).unwrap();
+    }
+
+    #[test]
+    fn the_local_file_of_an_entry_is_the_sent_or_the_saved_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("a.jpg");
+        std::fs::write(&file, b"x").unwrap();
+        let path = file.display().to_string();
+        let saved = HistoryEntry::from_event(&event(
+            "a.jpg",
+            TransferStatus::Completed {
+                path: Some(path.clone()),
+            },
+        ))
+        .unwrap();
+        assert_eq!(saved.local_file(), Some(file.clone()));
+        let failed = HistoryEntry {
+            status: "failed".into(),
+            ..saved.clone()
+        };
+        assert_eq!(failed.local_file(), None, "a failed download saved nothing");
+        let sent = HistoryEntry {
+            direction: Direction::Upload,
+            detail: None,
+            source: Some(path),
+            status: "failed".into(),
+            ..saved.clone()
+        };
+        assert_eq!(
+            sent.local_file(),
+            Some(file.clone()),
+            "sent again after a failure too"
+        );
+        std::fs::remove_file(&file).unwrap();
+        assert_eq!(sent.local_file(), None, "the file is gone");
+        let text = HistoryEntry::text(Direction::Upload, "abcd", 3, Ok(()));
+        assert_eq!(text.local_file(), None);
+
+        assert_eq!(saved.ferry_peer(), None, "abcd is not a Node ID");
+        let id = iroh::SecretKey::generate().public();
+        let ferry = HistoryEntry {
+            peer: id.to_string(),
+            ..saved.clone()
+        };
+        assert_eq!(ferry.ferry_peer(), Some(id));
+        let localsend = HistoryEntry {
+            peer: "localsend:192.168.1.2".into(),
+            ..saved
+        };
+        assert_eq!(localsend.ferry_peer(), None);
     }
 
     #[test]

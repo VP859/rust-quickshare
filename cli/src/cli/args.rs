@@ -56,6 +56,10 @@ pub enum Commands {
         /// Delete the history.
         #[arg(long)]
         clear: bool,
+        /// Send the file of transfer N of the list (as numbered) again to the
+        /// same Ferry device.
+        #[arg(long, value_name = "N", conflicts_with = "clear")]
+        send_again: Option<usize>,
     },
     /// Share files with a web browser on the local network and receive files from it, through a
     /// one-time link and QR code (the other device needs no app).

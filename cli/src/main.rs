@@ -56,7 +56,8 @@ async fn main() -> Result<()> {
             limit,
             kind,
             clear,
-        } => run_history(query.as_deref(), limit, kind, clear)?,
+            send_again,
+        } => run_history(query.as_deref(), limit, kind, clear, send_again).await?,
         Commands::Web {
             files,
             no_receive,

@@ -491,7 +491,7 @@ pub async fn send(
 
     let trackers: BTreeMap<String, Tracker<'_>> = local
         .iter()
-        .map(|(id, (_, name, size))| {
+        .map(|(id, (path, name, size))| {
             let tracker = Tracker::for_device(
                 device.peer_id(),
                 Some(device.label()),
@@ -499,7 +499,8 @@ pub async fn send(
                 *size,
                 Direction::Upload,
                 sink,
-            );
+            )
+            .with_source(path);
             tracker.emit(0, TransferStatus::AwaitingDecision);
             (id.clone(), tracker)
         })

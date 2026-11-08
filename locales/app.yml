@@ -420,6 +420,15 @@ history.cancelled:
 history.text:
   en: "text (content not recorded)"
   pl: "tekst (treść nie jest zapisywana)"
+history.no_entry:
+  en: "There is no transfer %{number} in the list"
+  pl: "Na liście nie ma przesyłania %{number}"
+history.no_file:
+  en: "The file of transfer %{number} is no longer on this device"
+  pl: "Pliku z przesyłania %{number} nie ma już na tym urządzeniu"
+history.not_ferry:
+  en: "Transfer %{number} was not sent to a Ferry device; send the file with `ferry send` or `ferry localsend send`"
+  pl: "Przesyłanie %{number} nie było wysłane do urządzenia Ferry; wyślij plik przez `ferry send` albo `ferry localsend send`"
 history.cleared:
   en: "History deleted."
   pl: "Historia usunięta."
@@ -1157,6 +1166,9 @@ gui.no_cache_dir:
 gui.tray_show:
   en: "Show window"
   pl: "Pokaż okno"
+gui.tray_send_clipboard:
+  en: "Send the clipboard…"
+  pl: "Wyślij schowek…"
 gui.tray_hide:
   en: "Hide to tray"
   pl: "Ukryj do zasobnika"

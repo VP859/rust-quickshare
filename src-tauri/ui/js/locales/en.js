@@ -83,6 +83,8 @@ export default {
   localsend_pin_hint: 'This LocalSend app asks for a PIN. It is set in its settings (Settings → Receive → PIN).',
   localsend_pin: 'PIN',
   localsend_pin_wrong: 'The PIN was not accepted. Try again.',
+  send_again_to: 'Send again to {name}',
+  send_to_other: 'Send…',
   privacy_localsend: 'Receive from LocalSend apps (compatibility mode)',
   privacy_localsend_hint: 'iPhones, Macs and other devices with the LocalSend app can send files here without Ferry. LocalSend has no pairing: senders are not verified, so every offer asks first. Uses port 53317 (TCP and UDP).',
   localsend_offer: 'Sent from a LocalSend app at {address} (compatibility mode) – the sender is not verified, its name can be anything.',

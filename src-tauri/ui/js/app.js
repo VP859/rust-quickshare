@@ -93,5 +93,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   setInterval(updateDiscoveryHint, 5000);
   // Files from the Android "Share" menu or from "Send with Ferry" in a file manager.
   await listen('share-files', checkSharedFiles);
+  // "Send the clipboard" in the tray menu: the text, ready for a recipient.
+  await listen('send-clipboard', ({ payload }) => {
+    if (payload) composeText(null, null, payload);
+    else toast(t('clipboard_empty'), true);
+  });
   checkSharedFiles();
 });

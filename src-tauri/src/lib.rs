@@ -227,12 +227,33 @@ pub(crate) mod tray {
         }
     }
 
-    /// Tray menu (show, hide, quit) in the current language.
+    /// Tray menu (show, send the clipboard, hide, quit) in the current language.
     fn menu<R: Runtime, M: Manager<R>>(manager: &M) -> tauri::Result<Menu<R>> {
         let show = MenuItem::with_id(manager, "show", t!("gui.tray_show"), true, None::<&str>)?;
+        let clipboard = MenuItem::with_id(
+            manager,
+            "send_clipboard",
+            t!("gui.tray_send_clipboard"),
+            true,
+            None::<&str>,
+        )?;
         let hide = MenuItem::with_id(manager, "hide", t!("gui.tray_hide"), true, None::<&str>)?;
         let quit = MenuItem::with_id(manager, "quit", t!("gui.tray_quit"), true, None::<&str>)?;
-        Menu::with_items(manager, &[&show, &hide, &quit])
+        Menu::with_items(manager, &[&show, &clipboard, &hide, &quit])
+    }
+
+    /// Opens the window with the text of the clipboard ready to be sent: the
+    /// user picks the device (nothing is sent without that choice).
+    fn send_clipboard(app: &AppHandle) {
+        use tauri::Emitter;
+        use tauri_plugin_clipboard_manager::ClipboardExt;
+        let text = app
+            .clipboard()
+            .read_text()
+            .ok()
+            .filter(|t| !t.trim().is_empty());
+        show_main(app);
+        let _ = app.emit("send-clipboard", text);
     }
 
     /// Creates the tray icon.
@@ -243,6 +264,7 @@ pub(crate) mod tray {
             .show_menu_on_left_click(false)
             .on_menu_event(|app, event| match event.id.as_ref() {
                 "show" => show_main(app),
+                "send_clipboard" => send_clipboard(app),
                 "hide" => {
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.hide();

@@ -1,8 +1,10 @@
 :root {
   --bg: #fafafa; --surface: #ffffff; --surface-2: #f4f4f5; --hover: #f4f4f5; --border: #e4e4e7; --border-strong: #d4d4d8;
-  --text: #18181b; --muted: #71717a; --faint: #a1a1aa;
+  /* Text colours keep at least 4.5:1 against every background (WCAG AA),
+     checked by tests/gui/accessibility.spec.js. */
+  --text: #18181b; --muted: #63636b; --faint: #6b6b74;
   --accent: #2563eb; --accent-hover: #1d4ed8; --accent-fg: #ffffff; --accent-soft: rgba(37, 99, 235, .09); --accent-text: #2563eb;
-  --ok: #16a34a; --warn: #d97706; --bad: #dc2626; --bad-soft: rgba(220, 38, 38, .08);
+  --ok: #15803d; --warn: #b45309; --bad: #b91c1c; --bad-soft: rgba(220, 38, 38, .08);
   --shadow-lg: 0 24px 64px rgba(0, 0, 0, .18);
   --radius: 12px; --radius-sm: 8px;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -10,8 +12,8 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #09090b; --surface: #111113; --surface-2: #18181b; --hover: #1c1c20; --border: #27272a; --border-strong: #3f3f46;
-    --text: #fafafa; --muted: #a1a1aa; --faint: #71717a;
-    --accent: #3b82f6; --accent-hover: #2563eb; --accent-soft: rgba(59, 130, 246, .14); --accent-text: #60a5fa;
+    --text: #fafafa; --muted: #a1a1aa; --faint: #85858e;
+    --accent: #2563eb; --accent-hover: #1d4ed8; --accent-soft: rgba(59, 130, 246, .14); --accent-text: #60a5fa;
     --ok: #22c55e; --warn: #f59e0b; --bad: #f87171; --bad-soft: rgba(248, 113, 113, .1);
     --shadow-lg: 0 24px 64px rgba(0, 0, 0, .6);
   }
@@ -235,3 +237,8 @@ body.mobile .desktop-only { display: none !important; }
   .modal { max-width: none; border-radius: 16px 16px 0 0; border-bottom: none; padding-bottom: env(safe-area-inset-bottom); transform: translateY(24px); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Less movement for people who asked their system for it. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
+}

@@ -361,6 +361,35 @@ test('the empty transfers list leads quietly to the history', async ({ app }) =>
   await expect(link).toHaveCount(0);
 });
 
+test('a file from the history goes out again: to the same Ferry device or to someone chosen now', async ({ app }) => {
+  await app.evaluate((peer) => window.__respond('get_history', [
+    { time: '2026-11-04T11:00:00Z', direction: 'upload', peer, file_name: 'slides.pdf', size: 10, status: 'failed', detail: 'connection lost', source: '/home/me/slides.pdf', local_file: '/home/me/slides.pdf', ferry_peer: true },
+    { time: '2026-11-03T09:00:00Z', direction: 'upload', peer: 'browser:192.168.1.20', peer_name: 'Safari', file_name: 'report.pdf', size: 100, status: 'completed', local_file: '/home/me/report.pdf', ferry_peer: false },
+    { time: '2026-11-02T09:00:00Z', direction: 'download', peer, file_name: 'gone.jpg', size: 1, status: 'completed', detail: '/x/gone.jpg', local_file: null, ferry_peer: true },
+  ]), PEER);
+  await app.locator('#btn-history').click();
+  const rows = app.locator('#history-list .row');
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(1).getByRole('button', { name: /Send again/ })).toHaveCount(0);
+  await expect(rows.nth(2).getByRole('button')).toHaveCount(0);
+  await rows.nth(0).getByRole('button', { name: 'Send again to Laptop' }).click();
+  expect(await calls(app)).toContainEqual(['send_files', { paths: ['/home/me/slides.pdf'], target: PEER }]);
+  await expect(app.locator('#modal-history')).not.toHaveClass(/active/);
+
+  await app.locator('#btn-history').click();
+  await rows.nth(1).getByRole('button', { name: 'Send…' }).click();
+  await expect(app.locator('#modal-recipient')).toHaveClass(/active/);
+  await expect(app.locator('#recipient-files')).toHaveText('report.pdf');
+});
+
+test('the clipboard from the tray menu is ready to be sent, or the user hears that it is empty', async ({ app }) => {
+  await emit(app, 'send-clipboard', 'https://example.org/from-the-clipboard');
+  await expect(app.locator('#text-input')).toHaveValue('https://example.org/from-the-clipboard');
+  await app.locator('#modal-text-send [data-close]').first().click();
+  await emit(app, 'send-clipboard', null);
+  await expect(app.locator('#toast')).toContainText('clipboard is empty');
+});
+
 test('the history has tabs for files and texts, and texts show no content', async ({ app }) => {
   await app.locator('#btn-history').click();
   const tab = (name) => app.locator('#history-tabs').getByRole('tab', { name });

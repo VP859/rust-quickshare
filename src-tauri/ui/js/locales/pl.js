@@ -84,6 +84,8 @@ export default {
   localsend_pin_hint: 'Ta aplikacja LocalSend wymaga PIN-u. Ustawia się go w jej ustawieniach (Ustawienia → Odbieranie → PIN).',
   localsend_pin: 'PIN',
   localsend_pin_wrong: 'PIN nie został przyjęty. Spróbuj ponownie.',
+  send_again_to: 'Wyślij ponownie do {name}',
+  send_to_other: 'Wyślij…',
   privacy_localsend: 'Odbieraj z aplikacji LocalSend (tryb zgodności)',
   privacy_localsend_hint: 'iPhone’y, Maki i inne urządzenia z aplikacją LocalSend mogą wysyłać tu pliki bez Ferry. LocalSend nie ma parowania: nadawcy nie są weryfikowani, więc każda oferta wymaga zgody. Używa portu 53317 (TCP i UDP).',
   localsend_offer: 'Wysłane z aplikacji LocalSend z adresu {address} (tryb zgodności) – nadawca nie jest zweryfikowany, jego nazwa może być dowolna.',

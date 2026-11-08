@@ -28,9 +28,9 @@ const RESPONSES = {
   set_key_storage: null,
   set_speed_limit: 2097152,
   get_history: [
-    { time: '2026-11-04T10:00:00Z', direction: 'download', peer: 'b'.repeat(64), file_name: 'holiday.jpg', size: 2048, status: 'completed', detail: '/home/me/Downloads/holiday.jpg' },
+    { time: '2026-11-04T10:00:00Z', direction: 'download', peer: 'b'.repeat(64), file_name: 'holiday.jpg', size: 2048, status: 'completed', detail: '/home/me/Downloads/holiday.jpg', local_file: '/home/me/Downloads/holiday.jpg', ferry_peer: true },
     { time: '2026-11-04T08:00:00Z', kind: 'text', direction: 'upload', peer: 'b'.repeat(64), file_name: '', size: 27, status: 'completed' },
-    { time: '2026-11-03T09:00:00Z', direction: 'upload', peer: 'browser:192.168.1.20', peer_name: 'Web browser (Safari, iPhone) at 192.168.1.20', file_name: 'report.pdf', size: 100, status: 'rejected', detail: 'busy' },
+    { time: '2026-11-03T09:00:00Z', direction: 'upload', peer: 'browser:192.168.1.20', peer_name: 'Web browser (Safari, iPhone) at 192.168.1.20', file_name: 'report.pdf', size: 100, status: 'rejected', detail: 'busy', source: '/home/me/report.pdf', local_file: '/home/me/report.pdf', ferry_peer: false },
   ],
   clear_history: null,
   pause_transfer: true,

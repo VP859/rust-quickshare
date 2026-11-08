@@ -573,6 +573,8 @@ pub struct Tracker<'a> {
     last_done: std::sync::atomic::AtomicU64,
     /// Progress events held back by [`PROGRESS_INTERVAL`].
     shown: Mutex<ShownProgress>,
+    /// The file being sent (uploads), kept in the history.
+    source: Option<PathBuf>,
 }
 
 /// What a [`Tracker`] has shown of the progress.
@@ -645,7 +647,14 @@ impl<'a> Tracker<'a> {
             conn: Mutex::new(None),
             last_done: std::sync::atomic::AtomicU64::new(0),
             shown: Mutex::default(),
+            source: None,
         }
+    }
+
+    /// Records `path` as the file sent, so the history can send it again.
+    pub fn with_source(mut self, path: &Path) -> Self {
+        self.source = Some(path.to_path_buf());
+        self
     }
 
     /// Reports the path of `conn` ([`Route`]) in the following events.
@@ -725,7 +734,7 @@ impl<'a> Tracker<'a> {
             .ok()
             .and_then(|c| c.as_ref().and_then(Route::of));
         if ev.status.is_final() {
-            crate::history::record(&ev);
+            crate::history::record(&ev, self.source.as_deref());
         }
         (self.sink)(ev);
     }
@@ -991,7 +1000,8 @@ async fn handle_pull<H: TransferHandler>(
         Direction::Upload,
         &sink,
     )
-    .with_connection(conn);
+    .with_connection(conn)
+    .with_source(&file.path);
     let result = tracker
         .cancellable(send_on_channel(conn, &mut channel, &file, &|d| {
             tracker.progress(d)
@@ -1300,8 +1310,9 @@ pub async fn send_files(
     }
     let mut failures = 0usize;
     for (item, (name, size)) in items.iter().zip(&files) {
-        let tracker =
-            Tracker::new(peer, name, *size, Direction::Upload, sink).with_connection(&conn);
+        let tracker = Tracker::new(peer, name, *size, Direction::Upload, sink)
+            .with_connection(&conn)
+            .with_source(&item.path);
         tracker.emit(0, TransferStatus::Preparing);
         let prepared = tracker
             .cancellable(async {

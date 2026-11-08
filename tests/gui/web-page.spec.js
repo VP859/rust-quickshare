@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test as base, expect } from '@playwright/test';
+import { audit } from './audit.js';
 
 const PAGE = join(import.meta.dirname, '..', '..', 'src', 'web', 'page');
 const SERVER = readFileSync(join(import.meta.dirname, '..', '..', 'src', 'web', 'server.rs'), 'utf8');
@@ -103,3 +104,12 @@ test('a receive-only session has no download list, in Polish for Polish browsers
   await expect(page.locator('#expires')).toHaveText('');
   await page.close();
 });
+
+for (const scheme of ['light', 'dark']) {
+  test(`the page has names, labels and enough contrast (${scheme} theme)`, async ({ session }) => {
+    await session.emulateMedia({ colorScheme: scheme });
+    await session.goto(BASE);
+    await expect(session.locator('#files li')).toHaveCount(1);
+    expect(await session.evaluate(audit, null)).toEqual([]);
+  });
+}

@@ -395,7 +395,8 @@ impl<H: TransferHandler> WebServer<H> {
                 file.size,
                 Direction::Upload,
                 &sink,
-            );
+            )
+            .with_source(&file.path);
             tracker.progress(0);
             let result = tracker
                 .cancellable(async {
