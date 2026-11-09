@@ -235,6 +235,8 @@ compatibility).
 
 ### Changed
 
+- **A calmer top bar**: the node status says only *Online*, *Connecting…* or *Offline* (the Node
+  ID is in its tooltip and under *My TICKET*), and on phones it shrinks to its coloured dot.
 - **The desktop window uses its width**: from 1100 px on, sending and the transfers are on the
   left and the devices on the right, instead of one narrow column in the middle of a large window.
   Narrow windows and phones keep the single column. The README images show the new layout.

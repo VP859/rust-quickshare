@@ -637,3 +637,13 @@ test('the desktop never shows the permission card', async ({ app, isMobile }) =>
   await expect(app.locator('#permissions')).toBeHidden();
   expect((await calls(app)).some(([cmd]) => cmd === 'permission_status')).toBe(false);
 });
+
+test('the top bar says only whether the node is online; the Node ID is in the tooltip', async ({ app, isMobile }) => {
+  const pill = app.locator('#node-pill');
+  await expect(app.locator('#node-status')).toHaveText('Online');
+  await expect(pill).toHaveAttribute('title', /Node ID a{64}/);
+  const width = (await pill.boundingBox()).width;
+  // On a phone only the dot is visible; the word stays for screen readers.
+  if (isMobile) expect(width).toBeLessThan(20);
+  else expect(width).toBeGreaterThan(40);
+});

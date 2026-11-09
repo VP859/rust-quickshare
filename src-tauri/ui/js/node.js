@@ -1,5 +1,5 @@
 // This device's node: its status in the top bar and its TICKET.
-import { $, close, fail, open, shortId } from './dom.js';
+import { $, close, fail, open } from './dom.js';
 import { t } from './i18n.js';
 import { state } from './state.js';
 import { copyText, invoke } from './tauri.js';
@@ -7,9 +7,10 @@ import { copyText, invoke } from './tauri.js';
 export function renderNodeStatus() {
   const { nodeInfo, nodeState } = state;
   $('node-dot').className = 'dot ' + (nodeState === 'ok' ? 'ok' : nodeState === 'bad' ? 'bad' : 'wait');
-  $('node-status').textContent = nodeState === 'ok' ? t('node_active', { id: shortId(nodeInfo.node_id) })
-    : nodeState === 'bad' ? t('node_unavailable') : t('node_starting');
-  $('node-pill').title = nodeInfo?.node_id ?? '';
+  const status = nodeState === 'ok' ? t('node_active') : nodeState === 'bad' ? t('node_unavailable') : t('node_starting');
+  $('node-status').textContent = status;
+  // The Node ID is too long for the bar: it is in the tooltip and under "My TICKET".
+  $('node-pill').title = nodeInfo?.node_id ? `${status} · Node ID ${nodeInfo.node_id}` : status;
 }
 
 export async function loadNodeInfo() {

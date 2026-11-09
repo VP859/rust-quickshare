@@ -283,5 +283,12 @@ button.link:hover { text-decoration: underline; }
 @media (min-width: 1800px) { .welcome-wrap { max-width: 1440px; } }
 @media (max-width: 560px) { .welcome-wrap { padding: 0 16px; margin-top: 16px; } }
 .welcome-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.hint-help { margin: -6px 0 10px; font-size: 12.5px; }
+button.link.inline { display: inline; padding: 0; font-size: inherit; vertical-align: baseline; }
 #permissions .welcome { border-left-color: var(--warn); }
+
+/* Narrow screens: the node status shrinks to its dot (the word stays for
+   screen readers), so the top bar is not crowded. */
+@media (max-width: 560px) {
+  #node-pill { padding: 0; border: 0; background: none; min-width: 12px; }
+  #node-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}

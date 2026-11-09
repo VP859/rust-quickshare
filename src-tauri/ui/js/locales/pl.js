@@ -5,7 +5,7 @@
 const filesPl = (n) => n === 1 ? 'plik' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'pliki' : 'plików';
 
 export default {
-  node_starting: 'Uruchamianie…', node_active: 'Online · {id}', node_unavailable: 'Offline',
+  node_starting: 'Łączenie…', node_active: 'Online', node_unavailable: 'Offline',
   mode_local: 'Tylko lokalnie', mode_relay: 'Lokalnie + własny przekaźnik', mode_internet: 'Lokalnie + internet', mode_hidden: 'ukryte', mode_pending: 'po restarcie',
   mode_hint: 'Tryb sieci i widoczność – kliknij, aby zmienić',
   my_ticket: 'Mój TICKET', settings: 'Ustawienia',

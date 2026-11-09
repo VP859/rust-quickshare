@@ -2,7 +2,7 @@
 // (checked by scripts/check-frontend.mjs); `{name}` is replaced by t().
 
 export default {
-  node_starting: 'Starting…', node_active: 'Online · {id}', node_unavailable: 'Offline',
+  node_starting: 'Connecting…', node_active: 'Online', node_unavailable: 'Offline',
   mode_local: 'Local only', mode_internet: 'Local + internet', mode_relay: 'Local + own relay', mode_hidden: 'hidden', mode_pending: 'after restart',
   mode_hint: 'Network mode and visibility – click to change',
   my_ticket: 'My TICKET', settings: 'Settings',
