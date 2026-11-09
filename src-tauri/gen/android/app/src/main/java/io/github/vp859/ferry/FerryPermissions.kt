@@ -12,8 +12,13 @@ import org.json.JSONObject
 import java.lang.ref.WeakReference
 
 /**
- * Runtime permissions, asked for only after the app said why (called from Rust
- * through JNI, see `platform.rs`; the frontend shows the explanation).
+ * Runtime permissions (called from Rust through JNI, see `platform.rs`).
+ *
+ * Android's dialog appears by itself on the first start ([requestAtStart]) and
+ * again for the local network when the user starts a search; the frontend
+ * explains each permission on a card and leads to the app settings once
+ * Android stops asking. The camera is asked for by the QR scanner plugin, only
+ * when the user scans a code.
  *
  * - Local network (Android 17+, API 37): needed for any traffic to devices on
  *   the local network – finding them, sending and receiving. Without it Ferry
@@ -35,6 +40,10 @@ object FerryPermissions {
   @Volatile
   var activity: WeakReference<Activity>? = null
 
+  /** Android's dialog is open (the frontend hides its card meanwhile). */
+  @Volatile
+  var asking = false
+
   private fun localNetworkNeeded() = Build.VERSION.SDK_INT >= API_ANDROID_17
   private fun notificationsNeeded() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
   private fun storageNeeded() = Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q
@@ -45,6 +54,8 @@ object FerryPermissions {
     if (storageNeeded()) add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
     if (localNetworkNeeded()) add(ACCESS_LOCAL_NETWORK)
   }.filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
+
+  private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
   private fun state(context: Context, needed: Boolean, permission: String): String = when {
     !needed -> "not_needed"
@@ -65,7 +76,7 @@ object FerryPermissions {
       json.put("local_network", state(context, localNetworkNeeded(), ACCESS_LOCAL_NETWORK))
       json.put("notifications", state(context, notificationsNeeded(), Manifest.permission.POST_NOTIFICATIONS))
       json.put("storage", state(context, storageNeeded(), Manifest.permission.WRITE_EXTERNAL_STORAGE))
-      val asked = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("asked", false)
+      val asked = prefs(context).getBoolean("asked", false)
       val current = activity?.get()
       // After a refusal Android shows its dialog again only while it would show a
       // rationale; before the first request it always does.
@@ -73,19 +84,42 @@ object FerryPermissions {
         ActivityCompat.shouldShowRequestPermissionRationale(current, it)
       })
       json.put("can_ask", canAsk)
+      json.put("asking", asking)
     } catch (e: Exception) {
       Log.w(TAG, "Could not read the permissions", e)
     }
     return json.toString()
   }
 
-  /** Shows Android's permission dialog for everything missing. */
+  /**
+   * Shows Android's permission dialog: for everything missing, or only for
+   * the local network when [only] is `local_network`.
+   */
   @JvmStatic
-  fun request(context: Context) {
-    val current = activity?.get() ?: return
-    val wanted = missing(context)
+  fun request(context: Context, only: String) {
+    val current = activity?.get()
+    if (current == null) {
+      Log.w(TAG, "No activity to ask for permissions")
+      return
+    }
+    ask(current, missing(context).filter { only != "local_network" || it == ACCESS_LOCAL_NETWORK })
+  }
+
+  /** On the very first start: asks for everything missing, once. */
+  fun requestAtStart(current: Activity) {
+    if (prefs(current).getBoolean("asked", false)) return
+    ask(current, missing(current))
+  }
+
+  /** Android answered the dialog (see `MainActivity.onRequestPermissionsResult`). */
+  fun answered() {
+    asking = false
+  }
+
+  private fun ask(current: Activity, wanted: List<String>) {
     if (wanted.isEmpty()) return
-    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("asked", true).apply()
+    prefs(current).edit().putBoolean("asked", true).apply()
+    asking = true
     current.runOnUiThread {
       ActivityCompat.requestPermissions(current, wanted.toTypedArray(), REQUEST)
     }

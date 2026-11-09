@@ -4,6 +4,7 @@ import { $, baseName, close, dotClass, el, emptyState, fail, icon, initials, ope
 import { t } from './i18n.js';
 import { showTicket } from './node.js';
 import { openPeerModal } from './peers.js';
+import { allowCamera } from './permissions.js';
 import { isScanning, loadLocalSend, localSendRow, onLocalSendChange, scanLocalSend, sendToLocalSend } from './localsend.js';
 import { isTrusted, platformIcon, platformLabel, state } from './state.js';
 import { invoke, pickFiles, pickFolder, scanQr, T } from './tauri.js';
@@ -126,7 +127,11 @@ async function handleScannedTicket(text) {
     openPeerModal(null, text);
   }
 }
-$('btn-scan').onclick = async () => { try { await handleScannedTicket(await scanQr()); } catch (e) { fail(e); } };
+$('btn-scan').onclick = async () => {
+  try {
+    if (await allowCamera()) await handleScannedTicket(await scanQr());
+  } catch (e) { fail(e); }
+};
 $('btn-receive-ticket').onclick = () => { $('receive-input').value = ''; open('modal-receive'); $('receive-input').focus(); };
 $('btn-receive-cancel').onclick = () => close('modal-receive');
 $('btn-receive-go').onclick = async () => {

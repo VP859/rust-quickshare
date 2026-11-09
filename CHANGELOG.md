@@ -19,9 +19,11 @@ compatibility).
 
 ### Added
 
-- **Android: permissions with a reason.** Ferry no longer asks for all permissions at start; a card
-  says why it needs *Local network* (Android 17+) and notifications, then shows Android's dialog,
-  or opens the app settings when Android no longer asks. "Not now" leaves a hint under *Nearby*.
+- **Android: permissions with a reason.** Android's dialog appears on the first start, and again for
+  *Local network* (Android 17+) when a search starts; the camera is asked for only when a QR code
+  is scanned (before, the scanner failed until the camera was allowed in the settings). A card says
+  why Ferry needs whatever is still missing and opens the app settings once Android no longer
+  asks; "Not now" leaves a hint under *Nearby*.
 - **"Why?" links** next to the existing hints (devices that do not show up, the pairing code,
   LocalSend, the network mode, a phone that cannot open a browser link) open the matching topic of
   the help window; `npm run check:ui` checks that every one names a topic.

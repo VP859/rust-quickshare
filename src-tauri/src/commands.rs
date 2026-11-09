@@ -1040,11 +1040,12 @@ pub fn permission_status() -> Option<crate::platform::PermissionStatus> {
     crate::platform::permission_status()
 }
 
-/// Shows Android's dialog for the missing permissions, after the app has said
-/// why it needs them; the answer arrives as the `ferry-permissions` event.
+/// Shows Android's dialog for the missing permissions (`only:
+/// "local_network"` – just that one, when a search starts); the answer arrives
+/// as the `ferry-permissions` event.
 #[tauri::command]
-pub fn request_permissions() {
-    crate::platform::request_permissions();
+pub fn request_permissions(only: Option<String>) {
+    crate::platform::request_permissions(only.as_deref() == Some("local_network"));
 }
 
 /// Opens the system app info screen of Ferry (Android: battery usage).

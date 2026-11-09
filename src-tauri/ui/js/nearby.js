@@ -5,7 +5,7 @@ import { t } from './i18n.js';
 import { refreshPeers, renderPeers } from './peers.js';
 import { helpLink } from './help.js';
 import { isScanning, localSendRow, onLocalSendChange, scanLocalSend, sendToLocalSend } from './localsend.js';
-import { permissionHint } from './permissions.js';
+import { askLocalNetwork, permissionHint } from './permissions.js';
 import { sendFiles } from './send.js';
 import { isTrusted, platformIcon, platformLabel, state } from './state.js';
 import { invoke, isMobile, listen, pickFiles } from './tauri.js';
@@ -104,6 +104,7 @@ async function pairWith(d) {
 $('btn-pairing-close').onclick = () => { pairingWith = null; close('modal-pairing'); };
 // Searches for Ferry devices and LocalSend apps (which hear this device's name).
 $('btn-nearby-refresh').onclick = async () => {
+  await askLocalNetwork();
   try { await invoke('refresh_nearby'); toast(t('searching')); } catch (e) { fail(e); }
   scanLocalSend();
 };

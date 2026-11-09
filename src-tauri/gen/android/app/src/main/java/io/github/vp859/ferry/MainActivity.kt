@@ -11,7 +11,7 @@ import androidx.activity.enableEdgeToEdge
  *
  * Keeps the P2P node alive through [FerryService] and forwards files and texts
  * from the system "Share" menu to the frontend. Runtime permissions are asked
- * for by [FerryPermissions] when the frontend has explained why.
+ * for by [FerryPermissions] on the first start; the frontend explains them.
  *
  * Tauri runs one WebView window per process: once its activity is closed for good
  * (e.g. swiped away from recents) its event loop ends, while the foreground service
@@ -46,7 +46,10 @@ class MainActivity : TauriActivity() {
     recreating = false
     FerryPermissions.activity = java.lang.ref.WeakReference(this)
     FerryService.start(this)
-    if (savedInstanceState == null) handleShareIntent(intent)
+    if (savedInstanceState == null) {
+      handleShareIntent(intent)
+      FerryPermissions.requestAtStart(this)
+    }
   }
 
   override fun onDestroy() {
@@ -111,6 +114,7 @@ class MainActivity : TauriActivity() {
   override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     if (requestCode != FerryPermissions.REQUEST) return
+    FerryPermissions.answered()
     val lanGranted = permissions.indices.any {
       permissions[it] == FerryPermissions.ACCESS_LOCAL_NETWORK &&
         grantResults.getOrNull(it) == PackageManager.PERMISSION_GRANTED

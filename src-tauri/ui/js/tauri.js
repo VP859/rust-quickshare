@@ -27,6 +27,15 @@ export async function pickFiles() {
   if (!res) return [];
   return (Array.isArray(res) ? res : [res]).map(f => typeof f === 'string' ? f : f.path ?? f.uri ?? String(f));
 }
+/**
+ * The QR scanner's camera permission (`granted`, `denied`, `prompt`, …); with
+ * `request`, Android's dialog appears first when it still can.
+ */
+export async function cameraPermission(request = false) {
+  const api = T?.barcodeScanner;
+  if (api?.checkPermissions) return request ? api.requestPermissions() : api.checkPermissions();
+  return (await invoke(`plugin:barcode-scanner|${request ? 'request' : 'check'}_permissions`))?.camera;
+}
 export async function scanQr() {
   const opts = { windowed: false, formats: ['QR_CODE'] };
   const res = T?.barcodeScanner?.scan ? await T.barcodeScanner.scan(opts) : await invoke('plugin:barcode-scanner|scan', opts);

@@ -320,10 +320,12 @@ with a notification keeps Ferry reachable in the background. Received files are 
 `Download/Ferry`; photos and videos go to `Pictures/Ferry` so they appear in the gallery.
 Ferry's data is excluded from Android backups – a new phone pairs again.
 
-Ferry asks for its permissions only after saying why, in a card on the main screen: *Local
-network* (Android 17 and newer – without it Ferry cannot find or reach devices nearby),
-notifications, and on Android 10 and older storage for Downloads. "Not now" keeps a hint under *Nearby*; when Android no longer shows its dialog, the
-button opens the app settings.
+Android's permission dialog appears on the first start: *Local network* (Android 17 and newer –
+without it Ferry cannot find or reach devices nearby), notifications, and on Android 10 and older
+storage for Downloads. A search under *Nearby* asks for the local network again while it is
+missing, and the camera is asked for only when you scan a QR code. Whatever is still missing is
+explained in a card on the main screen; "Not now" keeps a hint under *Nearby*, and once Android no
+longer shows its dialog, the button opens the app settings.
 
 ## Compared with similar tools
 

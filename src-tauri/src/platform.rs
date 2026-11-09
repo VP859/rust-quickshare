@@ -50,6 +50,9 @@ pub struct PermissionStatus {
     /// Android still shows its dialog; otherwise only the app settings help.
     #[serde(default)]
     pub can_ask: bool,
+    /// Android's dialog is open right now.
+    #[serde(default)]
+    pub asking: bool,
 }
 
 /// Android: public folders, gallery integration and the "Share" menu.
@@ -283,18 +286,23 @@ mod imp {
         serde_json::from_str(&json).ok()
     }
 
-    /// Shows Android's dialog for the missing permissions
-    /// (`FerryPermissions.request`); the answer arrives as the
+    /// Shows Android's dialog for the missing permissions, or only for the
+    /// local network (`FerryPermissions.request`); the answer arrives as the
     /// `ferry-permissions` window event.
-    pub fn request_permissions() {
+    pub fn request_permissions(only_local_network: bool) {
         let result = with_app_class(
             jni_str!("io.github.vp859.ferry.FerryPermissions"),
             |env, context, class| {
+                let only = env.new_string(if only_local_network {
+                    "local_network"
+                } else {
+                    ""
+                })?;
                 env.call_static_method(
                     class,
                     jni_str!("request"),
-                    jni_sig!("(Landroid/content/Context;)V"),
-                    &[JValue::Object(context)],
+                    jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
+                    &[JValue::Object(context), JValue::Object(&only)],
                 )
                 .map(|_| ())
             },
@@ -442,7 +450,7 @@ mod imp {
     }
 
     /// Nothing to ask for on desktop.
-    pub fn request_permissions() {}
+    pub fn request_permissions(_only_local_network: bool) {}
 
     /// Only Android has the app info screen with battery settings.
     pub fn open_app_settings() {}
@@ -482,9 +490,10 @@ pub fn permission_status() -> Option<PermissionStatus> {
     imp::permission_status()
 }
 
-/// Shows Android's dialog for the missing permissions (no-op on desktop).
-pub fn request_permissions() {
-    imp::request_permissions();
+/// Shows Android's dialog for the missing permissions, or only for the local
+/// network (no-op on desktop).
+pub fn request_permissions(only_local_network: bool) {
+    imp::request_permissions(only_local_network);
 }
 
 /// Opens the system app info screen of Ferry (Android).

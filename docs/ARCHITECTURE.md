@@ -81,6 +81,9 @@ recipient.
 (package `io.github.vp859.ferry`):
 
 * `MainActivity.kt` – share target (`ACTION_SEND` / `SEND_MULTIPLE`), runtime permissions,
+* `FerryPermissions.kt` – runtime permissions: asked for on the first start and, for the local
+  network, when a search starts; their state for the frontend's explanation card (the camera
+  is asked for by the barcode-scanner plugin, only before a scan),
 * `ShareIntake.kt` – copies shared `content://` files into the app cache,
 * `FerryService.kt` – foreground service with a notification and a multicast lock, so the node
   keeps running in the background; wake and Wi-Fi locks while transfers run,

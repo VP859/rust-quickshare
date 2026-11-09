@@ -130,6 +130,8 @@ export default {
   perm_local_network: 'Sieć lokalna – aby znaleźć urządzenia w pobliżu i wymieniać z nimi pliki. Bez niej Ferry działa tylko przez internet.',
   perm_notifications: 'Powiadomienia – aby informować o przychodzących plikach i tekstach, gdy Ferry działa w tle.',
   perm_storage: 'Pamięć – aby zapisywać odebrane pliki w Pobranych (Android 10 i starszy).',
+  perm_camera: 'Aparat – do skanowania kodów QR. Android już sam o niego nie zapyta.',
+  perm_camera_refused: 'Bez dostępu do aparatu Ferry nie zeskanuje kodu; użyj zamiast tego „Odbierz z TICKETU”.',
   perm_allow: 'Zezwól',
   perm_later: 'Nie teraz',
   perm_open_settings: 'Otwórz ustawienia aplikacji',

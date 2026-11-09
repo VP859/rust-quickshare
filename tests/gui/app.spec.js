@@ -632,6 +632,93 @@ test.describe('on Android 17 without the local network permission', () => {
   });
 });
 
+test.describe('on Android 17 without the local network permission, searching', () => {
+  test.use({ responses: { permission_status: { local_network: 'denied', notifications: 'granted', storage: 'not_needed', can_ask: true } } });
+
+  test('a search asks Android for the local network only', async ({ app, isMobile }) => {
+    test.skip(!isMobile, 'Android only');
+    await app.locator('#permissions').getByRole('button', { name: 'Not now' }).click();
+    await app.locator('#btn-nearby-refresh').click();
+    await expect.poll(() => calls(app)).toContainEqual(['request_permissions', { only: 'local_network' }]);
+    expect(await calls(app)).toContainEqual(['refresh_nearby', {}]);
+  });
+
+  test('once Android no longer asks, a search brings the card back', async ({ app, isMobile }) => {
+    test.skip(!isMobile, 'Android only');
+    await app.locator('#permissions').getByRole('button', { name: 'Not now' }).click();
+    await app.evaluate(() => {
+      window.__respond('permission_status', { local_network: 'denied', notifications: 'granted', can_ask: false });
+      window.dispatchEvent(new Event('ferry-permissions'));
+    });
+    await app.locator('#btn-nearby-refresh').click();
+    await expect(app.locator('#permissions')).toBeVisible();
+    await expect(app.locator('#permissions')).toContainText('Android no longer asks');
+    expect((await calls(app)).some(([cmd, args]) => cmd === 'request_permissions' && args.only)).toBe(false);
+  });
+});
+
+test.describe('on Android while its permission dialog is open', () => {
+  test.use({ responses: { permission_status: { local_network: 'denied', notifications: 'denied', storage: 'not_needed', can_ask: true, asking: true } } });
+
+  test('the card waits for the answer', async ({ app, isMobile }) => {
+    test.skip(!isMobile, 'Android only');
+    await expect(app.locator('#permissions')).toBeHidden();
+    await app.evaluate(() => {
+      window.__respond('permission_status', { local_network: 'granted', notifications: 'denied', can_ask: true, asking: false });
+      window.dispatchEvent(new Event('ferry-permissions'));
+    });
+    await expect(app.locator('#permissions')).toBeVisible();
+    await expect(app.locator('#permissions li')).toHaveCount(1);
+    await expect(app.locator('#permissions')).toContainText('Notifications');
+  });
+});
+
+test.describe('scanning a QR code on Android', () => {
+  const SCAN = { 'plugin:barcode-scanner|scan': { content: 'ferry:abc' }, inspect_ticket: { has_share: true }, receive_from_ticket: null };
+  const cmds = async (app) => (await calls(app)).map(([cmd]) => cmd).filter((cmd) => cmd.startsWith('plugin:barcode-scanner'));
+
+  test.describe('the first time', () => {
+    test.use({ responses: { ...SCAN, 'plugin:barcode-scanner|check_permissions': { camera: 'prompt' }, 'plugin:barcode-scanner|request_permissions': { camera: 'granted' } } });
+    test('asks for the camera only then, and scans once it is allowed', async ({ app, isMobile }) => {
+      test.skip(!isMobile, 'Android only');
+      expect(await cmds(app)).toEqual([]);
+      await app.locator('#btn-scan').click();
+      await expect.poll(() => cmds(app)).toEqual(['plugin:barcode-scanner|check_permissions', 'plugin:barcode-scanner|request_permissions', 'plugin:barcode-scanner|scan']);
+      await expect.poll(() => calls(app)).toContainEqual(['receive_from_ticket', { ticket: 'ferry:abc' }]);
+    });
+  });
+
+  test.describe('when the camera is refused', () => {
+    test.use({ responses: { ...SCAN, 'plugin:barcode-scanner|check_permissions': { camera: 'prompt' }, 'plugin:barcode-scanner|request_permissions': { camera: 'denied' } } });
+    test('says how to go on without it and does not scan', async ({ app, isMobile }) => {
+      test.skip(!isMobile, 'Android only');
+      await app.locator('#btn-scan').click();
+      await expect(app.locator('#toast')).toContainText('Without the camera');
+      expect(await cmds(app)).not.toContain('plugin:barcode-scanner|scan');
+      await expect(app.locator('#permissions')).toBeHidden();
+    });
+  });
+
+  test.describe('when Android no longer asks for the camera', () => {
+    test.use({ responses: { ...SCAN, 'plugin:barcode-scanner|check_permissions': { camera: 'denied' } } });
+    test('the card leads to the app settings and goes once it is allowed', async ({ app, isMobile }) => {
+      test.skip(!isMobile, 'Android only');
+      await app.locator('#btn-scan').click();
+      const card = app.locator('#permissions');
+      await expect(card).toBeVisible();
+      await expect(card).toContainText('Camera');
+      expect(await cmds(app)).toEqual(['plugin:barcode-scanner|check_permissions']);
+      await card.getByRole('button', { name: 'Open the app settings' }).click();
+      expect(await calls(app)).toContainEqual(['open_app_settings', {}]);
+      await app.evaluate(() => {
+        window.__respond('plugin:barcode-scanner|check_permissions', { camera: 'granted' });
+        window.dispatchEvent(new Event('ferry-permissions'));
+      });
+      await expect(card).toBeHidden();
+    });
+  });
+});
+
 test('the desktop never shows the permission card', async ({ app, isMobile }) => {
   test.skip(isMobile, 'desktop only');
   await expect(app.locator('#permissions')).toBeHidden();

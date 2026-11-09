@@ -129,6 +129,8 @@ export default {
   perm_local_network: 'Local network – to find devices nearby and exchange files with them. Without it Ferry only works through the internet.',
   perm_notifications: 'Notifications – to tell you about incoming files and texts while Ferry is in the background.',
   perm_storage: 'Storage – to save received files in Downloads (Android 10 and older).',
+  perm_camera: 'Camera – to scan QR codes. Android no longer asks for it by itself.',
+  perm_camera_refused: 'Without the camera Ferry cannot scan the code; use “Receive from TICKET” instead.',
   perm_allow: 'Allow',
   perm_later: 'Not now',
   perm_open_settings: 'Open the app settings',
