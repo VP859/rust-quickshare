@@ -33,6 +33,13 @@ export function openHelp(topic = null) {
 }
 $('btn-help').onclick = () => openHelp();
 
+/** A "Why?" link (or `label`) that opens `topic` of the help window. */
+export function helpLink(topic, label = 'help_why') {
+  return el('button', { class: 'link', onclick: () => openHelp(topic) }, t(label));
+}
+// The same for the links written in index.html (`data-help="topic"`).
+for (const link of document.querySelectorAll('[data-help]')) link.onclick = () => openHelp(link.dataset.help);
+
 // ---------- Welcome card ----------
 /** The card may be shown: it was never closed and nothing has happened yet. */
 let welcome = false;

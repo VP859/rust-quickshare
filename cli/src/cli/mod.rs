@@ -2,6 +2,7 @@
 
 pub mod args;
 pub mod display;
+pub mod guide_cmd;
 pub mod history_cmd;
 pub mod identity_cmd;
 pub mod integrate_cmd;

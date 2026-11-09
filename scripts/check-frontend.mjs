@@ -121,6 +121,15 @@ for (const topic of TOPICS) {
   }
 }
 
+// Every "Why?" link names a topic that exists.
+const topicIds = new Set(TOPICS.map((topic) => topic.id));
+for (const [, topic] of [...html.matchAll(/data-help="(\w+)"/g), ...code.matchAll(/helpLink\('(\w+)'/g), ...code.matchAll(/openHelp\('(\w+)'/g)]) {
+  if (!topicIds.has(topic)) {
+    console.error(`no help topic "${topic}" (js/help-topics.js)`);
+    failed = true;
+  }
+}
+
 // The cipher of browser sessions is served from vendor/; it must be exactly
 // the audited package that package-lock.json pins.
 const root = join(import.meta.dirname, '..');

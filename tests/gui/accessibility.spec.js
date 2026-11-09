@@ -55,6 +55,16 @@ for (const scheme of ['light', 'dark']) {
       expect(await axeViolations(app)).toEqual([]);
     });
 
+    test.describe('on Android without a permission', () => {
+      test.use({ responses: { permission_status: { local_network: 'denied', notifications: 'denied', can_ask: true } } });
+      test('the permission card has names, labels and enough contrast', async ({ app, isMobile }) => {
+        test.skip(!isMobile, 'Android only');
+        await expect(app.locator('#permissions')).toBeVisible();
+        expect(await app.evaluate(audit, '#permissions')).toEqual([]);
+        expect(await axeViolations(app, '#permissions')).toEqual([]);
+      });
+    });
+
     test.describe('for a new user', () => {
       test.use({ responses: { list_peers: [], get_welcome: true } });
       test('the welcome card has names, labels and enough contrast', async ({ app }) => {

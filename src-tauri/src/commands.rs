@@ -1033,6 +1033,20 @@ pub fn background_status() -> Option<crate::platform::BackgroundStatus> {
     crate::platform::background_status()
 }
 
+/// The runtime permissions on Android (local network, notifications);
+/// `null` on desktop.
+#[tauri::command]
+pub fn permission_status() -> Option<crate::platform::PermissionStatus> {
+    crate::platform::permission_status()
+}
+
+/// Shows Android's dialog for the missing permissions, after the app has said
+/// why it needs them; the answer arrives as the `ferry-permissions` event.
+#[tauri::command]
+pub fn request_permissions() {
+    crate::platform::request_permissions();
+}
+
 /// Opens the system app info screen of Ferry (Android: battery usage).
 #[tauri::command]
 pub fn open_app_settings() {

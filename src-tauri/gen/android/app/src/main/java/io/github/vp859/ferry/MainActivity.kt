@@ -1,20 +1,17 @@
 package io.github.vp859.ferry
 
-import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 
 /**
  * Entry activity hosting the Tauri WebView.
  *
- * Requests runtime permissions, keeps the P2P node alive through [FerryService]
- * and forwards files and texts from the system "Share" menu to the frontend.
+ * Keeps the P2P node alive through [FerryService] and forwards files and texts
+ * from the system "Share" menu to the frontend. Runtime permissions are asked
+ * for by [FerryPermissions] when the frontend has explained why.
  *
  * Tauri runs one WebView window per process: once its activity is closed for good
  * (e.g. swiped away from recents) its event loop ends, while the foreground service
@@ -24,16 +21,11 @@ import androidx.core.content.ContextCompat
  * Events dispatched to the WebView (`window`):
  * - `ferry-share` – shared files or a shared text are ready to be fetched with
  *   `take_shared_files` / `take_shared_text`;
- * - `ferry-lan-permission` – local network access was granted (Android 17+).
+ * - `ferry-lan-permission` – local network access was granted (Android 17+);
+ * - `ferry-permissions` – Android's permission dialog was answered.
  */
 class MainActivity : TauriActivity() {
   companion object {
-    private const val PERMISSIONS_REQUEST = 1
-
-    /** Required on Android 17 (API 37) for any local network traffic. */
-    private const val ACCESS_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
-    private const val API_ANDROID_17 = 37
-
     /** An activity was already created in this process. */
     private var started = false
 
@@ -52,7 +44,7 @@ class MainActivity : TauriActivity() {
     }
     started = true
     recreating = false
-    requestRuntimePermissions()
+    FerryPermissions.activity = java.lang.ref.WeakReference(this)
     FerryService.start(this)
     if (savedInstanceState == null) handleShareIntent(intent)
   }
@@ -116,23 +108,16 @@ class MainActivity : TauriActivity() {
     webView?.evaluateJavascript("window.dispatchEvent(new Event('ferry-share'))", null)
   }
 
-  private fun requestRuntimePermissions() {
-    val wanted = buildList {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
-      if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-      if (Build.VERSION.SDK_INT >= API_ANDROID_17) add(ACCESS_LOCAL_NETWORK)
-    }.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
-    if (wanted.isNotEmpty()) ActivityCompat.requestPermissions(this, wanted.toTypedArray(), PERMISSIONS_REQUEST)
-  }
-
   override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-    if (requestCode != PERMISSIONS_REQUEST) return
+    if (requestCode != FerryPermissions.REQUEST) return
     val lanGranted = permissions.indices.any {
-      permissions[it] == ACCESS_LOCAL_NETWORK && grantResults.getOrNull(it) == PackageManager.PERMISSION_GRANTED
+      permissions[it] == FerryPermissions.ACCESS_LOCAL_NETWORK &&
+        grantResults.getOrNull(it) == PackageManager.PERMISSION_GRANTED
     }
     if (lanGranted) {
       webView?.evaluateJavascript("window.dispatchEvent(new Event('ferry-lan-permission'))", null)
     }
+    webView?.evaluateJavascript("window.dispatchEvent(new Event('ferry-permissions'))", null)
   }
 }

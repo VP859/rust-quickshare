@@ -95,6 +95,7 @@ cd src-tauri && npx @tauri-apps/cli@2 build    # desktop app (.deb/.rpm/.AppImag
 ## Quick start
 
 ```bash
+ferry guide                             # the first steps and the usual questions, briefly
 ferry discover                          # devices on the local network
 ferry pair "Laptop"                     # the other device confirms; both show the same code
 ferry send photo.jpg Holiday/ --to Laptop   # files and folders
@@ -318,6 +319,11 @@ Share any file or link from another app to **Ferry** and pick a recipient. A for
 with a notification keeps Ferry reachable in the background. Received files are saved to
 `Download/Ferry`; photos and videos go to `Pictures/Ferry` so they appear in the gallery.
 Ferry's data is excluded from Android backups – a new phone pairs again.
+
+Ferry asks for its permissions only after saying why, in a card on the main screen: *Local
+network* (Android 17 and newer – without it Ferry cannot find or reach devices nearby),
+notifications, and on Android 10 and older storage for Downloads. "Not now" keeps a hint under *Nearby*; when Android no longer shows its dialog, the
+button opens the app settings.
 
 ## Compared with similar tools
 

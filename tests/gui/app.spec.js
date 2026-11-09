@@ -583,3 +583,57 @@ test.describe('someone who already uses Ferry', () => {
     expect(await calls(app)).toContainEqual(['dismiss_welcome', {}]);
   });
 });
+
+test('"Why?" links lead to the matching help topic', async ({ app }) => {
+  // Nearby is empty in the example data: the empty list asks.
+  await emit(app, 'nearby', []);
+  await app.locator('#nearby').getByRole('button', { name: 'A device does not show up?' }).click();
+  await expect(app.locator('#modal-help')).toHaveClass(/active/);
+  await expect(app.locator('[data-topic="trouble"]')).toHaveAttribute('open', '');
+  await app.locator('#modal-help [data-close]').first().click();
+  // While pairing, the reason to compare the code.
+  await emit(app, 'pairing-code', { node_id: 'c'.repeat(64), name: 'Kitchen PC', code: '123 456' });
+  await app.locator('#modal-pairing').getByRole('button', { name: 'Why compare the code?' }).click();
+  await expect(app.locator('[data-topic="pair"]')).toHaveAttribute('open', '');
+});
+
+test.describe('on Android 17 without the local network permission', () => {
+  test.use({ responses: { permission_status: { local_network: 'denied', notifications: 'granted', storage: 'not_needed', can_ask: true } } });
+
+  test('Ferry says why before Android asks, and the card goes when it is allowed', async ({ app, isMobile }) => {
+    test.skip(!isMobile, 'Android only');
+    const card = app.locator('#permissions');
+    await expect(card).toBeVisible();
+    await expect(card.locator('li')).toHaveCount(1);
+    await expect(card).toContainText('Local network');
+    await card.getByRole('button', { name: 'Allow' }).click();
+    expect(await calls(app)).toContainEqual(['request_permissions', {}]);
+    await app.evaluate(() => {
+      window.__respond('permission_status', { local_network: 'granted', notifications: 'granted', can_ask: true });
+      window.dispatchEvent(new Event('ferry-permissions'));
+    });
+    await expect(card).toBeHidden();
+  });
+
+  test('"Not now" leaves a hint under Nearby, and a refused dialog leads to the settings', async ({ app, isMobile }) => {
+    test.skip(!isMobile, 'Android only');
+    await emit(app, 'nearby', []);
+    await app.locator('#permissions').getByRole('button', { name: 'Not now' }).click();
+    await expect(app.locator('#permissions')).toBeHidden();
+    await expect(app.locator('#nearby')).toContainText('may not use the local network');
+    await app.evaluate(() => {
+      window.__respond('permission_status', { local_network: 'denied', notifications: 'granted', can_ask: false });
+      window.dispatchEvent(new Event('ferry-permissions'));
+    });
+    await app.locator('#nearby').getByRole('button', { name: 'Allow' }).click();
+    await expect(app.locator('#permissions')).toBeVisible();
+    await expect(app.locator('#permissions')).toContainText('Android no longer asks');
+    expect(await calls(app)).toContainEqual(['open_app_settings', {}]);
+  });
+});
+
+test('the desktop never shows the permission card', async ({ app, isMobile }) => {
+  test.skip(isMobile, 'desktop only');
+  await expect(app.locator('#permissions')).toBeHidden();
+  expect((await calls(app)).some(([cmd]) => cmd === 'permission_status')).toBe(false);
+});

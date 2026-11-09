@@ -3,7 +3,9 @@
 import { $, close, el, emptyState, fail, icon, open, toast } from './dom.js';
 import { t } from './i18n.js';
 import { refreshPeers, renderPeers } from './peers.js';
+import { helpLink } from './help.js';
 import { isScanning, localSendRow, onLocalSendChange, scanLocalSend, sendToLocalSend } from './localsend.js';
+import { permissionHint } from './permissions.js';
 import { sendFiles } from './send.js';
 import { isTrusted, platformIcon, platformLabel, state } from './state.js';
 import { invoke, isMobile, listen, pickFiles } from './tauri.js';
@@ -23,7 +25,9 @@ export function renderNearby() {
   box.replaceChildren();
   updateDiscoveryHint();
   if (!nearby.length) {
-    box.append(emptyState('wifi', t('searching_nearby')));
+    box.append(emptyState('wifi', t('searching_nearby'), helpLink('trouble', 'help_nearby_missing')));
+    const hint = permissionHint();
+    if (hint) box.append(hint);
     return;
   }
   for (const d of nearby) {
@@ -65,7 +69,7 @@ onLocalSendChange(renderLocalSendNearby);
 export async function updateDiscoveryHint() {
   let hint = null;
   try { hint = await invoke('discovery_health'); } catch {}
-  $('nearby-hint').textContent = hint ?? '';
+  $('nearby-hint').replaceChildren(...(hint ? [hint, ' ', helpLink('trouble')] : []));
   $('nearby-hint').hidden = !hint;
 }
 
@@ -129,6 +133,7 @@ $('btn-pair-reject').onclick = () => answerPairRequest(false);
 
 /** Subscribes to the discovery and pairing events of the backend. */
 export async function listenNearbyAndPairing() {
+  window.addEventListener('ferry-permission-status', renderNearby);
   await listen('nearby', ({ payload }) => setNearby(payload));
   await listen('peers-changed', async () => { await refreshPeers(); renderNearby(); });
   // Also emitted by the background pairing after adding a device by TICKET,

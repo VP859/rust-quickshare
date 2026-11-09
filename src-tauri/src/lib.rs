@@ -148,6 +148,8 @@ pub fn run() {
             set_verified,
             background_status,
             open_app_settings,
+            permission_status,
+            request_permissions,
             get_quit_on_close,
             set_quit_on_close,
             get_privacy,

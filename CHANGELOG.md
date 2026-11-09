@@ -19,6 +19,14 @@ compatibility).
 
 ### Added
 
+- **Android: permissions with a reason.** Ferry no longer asks for all permissions at start; a card
+  says why it needs *Local network* (Android 17+) and notifications, then shows Android's dialog,
+  or opens the app settings when Android no longer asks. "Not now" leaves a hint under *Nearby*.
+- **"Why?" links** next to the existing hints (devices that do not show up, the pairing code,
+  LocalSend, the network mode, a phone that cannot open a browser link) open the matching topic of
+  the help window; `npm run check:ui` checks that every one names a topic.
+- **`ferry guide [TOPIC]`**: the same topics on the command line, with the commands to use; the TUI
+  tells new users (nothing paired yet) how to pair and where the help is.
 - **Help in the app**: a **?** button in the GUI (desktop and Android) with short answers – sending,
   pairing and the code, devices without Ferry, iPhone and Mac, local or internet, devices that do
   not show up, what others can see – each linked to its section of the documentation (checked by

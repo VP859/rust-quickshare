@@ -5,7 +5,13 @@ use std::path::PathBuf;
 
 /// Ferry – secure P2P file sharing over QUIC, without a cloud or mDNS.
 #[derive(Parser, Debug)]
-#[command(name = "ferry", author, version, long_about = None)]
+#[command(
+    name = "ferry",
+    author,
+    version,
+    long_about = None,
+    after_help = "New to Ferry? `ferry guide` explains the first steps in a few lines."
+)]
 pub struct Cli {
     /// Interface language for this run (`en`, `pl`); overrides the saved setting.
     #[arg(long, global = true, value_name = "CODE")]
@@ -122,6 +128,12 @@ pub enum Commands {
         /// Close pairing now.
         #[arg(long, default_value_t = false)]
         close: bool,
+    },
+    /// Short answers to the usual questions: sending, pairing, devices without Ferry,
+    /// iPhone and Mac, local or internet, devices that do not show up, privacy.
+    Guide {
+        /// Only this topic: send, pair, browser, apple, internet, trouble, privacy.
+        topic: Option<String>,
     },
     /// Show or change the name of this device visible to others.
     Name {

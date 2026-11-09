@@ -214,7 +214,13 @@ impl App {
             discovery,
             node_id,
             ticket_str,
-            status_msg: t!("tui.ready").into_owned(),
+            // A new user (nothing paired yet) gets the first step and where help is.
+            status_msg: if config.peers.is_empty() {
+                t!("tui.ready_new")
+            } else {
+                t!("tui.ready")
+            }
+            .into_owned(),
             config,
             transfers: Vec::new(),
             pending: VecDeque::new(),

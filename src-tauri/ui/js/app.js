@@ -6,6 +6,7 @@
 //   send.js       choosing a recipient, sharing by TICKET, drag and drop
 //   localsend.js  LocalSend apps (iPhone, Mac): list, search, sending, PIN
 //   help.js       the help window and the welcome card for new users
+//   permissions.js Android permissions, asked for after saying why
 //   texts.js      sending and receiving texts and links
 //   transfers.js  the transfers list and incoming offers
 //   settings.js   the settings dialog
@@ -18,6 +19,7 @@ import { applyStaticText, t } from './i18n.js';
 import { ensureDeviceName, listenNearbyAndPairing, pairRequests, renderNearby, setNearby, showNextPairRequest, updateDiscoveryHint } from './nearby.js';
 import { loadWelcome } from './help.js';
 import { listenLocalSend } from './localsend.js';
+import { loadPermissions } from './permissions.js';
 import { loadNodeInfo, renderNodeStatus } from './node.js';
 import { checkOnline, refreshPeers, renderPeers } from './peers.js';
 import { chooseRecipient, setupDragDrop } from './send.js';
@@ -86,6 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await setupDragDrop();
   await refreshPeers();
   await loadWelcome();
+  await loadPermissions();
   await ensureDeviceName();
   try { setNearby(await invoke('list_nearby')); } catch {}
   await loadNodeInfo();

@@ -35,6 +35,23 @@ pub struct BackgroundStatus {
     pub data_saver: bool,
 }
 
+/// Runtime permissions on Android (see `FerryPermissions.kt`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PermissionStatus {
+    /// Local network access (Android 17+): `granted`, `denied` or `not_needed`.
+    #[serde(default)]
+    pub local_network: String,
+    /// Notifications (Android 13+): `granted`, `denied` or `not_needed`.
+    #[serde(default)]
+    pub notifications: String,
+    /// Saving to Downloads (Android 10 and older): `granted`, `denied` or `not_needed`.
+    #[serde(default)]
+    pub storage: String,
+    /// Android still shows its dialog; otherwise only the app settings help.
+    #[serde(default)]
+    pub can_ask: bool,
+}
+
 /// Android: public folders, gallery integration and the "Share" menu.
 #[cfg(target_os = "android")]
 mod imp {
@@ -245,6 +262,48 @@ mod imp {
         serde_json::from_str(&json).ok()
     }
 
+    /// The runtime permissions, from `FerryPermissions.status`.
+    pub fn permission_status() -> Option<super::PermissionStatus> {
+        let json = with_app_class(
+            jni_str!("io.github.vp859.ferry.FerryPermissions"),
+            |env, context, class| {
+                let value = env
+                    .call_static_method(
+                        class,
+                        jni_str!("status"),
+                        jni_sig!("(Landroid/content/Context;)Ljava/lang/String;"),
+                        &[JValue::Object(context)],
+                    )?
+                    .l()?;
+                env.cast_local::<JString>(value)?.try_to_string(env)
+            },
+        )
+        .inspect_err(|e| warn!("Could not read the permissions: {e}"))
+        .ok()?;
+        serde_json::from_str(&json).ok()
+    }
+
+    /// Shows Android's dialog for the missing permissions
+    /// (`FerryPermissions.request`); the answer arrives as the
+    /// `ferry-permissions` window event.
+    pub fn request_permissions() {
+        let result = with_app_class(
+            jni_str!("io.github.vp859.ferry.FerryPermissions"),
+            |env, context, class| {
+                env.call_static_method(
+                    class,
+                    jni_str!("request"),
+                    jni_sig!("(Landroid/content/Context;)V"),
+                    &[JValue::Object(context)],
+                )
+                .map(|_| ())
+            },
+        );
+        if let Err(e) = result {
+            warn!("Could not ask for the permissions: {e}");
+        }
+    }
+
     /// Opens the system app info screen (battery usage, permissions).
     pub fn open_app_settings() {
         let result = with_app_class(
@@ -377,6 +436,14 @@ mod imp {
         None
     }
 
+    /// Desktop systems grant what Ferry needs without asking.
+    pub fn permission_status() -> Option<super::PermissionStatus> {
+        None
+    }
+
+    /// Nothing to ask for on desktop.
+    pub fn request_permissions() {}
+
     /// Only Android has the app info screen with battery settings.
     pub fn open_app_settings() {}
 
@@ -408,6 +475,16 @@ pub fn take_shared_text(app: &AppHandle) -> Option<String> {
 /// What limits Ferry in the background (Android); `None` on desktop.
 pub fn background_status() -> Option<BackgroundStatus> {
     imp::background_status()
+}
+
+/// The runtime permissions (Android); `None` on desktop.
+pub fn permission_status() -> Option<PermissionStatus> {
+    imp::permission_status()
+}
+
+/// Shows Android's dialog for the missing permissions (no-op on desktop).
+pub fn request_permissions() {
+    imp::request_permissions();
 }
 
 /// Opens the system app info screen of Ferry (Android).

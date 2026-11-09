@@ -70,6 +70,19 @@
   </section>
 </div>
 
+<!-- Android: why Ferry needs a permission, before Android asks; see permissions.js. -->
+<div class="welcome-wrap" id="permissions" hidden>
+  <section class="welcome" aria-labelledby="permissions-title">
+    <div class="welcome-head"><h2 id="permissions-title" data-i18n="perm_title"></h2></div>
+    <ul class="welcome-steps" id="permissions-list"></ul>
+    <p class="muted small" id="permissions-settings" data-i18n="perm_settings_hint" hidden></p>
+    <div class="welcome-actions">
+      <button class="primary" id="btn-permissions-allow"></button>
+      <button class="ghost" id="btn-permissions-later" data-i18n="perm_later"></button>
+    </div>
+  </section>
+</div>
+
 <main>
   <section class="dropzone" id="dropzone">
     <div class="badge-icon"><svg class="i lg"><use href="#i-upload"/></svg></div>
@@ -100,6 +113,7 @@
       <div class="subsection" id="nearby-localsend-block" hidden>
         <h3 class="subhead"><span data-i18n="localsend_apps"></span><span class="count" id="localsend-count">0</span></h3>
         <p class="hint caution" data-i18n="localsend_unverified_short"></p>
+        <button class="link hint-help" data-help="apple" data-i18n="help_why"></button>
         <div class="list" id="nearby-localsend"></div>
       </div>
       <p class="hint warn" id="nearby-hint" hidden></p>
@@ -167,6 +181,7 @@
       <div class="recipient-group" id="localsend-section" hidden>
         <div class="label" data-i18n="localsend_apps"></div>
         <p class="compat-warning" data-i18n="localsend_unverified"></p>
+        <button class="link" data-help="apple" data-i18n="help_why"></button>
         <div class="recipients" id="localsend-recipients"></div>
         <button class="ghost" id="btn-localsend-scan"><svg class="i sm"><use href="#i-refresh"/></svg><span data-i18n="localsend_search"></span></button>
       </div>
@@ -227,6 +242,7 @@
           <li data-i18n="web_phone_help_vpn"></li>
           <li data-i18n="web_phone_help_router"></li>
         </ul>
+        <button class="link" data-help="trouble" data-i18n="help_more_in_app"></button>
       </details>
       <details class="small" id="web-other" hidden>
         <summary data-i18n="web_other"></summary>
@@ -344,6 +360,7 @@
     <div class="modal-head"><h3 id="pairing-title"></h3></div>
     <div class="modal-body">
       <p class="muted small" data-i18n="pairing_confirm_hint"></p>
+      <button class="link" data-help="pair" data-i18n="help_why_code"></button>
       <div class="pair-code" id="pairing-code"></div>
       <p class="muted small" id="pairing-status" role="status"></p>
       <div class="modal-actions"><button id="btn-pairing-close" data-i18n="close"></button></div>
@@ -357,6 +374,7 @@
     <div class="modal-body">
       <p><strong id="pair-req-name"></strong> <span data-i18n="pair_request_text"></span></p>
       <p class="muted small" data-i18n="pair_request_hint"></p>
+      <button class="link" data-help="pair" data-i18n="help_why_code"></button>
       <div class="pair-code" id="pair-req-code"></div>
       <p class="muted small" id="pair-req-queue"></p>
       <div class="modal-actions"><button class="danger" id="btn-pair-reject" data-i18n="reject"></button><button class="primary" id="btn-pair-accept" data-i18n="pair"></button></div>
@@ -469,6 +487,7 @@
             <option value="relay" data-i18n="network_relay"></option>
           </select>
           <div class="muted small" id="network-desc"></div>
+          <button class="link" data-help="internet" data-i18n="help_why"></button>
           <div class="relay-field" id="relay-field" hidden>
             <label for="relay-urls" class="small" data-i18n="relay_urls"></label>
             <textarea id="relay-urls" rows="2" spellcheck="false" autocomplete="off" data-i18n-ph="relay_urls_ph"></textarea>
