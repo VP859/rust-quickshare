@@ -88,6 +88,8 @@ export default {
   send_to_other: 'Wyślij…',
   cancel_discard: 'Anuluj i usuń odebraną część',
   cancel_discarded: '{name}: anulowano, częściowo odebrany plik usunięty',
+  privacy_strip: 'Usuwaj lokalizację ze zdjęć',
+  privacy_strip_hint: 'Zdjęcia JPEG i PNG są wysyłane bez informacji, gdzie i kiedy je zrobiono, jakim aparatem, oraz bez innych metadanych (EXIF, XMP). Obraz pozostaje dokładnie taki sam; zostaje tylko jego orientacja. Inne formaty (HEIC, filmy) są wysyłane bez zmian.',
   privacy_localsend: 'Odbieraj z aplikacji LocalSend (tryb zgodności)',
   privacy_localsend_hint: 'iPhone’y, Maki i inne urządzenia z aplikacją LocalSend mogą wysyłać tu pliki bez Ferry. LocalSend nie ma parowania: nadawcy nie są weryfikowani, więc każda oferta wymaga zgody. Używa portu 53317 (TCP i UDP).',
   localsend_offer: 'Wysłane z aplikacji LocalSend z adresu {address} (tryb zgodności) – nadawca nie jest zweryfikowany, jego nazwa może być dowolna.',

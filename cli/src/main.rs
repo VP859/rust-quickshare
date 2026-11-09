@@ -35,6 +35,7 @@ async fn main() -> Result<()> {
     // Every command that transfers files records them and keeps the speed limit.
     ferry::history::enable_from_config(&config);
     ferry::transfer::control::set_speed_limit(config.speed_limit);
+    ferry::transfer::metadata::set_strip_metadata(config.strip_metadata);
 
     let default_filter = if matches!(cli.command, Commands::Tui) {
         "off"

@@ -337,6 +337,13 @@ session, so a device without Ferry can download chosen files and send files with
   the effect is limited to a failed connection attempt to a stale address.
 * **Metadata** is not hidden: who talks to whom, when and how much is visible to the local network
   and, in internet mode, to the relay operator and your provider. Ferry offers no anonymity.
+* **Photos carry metadata.** By default a photo is sent as it is, with its EXIF data: often the
+  GPS position where it was taken, the time, the camera and its serial number. With
+  `strip-metadata` (*Settings → Privacy → Remove location from photos*) JPEG and PNG files are
+  sent as a copy without EXIF (except the orientation), XMP, IPTC, comments, text chunks and data
+  appended after the image; the image data is not re-encoded, so the picture is identical. Other
+  formats – HEIC, WebP, RAW, videos, documents – keep their metadata. Files shared by TICKET or in
+  a browser session are sent as they are.
 * **File names are visible to the receiver before accepting**, and in a batch up to 20 names are
   shown. They are encrypted in transit like the content.
 * **Cancelling** a transfer stops it on this device; the other device sees its streams end and

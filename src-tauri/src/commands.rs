@@ -1256,6 +1256,9 @@ pub struct PrivacySettings {
     /// The operating system is announced to everyone on the local network.
     #[serde(default)]
     announce_platform: bool,
+    /// Photos are sent without their location and other metadata.
+    #[serde(default)]
+    strip_metadata: bool,
     /// Random port for direct connections instead of the fixed one (applies
     /// at the next start).
     #[serde(default)]
@@ -1285,6 +1288,7 @@ pub async fn get_privacy(state: State<'_, AppState>) -> CmdResult<PrivacySetting
         pairing_open: config.pairing_open(),
         announce_platform: config.announce_platform,
         random_port: config.random_port,
+        strip_metadata: config.strip_metadata,
     })
 }
 
@@ -1310,6 +1314,8 @@ pub async fn set_privacy(
         config.disable_history = !settings.keep_history;
         config.paired_only = settings.paired_only;
         config.announce_platform = settings.announce_platform;
+        config.strip_metadata = settings.strip_metadata;
+        ferry::transfer::metadata::set_strip_metadata(settings.strip_metadata);
         config.random_port = settings.random_port;
         config.save().map_err(err)?;
         ferry::history::enable_from_config(&config);

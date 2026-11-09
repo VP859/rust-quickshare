@@ -72,6 +72,7 @@ function showPrivacy() {
   $('privacy-history').checked = privacy.keep_history;
   $('privacy-paired').checked = privacy.paired_only;
   $('privacy-platform').checked = privacy.announce_platform;
+  $('privacy-strip').checked = privacy.strip_metadata;
   $('privacy-port').checked = privacy.random_port;
   $('pairing-window').hidden = !privacy.paired_only;
   $('pairing-window-label').textContent = t(privacy.pairing_open ? 'pairing_open' : 'pairing_closed');
@@ -95,6 +96,7 @@ $('privacy-hidden').onchange = (e) => savePrivacy({ hidden: e.target.checked });
 $('privacy-texts').onchange = (e) => savePrivacy({ auto_accept_texts: e.target.checked });
 $('privacy-exe').onchange = (e) => savePrivacy({ auto_accept_executables: e.target.checked });
 $('privacy-localsend').onchange = (e) => savePrivacy({ localsend: e.target.checked });
+$('privacy-strip').onchange = (e) => savePrivacy({ strip_metadata: e.target.checked });
 $('privacy-platform').onchange = (e) => savePrivacy({ announce_platform: e.target.checked });
 $('privacy-port').onchange = async (e) => {
   await savePrivacy({ random_port: e.target.checked });

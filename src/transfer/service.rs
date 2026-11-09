@@ -1365,13 +1365,27 @@ pub async fn send_files(
     }
     let mut failures = 0usize;
     for (item, (name, size)) in items.iter().zip(&files) {
-        let tracker = Tracker::new(peer, name, *size, Direction::Upload, sink)
+        // A photo goes as a copy without its location and other metadata
+        // when the user asked for it; the copy is deleted after the transfer.
+        let copy = super::metadata::copy_without_metadata(&item.path).await;
+        let size = match &copy {
+            Ok(Some(copy)) => tokio::fs::metadata(copy.path())
+                .await
+                .map_or(*size, |m| m.len()),
+            _ => *size,
+        };
+        let tracker = Tracker::new(peer, name, size, Direction::Upload, sink)
             .with_connection(&conn)
             .with_source(&item.path);
         tracker.emit(0, TransferStatus::Preparing);
         let prepared = tracker
             .cancellable(async {
-                let mut file = prepare_file(&item.path).await?;
+                let send_path = match &copy {
+                    Ok(Some(copy)) => copy.path(),
+                    Ok(None) => item.path.as_path(),
+                    Err(e) => anyhow::bail!("{e:#}"),
+                };
+                let mut file = prepare_file(send_path).await?;
                 file.folder.clone_from(&item.folder);
                 Ok(file)
             })

@@ -458,10 +458,20 @@ pub async fn send(
     }
     let mut files = BTreeMap::new();
     let mut local = HashMap::new();
+    // Photos without their location and other metadata, when asked for; the
+    // copies live until the end of the transfer.
+    let mut copies = Vec::new();
+    let mut send_paths = HashMap::new();
     for (index, item) in items.iter().enumerate() {
-        let metadata = tokio::fs::metadata(&item.path)
+        let copy = crate::transfer::metadata::copy_without_metadata(&item.path).await?;
+        let send_path = copy
+            .as_ref()
+            .map_or_else(|| item.path.clone(), |c| c.path().to_path_buf());
+        copies.extend(copy);
+        let metadata = tokio::fs::metadata(&send_path)
             .await
             .with_context(|| t!("sender.read", path = item.path.display()))?;
+        send_paths.insert(index.to_string(), send_path);
         let name = item
             .path
             .file_name()
@@ -609,7 +619,8 @@ pub async fn send(
             );
             continue;
         };
-        let (path, _, size) = &local[id];
+        let (_, _, size) = &local[id];
+        let path = &send_paths[id];
         let query = format!(
             "sessionId={}&fileId={}&token={}",
             encode(&accepted.session_id),

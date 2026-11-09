@@ -74,6 +74,10 @@ pub struct Config {
     /// Hide this device on the local network from everyone except paired devices.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hidden: bool,
+    /// Send photos (JPEG, PNG) without their location and other metadata
+    /// ([`crate::transfer::metadata`]). Off by default.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub strip_metadata: bool,
     /// Announce the operating system on the local network (it only chooses an
     /// icon on the other devices). Off by default; a hidden device tells it
     /// to its paired devices anyway, since only they can read the answer.

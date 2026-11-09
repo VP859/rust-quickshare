@@ -154,6 +154,9 @@ channel.open:
 channel.accept:
   en: "Could not accept a control stream"
   pl: "Błąd przyjmowania strumienia kontrolnego"
+metadata.broken:
+  en: "Cannot remove the metadata of %{path}: the file is damaged; it was not sent"
+  pl: "Nie można usunąć metadanych pliku %{path}: plik jest uszkodzony; nie został wysłany"
 hash.open:
   en: "Could not open %{path} to compute its hash"
   pl: "Nie udało się otworzyć pliku %{path} do wyliczenia haszu"

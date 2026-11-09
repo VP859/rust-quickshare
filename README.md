@@ -44,6 +44,8 @@ The images are made from the real interfaces with example data (`tests/gui/scree
 - **Nearby devices and one-button pairing** – Ferry devices on the same network appear on their
   own; pairing shows the same six-digit code on both screens.
 - **Trusted devices** – an alias and optional Auto-Accept per device; everything else asks first.
+- **Photos without location** – optionally, JPEG and PNG photos are sent without where and when
+  they were taken and the camera (EXIF, XMP); the picture itself stays exactly the same.
 - **Privacy controls** – hide the device from local network discovery except for paired devices,
   and see exactly what leaves the device (*Settings → Privacy*, [details](docs/SECURITY-MODEL.md#what-each-party-can-see)).
 - **Cancel any transfer** – a partly received file is resumed next time, or deleted right away
@@ -125,6 +127,7 @@ ferry doctor                            # network and discovery diagnostics
 | Network mode | `network-mode internet` | `local` |
 | Download folder | `download-dir ~/Inbox` | system Downloads folder |
 | Hidden from unpaired devices | `hidden true` | `false` |
+| Send photos (JPEG, PNG) without location and other metadata | `strip-metadata true` | `false` |
 | Show the operating system on the local network (it picks an icon) | `announce-platform true` | `false` |
 | Random port for direct connections instead of 47824 (after a restart) | `random-port true` | `false` |
 | Only paired devices (unknown ones cannot even ask; `ferry pairing` opens pairing for a few minutes) | `paired-only true` | `false` |

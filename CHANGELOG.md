@@ -19,6 +19,11 @@ compatibility).
 
 ### Added
 
+- **Remove location from photos** (`ferry config set strip-metadata true`, *Settings → Privacy*,
+  off by default): JPEG and PNG photos sent to Ferry devices and LocalSend apps go without their
+  EXIF data (GPS position, time, camera, serial number – only the orientation is kept), XMP, IPTC,
+  comments and appended data. The image data is copied as it is, so the picture is identical; a
+  damaged photo is not sent rather than sent with its metadata.
 - **Cancel and delete**: a running download from a Ferry device can be cancelled together with
   what was received so far (the bin button in the GUI, `X` in the TUI), instead of keeping the
   `.part` file for resuming.

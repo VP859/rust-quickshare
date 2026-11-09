@@ -3,6 +3,7 @@
 
 pub mod control;
 pub mod hash;
+pub mod metadata;
 pub mod receiver;
 pub mod risk;
 pub mod security;

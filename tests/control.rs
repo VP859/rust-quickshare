@@ -429,3 +429,55 @@ async fn a_cancelled_download_keeps_its_partial_file_unless_it_is_discarded() {
     }
     set_speed_limit(None);
 }
+
+/// With "remove location from photos" a JPEG arrives without its EXIF data
+/// (but with its orientation), the original stays as it was, and the copy
+/// made for sending is gone afterwards.
+#[tokio::test(flavor = "multi_thread")]
+async fn photos_arrive_without_their_location_when_asked() {
+    let _serial = SERIAL.lock().await;
+    let (sender, receiver, addr, dst) = pair().await;
+    let src = tempfile::tempdir().unwrap();
+    // A JPEG: start, EXIF with orientation 6 and a GPS text, a frame, a scan, end.
+    let mut photo = vec![0xFF, 0xD8];
+    let mut exif =
+        b"Exif\0\0MM\0\x2A\0\0\0\x08\0\x01\x01\x12\0\x03\0\0\0\x01\0\x06\0\0\0\0\0\0".to_vec();
+    exif.extend_from_slice(b"GPS 52.2297N 21.0122E");
+    photo.extend_from_slice(&[0xFF, 0xE1]);
+    photo.extend_from_slice(&u16::try_from(exif.len() + 2).unwrap().to_be_bytes());
+    photo.extend_from_slice(&exif);
+    photo.extend_from_slice(&[0xFF, 0xC0, 0, 11, 8, 0, 1, 0, 1, 1, 1, 0x11, 0]);
+    photo.extend_from_slice(&[0xFF, 0xDA, 0, 8, 1, 1, 0, 0, 63, 0, 0x12, 0x34, 0xFF, 0xD9]);
+    let path = src.path().join("IMG_1.jpg");
+    std::fs::write(&path, &photo).unwrap();
+
+    ferry::transfer::metadata::set_strip_metadata(true);
+    let sent = service::send_files(&sender, addr, std::slice::from_ref(&path), &|_| {}).await;
+    ferry::transfer::metadata::set_strip_metadata(false);
+    sent.unwrap();
+
+    let received = std::fs::read(dst.path().join("IMG_1.jpg")).unwrap();
+    let has = |data: &[u8], needle: &[u8]| data.windows(needle.len()).any(|w| w == needle);
+    assert!(!has(&received, b"GPS"), "the location is gone");
+    assert!(has(&received, b"Exif\0\0"), "the orientation stays");
+    assert!(
+        received.ends_with(&[0x12, 0x34, 0xFF, 0xD9]),
+        "the picture is the same"
+    );
+    assert_eq!(
+        std::fs::read(&path).unwrap(),
+        photo,
+        "the original is untouched"
+    );
+    let copies = std::env::temp_dir().join("ferry-stripped");
+    let left = std::fs::read_dir(&copies)
+        .map(|d| {
+            d.flatten()
+                .filter(|e| e.path().join("IMG_1.jpg").exists())
+                .count()
+        })
+        .unwrap_or(0);
+    assert_eq!(left, 0, "the copy is deleted");
+    sender.close().await;
+    receiver.close().await;
+}

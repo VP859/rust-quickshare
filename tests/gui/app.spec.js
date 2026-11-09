@@ -193,7 +193,7 @@ test('the LocalSend compatibility mode is switched on in the privacy settings', 
   await app.locator('label.switch:has(#privacy-localsend)').click();
   await expect(toggle).toBeChecked();
   expect(await calls(app)).toContainEqual(['set_privacy', {
-    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: true, keep_history: true, paired_only: false, pairing_open: false, announce_platform: false, random_port: false },
+    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: true, keep_history: true, paired_only: false, pairing_open: false, announce_platform: false, random_port: false, strip_metadata: false },
   }]);
 });
 
@@ -203,7 +203,7 @@ test('"only paired devices" shows the pairing window, which opens pairing for a 
   await app.locator('label.switch:has(#privacy-paired)').click();
   await expect(app.locator('#privacy-paired')).toBeChecked();
   expect(await calls(app)).toContainEqual(['set_privacy', {
-    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: true, paired_only: true, pairing_open: false, announce_platform: false, random_port: false },
+    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: true, paired_only: true, pairing_open: false, announce_platform: false, random_port: false, strip_metadata: false },
   }]);
   await expect(app.locator('#pairing-window')).toBeVisible();
   await expect(app.locator('#pairing-window-label')).toHaveText('Pairing is closed');
@@ -215,10 +215,19 @@ test('showing the operating system and a random port are privacy settings; the p
   await app.locator('#btn-settings').click();
   await app.locator('label.switch:has(#privacy-platform)').click();
   expect(await calls(app)).toContainEqual(['set_privacy', {
-    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: true, paired_only: false, pairing_open: false, announce_platform: true, random_port: false },
+    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: true, paired_only: false, pairing_open: false, announce_platform: true, random_port: false, strip_metadata: false },
   }]);
   await app.locator('label.switch:has(#privacy-port)').click();
   await expect(app.locator('#modal-restart')).toHaveClass(/active/);
+});
+
+test('removing the location from photos is a privacy setting', async ({ app }) => {
+  await app.locator('#btn-settings').click();
+  await expect(app.locator('#privacy-strip')).not.toBeChecked();
+  await app.locator('label.switch:has(#privacy-strip)').click();
+  expect(await calls(app)).toContainEqual(['set_privacy', {
+    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: true, paired_only: false, pairing_open: false, announce_platform: false, random_port: false, strip_metadata: true },
+  }]);
 });
 
 test('a text goes through the recipient list and appears among the transfers', async ({ app }) => {
@@ -357,7 +366,7 @@ test('the speed limit and the history setting are saved', async ({ app }) => {
   await expect(app.locator('#privacy-history')).toBeChecked();
   await app.locator('label.switch:has(#privacy-history)').click();
   expect(await calls(app)).toContainEqual(['set_privacy', {
-    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: false, paired_only: false, pairing_open: false, announce_platform: false, random_port: false },
+    settings: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: false, paired_only: false, pairing_open: false, announce_platform: false, random_port: false, strip_metadata: false },
   }]);
 });
 

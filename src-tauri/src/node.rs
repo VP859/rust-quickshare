@@ -734,6 +734,7 @@ pub fn start(app: AppHandle) {
                 start_discovery(&app, engine, &config);
                 ferry::history::enable_from_config(&config);
                 ferry::transfer::control::set_speed_limit(config.speed_limit);
+                ferry::transfer::metadata::set_strip_metadata(config.strip_metadata);
                 if let Err(e) = sync_localsend(&app).await {
                     warn!("{e}");
                 }
