@@ -4,6 +4,8 @@
 //  - every translation key used by the page or the scripts exists in every
 //    language in js/locales/, all languages define the same keys and no key
 //    is written twice in one file,
+//  - every topic of the help window (js/help-topics.js) points to a heading
+//    that exists in the documentation,
 //  - the copies of @noble/ciphers in src/web/page/vendor/ (the encryption of
 //    browser sessions) are byte for byte those of the npm package.
 //
@@ -92,6 +94,33 @@ for (const lang of codes) {
 }
 
 if (failed) process.exit(1);
+// The "More in the documentation" links of the help window: the file and
+// the heading must exist (#anchors as GitHub and mdBook make them).
+const repo = join(import.meta.dirname, '..');
+const slug = (text) => text.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<[^>]+>/g, '').toLowerCase()
+  .replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-');
+const { TOPICS } = await import(pathToFileURL(join(dir, 'js', 'help-topics.js')).href);
+for (const topic of TOPICS) {
+  const [file, anchor] = topic.doc.split('#');
+  const path = join(repo, file);
+  if (!existsSync(path)) {
+    console.error(`help topic ${topic.id}: no file ${file}`);
+    failed = true;
+    continue;
+  }
+  let inCode = false;
+  const anchors = new Set();
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) inCode = !inCode;
+    const heading = !inCode && /^#{1,6}\s+(.*?)\s*#*\s*$/.exec(line);
+    if (heading) anchors.add(slug(heading[1]));
+  }
+  if (!anchors.has(anchor)) {
+    console.error(`help topic ${topic.id}: no heading #${anchor} in ${file}`);
+    failed = true;
+  }
+}
+
 // The cipher of browser sessions is served from vendor/; it must be exactly
 // the audited package that package-lock.json pins.
 const root = join(import.meta.dirname, '..');

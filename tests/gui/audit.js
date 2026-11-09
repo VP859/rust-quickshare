@@ -11,6 +11,8 @@ export function audit(rootSelector) {
   const problems = [];
   const visible = (e) => {
     if (!(e instanceof Element)) return false;
+    // Also false inside a closed <details>, whose content keeps its size.
+    if (e.checkVisibility && !e.checkVisibility({ contentVisibilityAuto: true })) return false;
     const s = getComputedStyle(e);
     if (s.visibility === 'hidden' || s.display === 'none' || Number(s.opacity) === 0) return false;
     const r = e.getBoundingClientRect();

@@ -35,6 +35,8 @@ const RESPONSES = {
   clear_history: null,
   pause_transfer: true,
   set_pairing_open: null,
+  get_welcome: false,
+  dismiss_welcome: null,
   list_localsend: [{ alias: "Kate's iPhone", model: 'iPhone', device_type: 'mobile', fingerprint: 'AB12', address: '192.168.1.20:53317', https: true }],
   scan_localsend: [],
   send_to_localsend: null,

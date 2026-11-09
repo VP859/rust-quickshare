@@ -59,6 +59,9 @@ The images are made from the real interfaces with example data (`tests/gui/scree
   without their content); it can be cleared or turned off. A file from it can be sent again to the
   same device or to another one (`ferry history --send-again N`). The transfers list shows the
   current session and leads to it.
+- **Help where it is needed** – the **?** button in the desktop and Android app answers the usual
+  questions in a few sentences each, with links to the documentation; a short welcome card shows
+  new users the three steps and goes away for good once closed or once the first device is paired.
 - **Accessible** – every control works with the keyboard and has a name for screen readers, and
   text keeps WCAG AA contrast in the light and the dark theme; automated tests check it.
 - **Every interface** – desktop and Android app (Tauri), terminal UI, command line and a

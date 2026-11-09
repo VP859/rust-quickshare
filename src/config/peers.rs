@@ -116,6 +116,10 @@ pub struct Config {
     /// without asking. Off by default: they always ask first.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub auto_accept_executables: bool,
+    /// Desktop app: the welcome card for new users was closed, or the user
+    /// paired a device or sent a file; it is not shown again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub welcome_dismissed: bool,
     /// Desktop app: closing the window quits Ferry instead of keeping it
     /// running in the system tray.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

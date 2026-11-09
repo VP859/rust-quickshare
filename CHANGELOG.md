@@ -19,6 +19,11 @@ compatibility).
 
 ### Added
 
+- **Help in the app**: a **?** button in the GUI (desktop and Android) with short answers – sending,
+  pairing and the code, devices without Ferry, iPhone and Mac, local or internet, devices that do
+  not show up, what others can see – each linked to its section of the documentation (checked by
+  `npm run check:ui`). New users see a small welcome card with three steps, never a dialog; it goes
+  away for good when closed or after the first pairing or transfer.
 - **Encrypted browser sessions**: the files, their names and the list of shared files go
   end-to-end encrypted (ChaCha20-Poly1305 in 64 KiB records) with a key that is only in the link
   after `#` and never crosses the network; the page decrypts and encrypts with `@noble/ciphers`.

@@ -1383,6 +1383,32 @@ pub async fn set_pairing_open(open: bool, state: State<'_, AppState>) -> CmdResu
     config.save().map_err(err)
 }
 
+/// Whether the welcome card for new users may be shown (it was never closed).
+///
+/// # Errors
+///
+/// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
+#[tauri::command]
+pub async fn get_welcome(state: State<'_, AppState>) -> CmdResult<bool> {
+    Ok(!state.config.lock().await.welcome_dismissed)
+}
+
+/// Hides the welcome card for good: closed by the user, or no longer needed
+/// after the first pairing or transfer.
+///
+/// # Errors
+///
+/// When the configuration cannot be saved.
+#[tauri::command]
+pub async fn dismiss_welcome(state: State<'_, AppState>) -> CmdResult<()> {
+    let mut config = state.config.lock().await;
+    if config.welcome_dismissed {
+        return Ok(());
+    }
+    config.welcome_dismissed = true;
+    config.save().map_err(err)
+}
+
 /// Restarts the application, e.g. to apply a new network mode (desktop only;
 /// on Android the app is restarted by closing it from the recent apps).
 #[tauri::command]

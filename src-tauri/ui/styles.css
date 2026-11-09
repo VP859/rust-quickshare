@@ -266,3 +266,19 @@ body.mobile .desktop-only { display: none !important; }
 #web-other summary, #web-phone-help summary { cursor: pointer; color: var(--muted); }
 #web-phone-help ul { margin: 6px 0 0 18px; display: flex; flex-direction: column; gap: 4px; }
 #web-other .mono { margin-top: 4px; }
+
+/* Welcome card (new users) and help window. */
+.welcome-wrap { max-width: 760px; margin: 20px auto 0; padding: 0 20px; }
+.welcome { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.welcome-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.welcome-head h2 { font-size: 14px; font-weight: 600; }
+.welcome-steps { margin: 0 0 0 20px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; }
+button.link { background: none; border: 0; box-shadow: none; padding: 2px 0; min-height: 0; color: var(--accent-text); font-size: 13px; font-weight: 500; cursor: pointer; align-self: flex-start; }
+button.link:hover { text-decoration: underline; }
+.help-topics { display: flex; flex-direction: column; gap: 6px; }
+.help-topic { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; }
+.help-topic summary { cursor: pointer; font-weight: 500; }
+.help-topic p { margin: 8px 0 4px; color: var(--muted); font-size: 13px; -webkit-user-select: text; user-select: text; }
+@media (min-width: 1100px) { .welcome-wrap { max-width: 1280px; } }
+@media (min-width: 1800px) { .welcome-wrap { max-width: 1440px; } }
+@media (max-width: 560px) { .welcome-wrap { padding: 0 16px; margin-top: 16px; } }

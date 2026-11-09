@@ -1,5 +1,6 @@
 // Trusted devices: the list, the device menu, the safety number and the
 // add/edit dialog.
+import { renderWelcome } from './help.js';
 import { $, close, dotClass, el, emptyState, fail, icon, initials, open, toast } from './dom.js';
 import { t } from './i18n.js';
 import { sendToPeer } from './send.js';
@@ -21,6 +22,7 @@ export async function refreshPeers() {
 }
 
 export function renderPeers() {
+  renderWelcome();
   const box = $('peers');
   const { peers, online } = state;
   $('peers-count').textContent = peers.length;

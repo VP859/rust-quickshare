@@ -153,6 +153,8 @@ pub fn run() {
             get_privacy,
             set_privacy,
             set_pairing_open,
+            get_welcome,
+            dismiss_welcome,
             web_share_status,
             list_localsend,
             scan_localsend,

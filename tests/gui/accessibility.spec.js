@@ -32,6 +32,10 @@ export async function axeViolations(page, selector) {
 const DIALOGS = {
   settings: async (app) => app.locator('#btn-settings').click(),
   history: async (app) => app.locator('#btn-history').click(),
+  help: async (app) => {
+    await app.locator('#btn-help').click();
+    await app.locator('#modal-help summary').first().click();
+  },
   recipient: async (app) => {
     await app.evaluate(() => window.__respond('take_shared_files', ['/home/me/a.jpg']));
     await emit(app, 'share-files', null);
@@ -49,6 +53,15 @@ for (const scheme of ['light', 'dark']) {
       await fillScreen(app);
       expect(await app.evaluate(audit, null)).toEqual([]);
       expect(await axeViolations(app)).toEqual([]);
+    });
+
+    test.describe('for a new user', () => {
+      test.use({ responses: { list_peers: [], get_welcome: true } });
+      test('the welcome card has names, labels and enough contrast', async ({ app }) => {
+        await expect(app.locator('#welcome')).toBeVisible();
+        expect(await app.evaluate(audit, '#welcome')).toEqual([]);
+        expect(await axeViolations(app, '#welcome')).toEqual([]);
+      });
     });
 
     for (const [name, openDialog] of Object.entries(DIALOGS)) {

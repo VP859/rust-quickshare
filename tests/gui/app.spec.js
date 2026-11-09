@@ -523,3 +523,63 @@ test('the keyring option is hidden where there is no keyring', async ({ app }) =
   await expect(app.locator('#modal-settings')).toHaveClass(/active/);
   await expect(app.locator('#keyring-toggle')).toBeHidden();
 });
+
+test('the help window answers briefly and links to the documentation', async ({ app, isMobile }) => {
+  await app.locator('#btn-help').click();
+  const dialog = app.locator('#modal-help');
+  await expect(dialog).toHaveClass(/active/);
+  const topics = dialog.locator('.help-topic');
+  await expect(topics).toHaveCount(7);
+  await expect(dialog.locator('.help-topic p').first()).toBeHidden();
+  await dialog.getByText('How do I pair a device, and why compare the code?').click();
+  await expect(dialog.locator('[data-topic="pair"] p')).toContainText('same six-digit code');
+  const more = dialog.locator('[data-topic="pair"]').getByRole('button', { name: 'More in the documentation' });
+  if (isMobile) {
+    await expect(more).toHaveCount(0);
+  } else {
+    await more.click();
+    expect(await calls(app)).toContainEqual(['open_link', { url: 'https://vp859.github.io/rust-quickshare/index.html#local-network-and-pairing' }]);
+  }
+});
+
+test.describe('a new user', () => {
+  test.use({ responses: { list_peers: [], get_welcome: true } });
+
+  test('sees a short welcome that leads to the help and goes away for good when closed', async ({ app }) => {
+    const card = app.locator('#welcome');
+    await expect(card).toBeVisible();
+    await expect(card.locator('li')).toHaveCount(3);
+    await card.getByRole('button', { name: 'How does it work?' }).click();
+    await expect(app.locator('#modal-help')).toHaveClass(/active/);
+    await expect(app.locator('[data-topic="send"]')).toHaveAttribute('open', '');
+    await app.locator('#modal-help [data-close]').first().click();
+    await card.getByRole('button', { name: 'Close the welcome' }).click();
+    await expect(card).toBeHidden();
+    expect(await calls(app)).toContainEqual(['dismiss_welcome', {}]);
+  });
+
+  test('no longer needs it after the first file went through', async ({ app }) => {
+    await expect(app.locator('#welcome')).toBeVisible();
+    await emit(app, 'transfer', { id: 'w1', peer: PEER, peer_name: null, file_name: 'a.jpg', direction: 'upload', total: 1, done: 1, status: { kind: 'completed', path: null }, route: null });
+    await expect(app.locator('#welcome')).toBeHidden();
+    expect(await calls(app)).toContainEqual(['dismiss_welcome', {}]);
+  });
+
+  test('no longer needs it after pairing the first device', async ({ app }) => {
+    await expect(app.locator('#welcome')).toBeVisible();
+    await app.evaluate((peer) => window.__respond('list_peers', [{ node_id: peer, alias: 'Laptop', auto_accept: false, verified: false, added_at: '2026-11-01T00:00:00Z', has_address: true }]), PEER);
+    await emit(app, 'peers-changed', null);
+    await expect(app.locator('#welcome')).toBeHidden();
+    expect(await calls(app)).toContainEqual(['dismiss_welcome', {}]);
+  });
+});
+
+test.describe('someone who already uses Ferry', () => {
+  test.use({ responses: { get_welcome: true } });
+
+  test('does not see the welcome (a device is paired)', async ({ app }) => {
+    await expect(app.locator('#peers')).toContainText('Laptop');
+    await expect(app.locator('#welcome')).toBeHidden();
+    expect(await calls(app)).toContainEqual(['dismiss_welcome', {}]);
+  });
+});
