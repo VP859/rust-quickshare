@@ -223,8 +223,11 @@ fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         }
         KeyCode::Char('e') => app.open_rename(),
         KeyCode::Char('a') => app.toggle_auto_accept(),
+        KeyCode::Char('X') if app.focus == Focus::Transfers => {
+            app.cancel_selected_transfer(true);
+        }
         KeyCode::Delete | KeyCode::Char('x') if app.focus == Focus::Transfers => {
-            app.cancel_selected_transfer();
+            app.cancel_selected_transfer(false);
         }
         KeyCode::Delete | KeyCode::Char('x') => app.ask_remove(),
         KeyCode::Char('i') | KeyCode::Char('+') => app.open_add_device(),

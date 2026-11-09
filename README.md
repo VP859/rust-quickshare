@@ -46,7 +46,8 @@ The images are made from the real interfaces with example data (`tests/gui/scree
 - **Trusted devices** – an alias and optional Auto-Accept per device; everything else asks first.
 - **Privacy controls** – hide the device from local network discovery except for paired devices,
   and see exactly what leaves the device (*Settings → Privacy*, [details](docs/SECURITY-MODEL.md#what-each-party-can-see)).
-- **Cancel any transfer** – a partly received file is resumed next time.
+- **Cancel any transfer** – a partly received file is resumed next time, or deleted right away
+  with *Cancel and delete* (the bin button in the GUI, `X` in the TUI).
 - **Pause and speed limit** – pause a transfer and resume it later (the connection stays open), and
   limit the speed of sending and receiving.
 - **Several devices at once** – send the same files to several devices in one go.

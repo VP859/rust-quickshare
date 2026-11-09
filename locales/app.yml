@@ -1068,6 +1068,12 @@ tui.cannot_pause:
 tui.help_cancel:
   en: "cancel the selected transfer (in the transfers panel)"
   pl: "anuluj wybrany transfer (w panelu transferów)"
+tui.help_cancel_discard:
+  en: "cancel the selected download and delete the partly received file"
+  pl: "anuluj wybrane pobieranie i usuń częściowo odebrany plik"
+tui.cancelling_discard:
+  en: "Cancelling '%{name}' and deleting what was received..."
+  pl: "Anulowanie '%{name}' i usuwanie odebranej części..."
 tui.cancelling:
   en: "Cancelling '%{name}'..."
   pl: "Anulowanie '%{name}'..."

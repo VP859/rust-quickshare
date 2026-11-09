@@ -340,7 +340,9 @@ session, so a device without Ferry can download chosen files and send files with
 * **File names are visible to the receiver before accepting**, and in a batch up to 20 names are
   shown. They are encrypted in transit like the content.
 * **Cancelling** a transfer stops it on this device; the other device sees its streams end and
-  reports the transfer as failed. A partial `.part` file stays for a later resume.
+  reports the transfer as failed. A partial `.part` file stays for a later resume, unless the
+  download was cancelled with *Cancel and delete* (`cancel_and_discard`), which removes it. Files
+  from LocalSend apps and browsers are never kept partly: their `.part` files go when the upload ends early.
 * The Android share target receives files from other apps through `content://` URIs; the files are
   copied to the app's private cache before sending, and copies older than a day are deleted at the
   next start.

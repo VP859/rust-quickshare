@@ -22,6 +22,19 @@ test('starts, lists trusted devices and loads under the strict CSP', async ({ ap
   expect(names).toEqual(expect.arrayContaining(['get_language', 'list_peers', 'get_node_info']));
 });
 
+test('a download from a Ferry device can be cancelled and its partial file deleted', async ({ app }) => {
+  await emit(app, 'transfer', transfer({ kind: 'running' }, { direction: 'download' }));
+  const row = app.locator('#transfers .transfer');
+  await row.getByRole('button', { name: 'Cancel and delete what was received' }).click();
+  expect(await calls(app)).toContainEqual(['cancel_transfer', { id: 't1', discard: true }]);
+  await expect(app.locator('#toast')).toContainText('partly received file is deleted');
+
+  // Uploads and LocalSend downloads have nothing to delete here.
+  await emit(app, 'transfer', transfer({ kind: 'running' }, { id: 't2' }));
+  await emit(app, 'transfer', transfer({ kind: 'running' }, { id: 't3', direction: 'download', peer: 'localsend:192.168.1.20', peer_name: 'Phone' }));
+  await expect(app.locator('#transfers').getByRole('button', { name: 'Cancel and delete what was received' })).toHaveCount(1);
+});
+
 test('shows progress, route and a cancel button for a running transfer', async ({ app }) => {
   await emit(app, 'transfer', transfer({ kind: 'running' }));
   const row = app.locator('#transfers .transfer');

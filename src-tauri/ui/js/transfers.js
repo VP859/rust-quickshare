@@ -1,6 +1,6 @@
 // The transfers list (files from `transfer` events, texts from texts.js) and
 // the dialog for incoming offers.
-import { $, close, el, emptyState, fail, fmtSize, icon, open, shortId } from './dom.js';
+import { $, close, el, emptyState, fail, fmtSize, icon, open, shortId, toast } from './dom.js';
 import { t } from './i18n.js';
 import { state } from './state.js';
 import { openHistory } from './history.js';
@@ -60,9 +60,14 @@ function renderTransfer(ev) {
     const paused = kind === 'paused';
     const pause = (kind === 'running' || paused) ? el('button', { class: 'ghost icon', title: t(paused ? 'resume' : 'pause'), 'aria-label': t(paused ? 'resume' : 'pause'),
       onclick: () => invoke('pause_transfer', { id: ev.id, paused: !paused }).catch(fail) }, icon(paused ? 'play' : 'pause', 'sm')) : '';
+    // A download from a Ferry device keeps what arrived for resuming; this
+    // button cancels and deletes it. (LocalSend and browser uploads never keep it.)
+    const fromFerry = ev.direction === 'download' && /^[0-9a-f]{64}$/.test(ev.peer);
+    const discard = fromFerry ? el('button', { class: 'ghost icon', title: t('cancel_discard'), 'aria-label': t('cancel_discard'),
+      onclick: () => invoke('cancel_transfer', { id: ev.id, discard: true }).then(() => toast(t('cancel_discarded', { name: ev.file_name }))).catch(fail) }, icon('trash', 'sm')) : '';
     parts.push(el('div', { class: 'trailing' }, pause,
       el('button', { class: 'ghost icon', title: t('cancel_transfer'), 'aria-label': t('cancel_transfer'),
-        onclick: () => invoke('cancel_transfer', { id: ev.id }).catch(fail) }, icon('x', 'sm'))));
+        onclick: () => invoke('cancel_transfer', { id: ev.id }).catch(fail) }, icon('x', 'sm')), discard));
   }
   if (kind === 'completed' && ev.direction === 'download' && ev.status.path && !isMobile) {
     const openFile = (reveal) => invoke('open_received', { path: ev.status.path, reveal }).catch(fail);

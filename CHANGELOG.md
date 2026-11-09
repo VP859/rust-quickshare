@@ -19,6 +19,9 @@ compatibility).
 
 ### Added
 
+- **Cancel and delete**: a running download from a Ferry device can be cancelled together with
+  what was received so far (the bin button in the GUI, `X` in the TUI), instead of keeping the
+  `.part` file for resuming.
 - **Send again from the history**: a file that was sent (or received) and is still on this device
   goes out again to the same Ferry device or to a recipient chosen now (GUI), or with
   `ferry history --send-again N`; the history keeps the path of sent files for this.

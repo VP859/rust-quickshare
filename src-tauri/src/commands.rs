@@ -1056,10 +1056,16 @@ pub async fn set_verified(
     config.save().map_err(err)
 }
 
-/// Cancels a running transfer by its ID; `false` when it has already ended.
+/// Cancels a running transfer by its ID; with `discard` a partly received
+/// file is deleted instead of kept for resuming. `false` when it has already
+/// ended.
 #[tauri::command]
-pub fn cancel_transfer(id: String) -> bool {
-    service::cancel_transfer(&id)
+pub fn cancel_transfer(id: String, discard: Option<bool>) -> bool {
+    if discard == Some(true) {
+        service::cancel_and_discard(&id)
+    } else {
+        service::cancel_transfer(&id)
+    }
 }
 
 /// Pauses (`paused`) or resumes a running transfer; `false` when it has ended.

@@ -24,7 +24,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use super::Channel;
-use super::receiver::{check_free_space, read_offer, receive_on_channel, reject};
+use super::receiver::{check_free_space, part_path_for, read_offer, receive_on_channel, reject};
 use super::risk;
 use super::sender::{
     PreparedFile, SendItem, SendOutcome, expand_paths, prepare_file, push_file, send_on_channel,
@@ -155,6 +155,8 @@ struct ActiveTransfer {
     cancel: CancellationToken,
     /// `true` while it is paused ([`pause_transfer`]).
     pause: tokio::sync::watch::Sender<bool>,
+    /// Set by [`cancel_and_discard`]: the partly received file goes too.
+    discard: Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// The transfers in progress, keyed by transfer ID.
@@ -185,6 +187,48 @@ pub fn cancel_transfer(id: &str) -> bool {
         .ok()
         .and_then(|active| active.get(id).map(|t| t.cancel.clone()));
     token.inspect(CancellationToken::cancel).is_some()
+}
+
+/// Stops a running download like [`cancel_transfer`] and deletes what was
+/// received so far (the `.part` file), so it is not resumed later and does not
+/// stay on the disk; returns whether the transfer was found.
+///
+/// Only Ferry downloads keep a partial file; LocalSend and browser uploads
+/// delete theirs anyway when they end early. For an upload this is the same as
+/// [`cancel_transfer`]: the partial file is on the other device.
+pub fn cancel_and_discard(id: &str) -> bool {
+    if let Ok(active) = ACTIVE_TRANSFERS.lock()
+        && let Some(transfer) = active.get(id)
+    {
+        transfer
+            .discard
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    cancel_transfer(id)
+}
+
+/// Deletes the partial file of a download that was cancelled with
+/// [`cancel_and_discard`]. On Windows a write still in progress keeps the file
+/// open for a moment, so deleting is tried a few times.
+async fn discard_partial(tracker: &Tracker<'_>, result: &Result<PathBuf>, part: Result<PathBuf>) {
+    let cancelled = result.as_ref().is_err_and(|e| e.is::<Cancelled>());
+    let Ok(part) = part else {
+        return;
+    };
+    if !cancelled || !tracker.discard_requested() {
+        return;
+    }
+    for attempt in 0..10 {
+        match tokio::fs::remove_file(&part).await {
+            Ok(()) => {
+                info!("Deleted the partial file {}", part.display());
+                return;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return,
+            Err(e) if attempt == 9 => warn!("Could not delete {}: {e}", part.display()),
+            Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
+        }
+    }
 }
 
 /// Snapshot of one transfer, serialized as-is to the GUI frontend.
@@ -575,6 +619,8 @@ pub struct Tracker<'a> {
     shown: Mutex<ShownProgress>,
     /// The file being sent (uploads), kept in the history.
     source: Option<PathBuf>,
+    /// Set by [`cancel_and_discard`].
+    discard: Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// What a [`Tracker`] has shown of the progress.
@@ -620,12 +666,14 @@ impl<'a> Tracker<'a> {
         let id = uuid::Uuid::new_v4().to_string();
         let cancel = CancellationToken::new();
         let (pause_tx, pause) = tokio::sync::watch::channel(false);
+        let discard = Arc::new(std::sync::atomic::AtomicBool::new(false));
         if let Ok(mut active) = ACTIVE_TRANSFERS.lock() {
             active.insert(
                 id.clone(),
                 ActiveTransfer {
                     cancel: cancel.clone(),
                     pause: pause_tx,
+                    discard: discard.clone(),
                 },
             );
         }
@@ -648,7 +696,13 @@ impl<'a> Tracker<'a> {
             last_done: std::sync::atomic::AtomicU64::new(0),
             shown: Mutex::default(),
             source: None,
+            discard,
         }
+    }
+
+    /// Whether the transfer was cancelled with [`cancel_and_discard`].
+    pub fn discard_requested(&self) -> bool {
+        self.discard.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Records `path` as the file sent, so the history can send it again.
@@ -971,8 +1025,9 @@ async fn handle_push<H: TransferHandler>(
                 && is_retryable(e)
             {
                 // The sender reconnects and resumes; the user already said yes.
-                gate.keep_file(peer, offer.file_hash, dest_dir);
+                gate.keep_file(peer, offer.file_hash, dest_dir.clone());
             }
+            discard_partial(&tracker, &result, part_path_for(&dest_dir, &offer)).await;
             tracker.finish(&result, |p| Some(p.display().to_string()));
             ignore_cancelled(result)?;
         }
@@ -1457,6 +1512,7 @@ pub async fn pull_shared(
             tracker.progress(d)
         }))
         .await;
+    discard_partial(&tracker, &result, part_path_for(dest_dir, &offer)).await;
     tracker.finish(&result, |p| Some(p.display().to_string()));
     conn.close(0u32.into(), b"done");
     result

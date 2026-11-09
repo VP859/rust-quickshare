@@ -300,14 +300,24 @@ impl App {
         self.status_msg = t!("tui.cleared").into_owned();
     }
 
-    /// Cancels the selected transfer if it is still running.
-    pub fn cancel_selected_transfer(&mut self) {
+    /// Cancels the selected transfer if it is still running; with `discard`
+    /// a partly received file is deleted instead of kept for resuming.
+    pub fn cancel_selected_transfer(&mut self, discard: bool) {
         let Some(row) = self.selected_transfer() else {
             self.status_msg = t!("tui.no_transfers").into_owned();
             return;
         };
-        self.status_msg = if !row.ev.status.is_final() && service::cancel_transfer(&row.ev.id) {
-            t!("tui.cancelling", name = &row.ev.file_name)
+        let cancel = if discard {
+            service::cancel_and_discard
+        } else {
+            service::cancel_transfer
+        };
+        self.status_msg = if !row.ev.status.is_final() && cancel(&row.ev.id) {
+            if discard {
+                t!("tui.cancelling_discard", name = &row.ev.file_name)
+            } else {
+                t!("tui.cancelling", name = &row.ev.file_name)
+            }
         } else {
             t!("tui.cannot_cancel")
         }

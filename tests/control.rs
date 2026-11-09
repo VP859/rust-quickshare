@@ -336,3 +336,96 @@ async fn files_go_to_several_devices_at_once() {
         node.close().await;
     }
 }
+
+/// Receiver that cancels its download once 1 MiB arrived, keeping or
+/// discarding the partial file.
+struct CancelDownload {
+    dir: PathBuf,
+    discard: bool,
+    finished: Mutex<Option<TransferStatus>>,
+}
+
+impl TransferHandler for CancelDownload {
+    async fn decide(&self, _: EndpointId, _: &str, _: &TransferOffer) -> OfferDecision {
+        OfferDecision::Accept {
+            dest_dir: self.dir.clone(),
+        }
+    }
+    fn on_event(&self, e: TransferEvent) {
+        if e.direction != Direction::Download {
+            return;
+        }
+        if e.status == TransferStatus::Running && e.done > 1024 * 1024 {
+            if self.discard {
+                service::cancel_and_discard(&e.id);
+            } else {
+                service::cancel_transfer(&e.id);
+            }
+        }
+        if e.status.is_final() {
+            *self.finished.lock().unwrap() = Some(e.status);
+        }
+    }
+}
+
+/// Files in `dir` whose name ends with `.part`.
+fn partial_files(dir: &std::path::Path) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with(".part"))
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cancelled_download_keeps_its_partial_file_unless_it_is_discarded() {
+    let _serial = SERIAL.lock().await;
+    set_speed_limit(Some(1024 * 1024));
+    for discard in [false, true] {
+        let sender = NodeEngine::new(SecretKey::generate()).await.unwrap();
+        let receiver = NodeEngine::new(SecretKey::generate()).await.unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        let handler = Arc::new(CancelDownload {
+            dir: dst.path().into(),
+            discard,
+            finished: Mutex::new(None),
+        });
+        tokio::spawn(service::serve(receiver.clone(), handler.clone()));
+        let port = receiver
+            .endpoint()
+            .bound_sockets()
+            .into_iter()
+            .find(SocketAddr::is_ipv4)
+            .unwrap()
+            .port();
+        let addr = EndpointAddr::from_parts(
+            receiver.node_id(),
+            [TransportAddr::Ip((Ipv4Addr::LOCALHOST, port).into())],
+        );
+        let src = tempfile::tempdir().unwrap();
+        let (path, _) = file(src.path(), "big.bin", 4 * 1024 * 1024);
+        let _ = service::send_files(&sender, addr, &[path], &|_| {}).await;
+        // The receiver ends just after the sender saw its streams close.
+        for _ in 0..100 {
+            if handler.finished.lock().unwrap().is_some() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert_eq!(
+            *handler.finished.lock().unwrap(),
+            Some(TransferStatus::Cancelled)
+        );
+        assert!(!dst.path().join("big.bin").exists());
+        let partial = partial_files(dst.path());
+        if discard {
+            assert!(partial.is_empty(), "discarded: {partial:?}");
+        } else {
+            assert_eq!(partial.len(), 1, "kept for resuming: {partial:?}");
+        }
+        sender.close().await;
+        receiver.close().await;
+    }
+    set_speed_limit(None);
+}
