@@ -263,5 +263,6 @@ body.mobile .desktop-only { display: none !important; }
 }
 
 #web-access.warn { color: var(--warn); }
-#web-other summary { cursor: pointer; color: var(--muted); }
+#web-other summary, #web-phone-help summary { cursor: pointer; color: var(--muted); }
+#web-phone-help ul { margin: 6px 0 0 18px; display: flex; flex-direction: column; gap: 4px; }
 #web-other .mono { margin-top: 4px; }

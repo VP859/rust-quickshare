@@ -329,7 +329,9 @@ fn urls(engine: Option<&NodeEngine>, bind: IpAddr, port: u16, token: &str) -> Ve
 
 /// Names of interfaces that do not lead to other devices of the local
 /// network: containers and virtual machines (Docker, Podman, libvirt, …) and
-/// VPN tunnels (WireGuard, NordVPN, Tailscale, …).
+/// VPN tunnels (WireGuard, NordVPN, Tailscale, …). Desktop only: Android
+/// lists interfaces without their names.
+#[cfg(not(target_os = "android"))]
 const VIRTUAL_INTERFACES: [&str; 17] = [
     "docker",
     "br-",
@@ -351,6 +353,7 @@ const VIRTUAL_INTERFACES: [&str; 17] = [
 ];
 
 /// Whether an interface named `name` is a container bridge or a VPN tunnel.
+#[cfg(not(target_os = "android"))]
 fn is_virtual(name: &str) -> bool {
     VIRTUAL_INTERFACES
         .iter()
@@ -420,6 +423,7 @@ mod tests {
         assert_eq!(ips[3], Ipv4Addr::new(169, 254, 1, 1));
     }
 
+    #[cfg(not(target_os = "android"))]
     #[test]
     fn containers_and_vpns_are_not_offered() {
         for name in [

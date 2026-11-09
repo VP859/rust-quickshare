@@ -260,6 +260,9 @@ test('receiving from a browser shows the link, its lifetime and a stop button', 
   await expect(app.locator('#web-other-list')).toContainText('10.5.0.2');
   await expect(app.locator('#web-expires')).toContainText('30 more minute');
   await expect(app.locator('#web-access')).toContainText('Not opened yet');
+  // Help for a phone that cannot open the link, folded away.
+  await app.locator('#web-phone-help summary').click();
+  await expect(app.locator('#web-phone-help')).toContainText('Local network');
   // The phone opened it; then another device was turned away.
   await app.evaluate(() => window.__respond('web_share_status', { running: true, owner: '192.168.1.20', refused: [] }));
   await expect(app.locator('#web-access')).toContainText('Opened by 192.168.1.20', { timeout: 5000 });

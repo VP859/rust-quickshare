@@ -174,6 +174,9 @@ compatibility).
 
 ### Fixed
 
+- **Browser sessions**: hints for a link that does not load on the phone (same Wi-Fi, Android's
+  *Local network* permission for the browser, a VPN on the phone, client isolation in the router)
+  under the link in the GUI, in `ferry web` and in the README.
 - **Browser sessions**: opening the link on the computer itself (to try it) no longer locks out the
   phone it was meant for, the GUI shows which device opened the link and which were turned away,
   and only addresses of real network interfaces are offered (no Docker or VPN addresses); the

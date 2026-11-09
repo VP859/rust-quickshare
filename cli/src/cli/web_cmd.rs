@@ -124,6 +124,7 @@ pub async fn run_web(files: Vec<PathBuf>, no_receive: bool, minutes: u64) -> Res
         );
     }
     println!(" {}", t!("cli.web_security"));
+    println!(" {}", t!("cli.web_phone_help"));
     let port = share.port();
     if let Ok(Some(hint)) = tokio::task::spawn_blocking(move || firewall_hint(port)).await {
         println!(" {hint}");

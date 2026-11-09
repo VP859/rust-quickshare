@@ -264,6 +264,13 @@ send files to Ferry; every batch from the browser is asked about before it is sa
   that part over the network. Someone listening on the network sees only sizes and timing. Someone
   who can *change* the traffic could change the page and make it give the key away, so use
   sessions on networks you trust. With firewalld, Ferry shows the command that opens the port.
+- **The page does not load on the phone?** The phone must be on the same Wi-Fi (not a guest
+  network). Android 16 and newer let an app – the browser too – reach devices on the local network
+  only with the *Local network* permission (*Settings → Apps → the browser → Permissions*; on some
+  versions *Nearby devices*). A VPN on the phone can also keep it off the local network. If the
+  router's page (e.g. `http://192.168.1.1`) does not open on the phone either, the phone has no
+  access to the local network; if only Ferry's link fails, the router may keep devices apart
+  (*client isolation*). The GUI shows these hints under the link.
 - The browser encrypts and decrypts files in its memory (it cannot stream them to the disk over
   HTTP): very large files (several GB) may not fit on a phone; use the Ferry app or LocalSend for
   those.
@@ -298,6 +305,9 @@ LocalSend's list of nearby devices like another LocalSend device.
   time, as both need the port.
 - In hidden mode Ferry does not announce itself to LocalSend devices either; a LocalSend app
   can still reach it by IP address.
+- A phone that finds Ferry only after *Refresh* in LocalSend, or cannot send to it, usually lacks
+  the *Local network* permission for the LocalSend app (Android 16 and newer, in the app's
+  permissions).
 
 ## Android
 
@@ -348,6 +358,12 @@ only forwards encrypted packets; you can run your own relay ([Own relay](#own-re
 **Why is a device not in the *Nearby* list?** Both devices must be on the same network and the
 firewall must allow UDP 47823–47834 ([details](#local-network-and-pairing)). VPNs with a "kill
 switch" often block the local network. `ferry doctor` checks the usual causes.
+
+**The browser link does not open on my phone.** Usually the phone's browser may not reach the
+local network: on Android 16 and newer allow it *Local network* (or *Nearby devices*) in the app's
+permissions. Also check that the phone is on the same Wi-Fi and not behind a VPN, and see
+[browser sessions](#browser-sessions-no-app-on-the-other-device). The same permission is needed by
+the LocalSend app when it sends to Ferry.
 
 **What happens if a transfer is interrupted?** The partly received file is kept; sending the same
 file again continues where it stopped. A broken connection is retried automatically.
