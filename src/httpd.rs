@@ -156,17 +156,20 @@ impl Drop for PartFile {
 
 /// Writes the request body to a `.part` file next to the target, checks the
 /// size and the SHA-256 (when announced) and moves it to a name that does not
-/// overwrite anything. Returns the saved path.
+/// overwrite anything. Returns the saved path. With `opener` the body is an
+/// encrypted stream ([`crate::web::seal`]), decrypted on the way.
 ///
 /// # Errors
 ///
 /// [`UploadError::Checksum`] for a wrong SHA-256, [`UploadError::Failed`] for
-/// a wrong size, an unsafe name, a full disk or an I/O error; nothing is kept.
+/// a wrong size, data that does not decrypt, an unsafe name, a full disk or an
+/// I/O error; nothing is kept.
 pub(crate) async fn receive(
     mut body: Incoming,
     file: &OfferedFile,
     dest_dir: &Path,
     progress: &(dyn Fn(u64) + Send + Sync),
+    mut opener: Option<crate::web::seal::Opener>,
 ) -> Result<PathBuf, UploadError> {
     let target_dir = resolve_secure_folder(dest_dir, &file.folder).map_err(fail)?;
     let final_target = resolve_secure_target_path(&target_dir, &file.name).map_err(fail)?;
@@ -182,6 +185,10 @@ pub(crate) async fn receive(
     while let Some(frame) = body.frame().await {
         let Ok(data) = frame.map_err(fail)?.into_data() else {
             continue;
+        };
+        let data = match opener.as_mut() {
+            Some(opener) => Bytes::from(opener.push(&data).map_err(fail)?),
+            None => data,
         };
         crate::transfer::control::pace(
             crate::transfer::service::Direction::Download,
@@ -203,6 +210,9 @@ pub(crate) async fn receive(
             reported = received;
             progress(received);
         }
+    }
+    if let Some(opener) = &opener {
+        opener.finish().map_err(fail)?;
     }
     if received != file.size {
         return Err(fail(anyhow::anyhow!(
@@ -231,12 +241,17 @@ pub(crate) async fn read_json<T: serde::de::DeserializeOwned>(
     req: Request<Incoming>,
     limit: usize,
 ) -> Result<T, StatusCode> {
-    let bytes = Limited::new(req.into_body(), limit)
+    let bytes = read_bytes(req, limit).await?;
+    serde_json::from_slice(&bytes).map_err(|_| StatusCode::BAD_REQUEST)
+}
+
+/// Reads a body of at most `limit` bytes.
+pub(crate) async fn read_bytes(req: Request<Incoming>, limit: usize) -> Result<Bytes, StatusCode> {
+    Ok(Limited::new(req.into_body(), limit)
         .collect()
         .await
         .map_err(|_| StatusCode::PAYLOAD_TOO_LARGE)?
-        .to_bytes();
-    serde_json::from_slice(&bytes).map_err(|_| StatusCode::BAD_REQUEST)
+        .to_bytes())
 }
 
 /// A JSON response.

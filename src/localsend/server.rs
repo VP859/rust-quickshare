@@ -410,7 +410,7 @@ impl<H: TransferHandler> Server<H> {
             Ok(tokio::select! {
                 // The sender cancelled the session.
                 () = cancel.cancelled() => Err(UploadError::Cancelled),
-                result = receive(req.into_body(), &file, &dest_dir, &progress) => result,
+                result = receive(req.into_body(), &file, &dest_dir, &progress, None) => result,
             })
         };
         // An error of `cancellable` means the user cancelled on this device.

@@ -3,13 +3,15 @@
 //  - inline <script> blocks are absent, so the CSP can forbid them,
 //  - every translation key used by the page or the scripts exists in every
 //    language in js/locales/, all languages define the same keys and no key
-//    is written twice in one file.
+//    is written twice in one file,
+//  - the copies of @noble/ciphers in src/web/page/vendor/ (the encryption of
+//    browser sessions) are byte for byte those of the npm package.
 //
 // Usage: node scripts/check-frontend.mjs src-tauri/ui
 // Linting and browser tests: `npm run lint:ui`, `npm run test:ui`.
 
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -84,6 +86,24 @@ for (const lang of codes) {
     const extra = [...languages[lang]].filter((k) => !languages[other].has(k));
     if (extra.length) {
       console.error(`keys in ${lang} but not in ${other}: ${extra.join(', ')}`);
+      failed = true;
+    }
+  }
+}
+
+if (failed) process.exit(1);
+// The cipher of browser sessions is served from vendor/; it must be exactly
+// the audited package that package-lock.json pins.
+const root = join(import.meta.dirname, '..');
+const vendor = join(root, 'src', 'web', 'page', 'vendor');
+const npm = join(root, 'node_modules', '@noble', 'ciphers');
+if (!existsSync(npm)) {
+  console.error('node_modules/@noble/ciphers is missing: run `npm ci` to check src/web/page/vendor/');
+  failed = true;
+} else {
+  for (const file of readdirSync(vendor).filter((f) => f !== 'README.md')) {
+    if (!readFileSync(join(vendor, file)).equals(readFileSync(join(npm, file)))) {
+      console.error(`src/web/page/vendor/${file} differs from @noble/ciphers ${JSON.parse(readFileSync(join(npm, 'package.json'))).version}`);
       failed = true;
     }
   }

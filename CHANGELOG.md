@@ -19,6 +19,11 @@ compatibility).
 
 ### Added
 
+- **Encrypted browser sessions**: the files, their names and the list of shared files go
+  end-to-end encrypted (ChaCha20-Poly1305 in 64 KiB records) with a key that is only in the link
+  after `#` and never crosses the network; the page decrypts and encrypts with `@noble/ciphers`.
+  Someone listening on the network sees only sizes and timing. Over plain HTTP it cannot protect
+  against someone who changes the page on the way, which the interfaces say.
 - **Remove location from photos** (`ferry config set strip-metadata true`, *Settings → Privacy*,
   off by default): JPEG and PNG photos sent to Ferry devices and LocalSend apps go without their
   EXIF data (GPS position, time, camera, serial number – only the orientation is kept), XMP, IPTC,

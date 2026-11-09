@@ -20,6 +20,8 @@ section { background: var(--card); border: 1px solid var(--line); border-radius:
 .list li { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
 .name { overflow-wrap: anywhere; font-weight: 500; }
 .size { color: var(--muted); font-size: 13px; grid-column: 1; }
+.button { border: 0; font: inherit; cursor: pointer; min-width: 6.5em; }
+.button:disabled { cursor: progress; opacity: .8; }
 .button { display: inline-block; padding: 8px 14px; border-radius: 8px; background: var(--accent-bg, var(--accent)); color: var(--accent-text); text-decoration: none; font-weight: 600; grid-row: 1 / span 2; grid-column: 2; }
 .drop { display: grid; gap: 4px; place-items: center; text-align: center; padding: 26px 12px; border: 2px dashed var(--line); border-radius: 12px; cursor: pointer; }
 .drop:hover, .drop.over { border-color: var(--accent); }

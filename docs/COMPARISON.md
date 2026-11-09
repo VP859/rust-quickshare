@@ -38,7 +38,8 @@ out of date.
 - **Does one thing.** KDE Connect also syncs the clipboard, shows phone notifications on the
   computer, controls media and works as a remote mouse. Ferry only moves files and text.
 - **The other side must have Ferry installed** for its full security. PairDrop works with nothing
-  but a browser on both sides; Ferry's browser sessions need Ferry on one side and use plain HTTP.
+  but a browser on both sides; Ferry's browser sessions need Ferry on one side and, over plain HTTP,
+  protect the files only against listening, not against someone who changes the page.
 - **Two languages.** Ferry speaks English and Polish; LocalSend and KDE Connect are translated into
   dozens of languages.
 - **No anonymity.** Who talks to whom, when and how much is visible on the local network and, in

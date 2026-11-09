@@ -57,7 +57,7 @@ export default {
   web_desc: 'Open this link or scan the QR code on a phone or computer on the same network – no app needed. It can download the shared files and send files here; you are asked before anything is saved.',
   web_expires: 'The link works for {min} more minute(s) and only on the first device that opens it.',
   web_expired: 'The link has expired.',
-  web_security: 'The link is not encrypted (HTTP). Use it only on a network you trust.',
+  web_security: 'Files and names are encrypted with the key in the link (after #), which never crosses the network. Someone who can change the traffic could still read them: use it on a network you trust.',
   web_stop: 'Stop',
   web_stopped: 'The browser link no longer works.',
   browser_offer: 'Sent from a web browser through the link you shared. Accept only if you are sending these files yourself.',

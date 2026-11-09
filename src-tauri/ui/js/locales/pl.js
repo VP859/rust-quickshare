@@ -58,7 +58,7 @@ export default {
   web_desc: 'Otwórz ten link lub zeskanuj kod QR na telefonie albo komputerze w tej samej sieci – aplikacja nie jest potrzebna. Można nim pobrać udostępnione pliki i wysłać tu pliki; zanim cokolwiek zostanie zapisane, Ferry zapyta.',
   web_expires: 'Link działa jeszcze przez {min} min i tylko na pierwszym urządzeniu, które go otworzy.',
   web_expired: 'Link wygasł.',
-  web_security: 'Link nie jest szyfrowany (HTTP). Używaj go tylko w zaufanej sieci.',
+  web_security: 'Pliki i nazwy są szyfrowane kluczem z linku (po #), który nigdy nie przechodzi przez sieć. Ktoś, kto może zmieniać ruch, nadal mógłby je odczytać: używaj go w zaufanej sieci.',
   web_stop: 'Zatrzymaj',
   web_stopped: 'Link dla przeglądarki już nie działa.',
   browser_offer: 'Wysłane z przeglądarki przez udostępniony przez Ciebie link. Przyjmij tylko, jeśli to Ty wysyłasz te pliki.',

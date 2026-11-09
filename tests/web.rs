@@ -9,6 +9,7 @@ use ferry::transfer::risk::Risk;
 use ferry::transfer::service::{
     Direction, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
 };
+use ferry::web::seal::{self, SessionKey, purpose};
 use ferry::web::{BrowserOffer, WebShare, WebShareOptions};
 use http_body_util::{BodyExt, Full};
 use hyper::header::HeaderMap;
@@ -98,8 +99,32 @@ fn options(files: Vec<PathBuf>) -> WebShareOptions {
 
 /// `/<token>/` of the session.
 fn base(share: &WebShare) -> String {
-    // http://127.0.0.1:<port>/<token>/
-    format!("/{}", share.url().splitn(4, '/').nth(3).unwrap())
+    // http://127.0.0.1:<port>/<token>/#k=<key>
+    let url = share.url().split_once('#').unwrap().0;
+    format!("/{}", url.splitn(4, '/').nth(3).unwrap())
+}
+
+/// The session key, from the link (`#k=…`), as the page takes it.
+fn key(share: &WebShare) -> SessionKey {
+    SessionKey::from_fragment(share.url().split_once('#').unwrap().1).unwrap()
+}
+
+/// `api/info`, decrypted.
+async fn info(share: &WebShare) -> Value {
+    let reply = call(share.port(), "GET", &format!("{}api/info", base(share)), "").await;
+    assert_eq!(reply.status, StatusCode::OK);
+    serde_json::from_slice(&seal::open_all(&key(share), purpose::INFO, &reply.body).unwrap())
+        .unwrap()
+}
+
+/// An offer of `files` as the page sends it: encrypted.
+fn sealed_offer(share: &WebShare, offer: &Value) -> Vec<u8> {
+    seal::seal_all(&key(share), purpose::OFFER, offer.to_string().as_bytes()).unwrap()
+}
+
+/// File `index` of the offer `id` as the page uploads it: encrypted.
+fn sealed_upload(share: &WebShare, id: &str, index: usize, data: &[u8]) -> Vec<u8> {
+    seal::seal_all(&key(share), &purpose::upload(id, index), data).unwrap()
 }
 
 struct Reply {
@@ -157,7 +182,13 @@ async fn call(port: u16, method: &str, path: &str, body: impl Into<Bytes>) -> Re
 async fn send(share: &WebShare, files: &[(&str, &[u8])]) -> (Reply, Vec<StatusCode>) {
     let (port, base) = (share.port(), base(share));
     let offer = json!({ "files": files.iter().map(|(n, d)| json!({ "name": n, "size": d.len() })).collect::<Vec<_>>() });
-    let reply = call(port, "POST", &format!("{base}api/offer"), offer.to_string()).await;
+    let reply = call(
+        port,
+        "POST",
+        &format!("{base}api/offer"),
+        sealed_offer(share, &offer),
+    )
+    .await;
     if reply.status != StatusCode::OK {
         return (reply, Vec::new());
     }
@@ -165,7 +196,8 @@ async fn send(share: &WebShare, files: &[(&str, &[u8])]) -> (Reply, Vec<StatusCo
     let mut statuses = Vec::new();
     for (i, (_, data)) in files.iter().enumerate() {
         let path = format!("{base}api/upload/{id}/{i}");
-        statuses.push(call(port, "PUT", &path, data.to_vec()).await.status);
+        let body = sealed_upload(share, &id, i, data);
+        statuses.push(call(port, "PUT", &path, body).await.status);
     }
     (reply, statuses)
 }
@@ -200,6 +232,10 @@ async fn the_page_is_only_behind_the_token() {
         .unwrap();
     let (port, base) = (share.port(), base(&share));
     assert!(share.url().starts_with("http://127.0.0.1:"));
+    assert!(
+        share.url().contains("/#k="),
+        "the key is in the link, after #"
+    );
     assert_eq!(base.len(), 1 + 32 + 1, "/<128-bit token>/");
 
     for path in [
@@ -229,18 +265,37 @@ async fn the_page_is_only_behind_the_token() {
     assert_eq!(page.headers["x-content-type-options"], "nosniff");
     assert_eq!(page.headers["referrer-policy"], "no-referrer");
     assert!(String::from_utf8_lossy(&page.body).contains("page.js"));
-    for asset in ["page.js", "page.css"] {
+    for asset in [
+        "page.js",
+        "seal.js",
+        "page.css",
+        "vendor/chacha.js",
+        "vendor/_arx.js",
+        "vendor/_poly1305.js",
+        "vendor/utils.js",
+    ] {
         assert_eq!(
             call(port, "GET", &format!("{base}{asset}"), "")
                 .await
                 .status,
-            StatusCode::OK
+            StatusCode::OK,
+            "{asset}"
         );
     }
+    assert_eq!(
+        call(port, "GET", &format!("{base}vendor/aes.js"), "")
+            .await
+            .status,
+        StatusCode::NOT_FOUND,
+        "only the four files of the cipher"
+    );
 
-    let info = call(port, "GET", &format!("{base}api/info"), "")
-        .await
-        .json();
+    let sealed = call(port, "GET", &format!("{base}api/info"), "").await;
+    assert!(
+        !String::from_utf8_lossy(&sealed.body).contains("Kate"),
+        "the device name is not readable on the network"
+    );
+    let info = info(&share).await;
     assert_eq!(info["device"], "Kate's laptop");
     assert_eq!(info["receive"], true);
     assert!(info["expires_in"].as_u64().unwrap() > 29 * 60);
@@ -258,19 +313,31 @@ async fn shared_files_can_be_downloaded() {
         .unwrap();
     let (port, base) = (share.port(), base(&share));
 
-    let info = call(port, "GET", &format!("{base}api/info"), "")
-        .await
-        .json();
+    let info = info(&share).await;
     assert_eq!(info["files"][0]["name"], "zdjęcie wakacje.jpg");
     assert_eq!(info["files"][0]["size"], data.len());
 
     let file = call(port, "GET", &format!("{base}api/files/0"), "").await;
     assert_eq!(file.status, StatusCode::OK);
-    assert_eq!(file.body, data);
     assert_eq!(file.headers["content-type"], "application/octet-stream");
-    let disposition = file.headers["content-disposition"].to_str().unwrap();
-    assert!(disposition.starts_with("attachment;"), "never shown inline");
-    assert!(disposition.contains("filename*=UTF-8''zdj%C4%99cie%20wakacje.jpg"));
+    assert!(
+        file.headers.get("content-disposition").is_none(),
+        "the name is not in a header: the page saves the file"
+    );
+    assert_eq!(file.body.len() as u64, seal::sealed_len(data.len() as u64));
+    assert!(
+        !file
+            .body
+            .windows(64)
+            .any(|w| data.windows(64).next() == Some(w)),
+        "the content is not readable on the network"
+    );
+    let opened = seal::open_all(&key(&share), &purpose::download(0), &file.body).unwrap();
+    assert_eq!(opened, data);
+    assert!(
+        seal::open_all(&key(&share), &purpose::download(1), &file.body).is_err(),
+        "a stream only stands for its own file"
+    );
     assert_eq!(
         call(port, "GET", &format!("{base}api/files/1"), "")
             .await
@@ -389,28 +456,62 @@ async fn names_sizes_and_tokens_are_checked() {
 
     let offer =
         json!({ "files": [{ "name": "a.txt", "size": 4 }, { "name": "setup.exe", "size": 2 }] });
-    let reply = call(port, "POST", &format!("{base}api/offer"), offer.to_string()).await;
+    // An offer in the clear, or with another key, is not even read.
+    for body in [
+        offer.to_string().into_bytes(),
+        seal::seal_all(
+            &SessionKey::from_bytes([9; 32]),
+            purpose::OFFER,
+            offer.to_string().as_bytes(),
+        )
+        .unwrap(),
+    ] {
+        let reply = call(port, "POST", &format!("{base}api/offer"), body).await;
+        assert_eq!(reply.status, StatusCode::BAD_REQUEST);
+    }
+    assert!(ui.offers.lock().unwrap().is_empty(), "not asked");
+
+    let reply = call(
+        port,
+        "POST",
+        &format!("{base}api/offer"),
+        sealed_offer(&share, &offer),
+    )
+    .await;
     assert_eq!(ui.offers.lock().unwrap()[0].risk, Some(Risk::Program));
     let id = reply.json()["id"].as_str().unwrap().to_string();
 
     // Another offer while this one runs.
-    let busy = call(port, "POST", &format!("{base}api/offer"), offer.to_string()).await;
+    let busy = call(
+        port,
+        "POST",
+        &format!("{base}api/offer"),
+        sealed_offer(&share, &offer),
+    )
+    .await;
     assert_eq!(busy.status, StatusCode::CONFLICT);
-    // Wrong offer, wrong index, wrong size.
+    // Wrong offer, wrong index.
     for path in [
         format!("{base}api/upload/{}/0", "0".repeat(32)),
         format!("{base}api/upload/{id}/7"),
     ] {
+        let body = sealed_upload(&share, &id, 0, b"data");
         assert_eq!(
-            call(port, "PUT", &path, "data").await.status,
+            call(port, "PUT", &path, body).await.status,
             StatusCode::FORBIDDEN,
             "{path}"
         );
     }
-    let longer = call(port, "PUT", &format!("{base}api/upload/{id}/0"), "toolong").await;
+    // Wrong size, and content encrypted for another file: refused, nothing kept.
+    let longer = sealed_upload(&share, &id, 0, b"toolong");
+    let longer = call(port, "PUT", &format!("{base}api/upload/{id}/0"), longer).await;
     assert_eq!(longer.status, StatusCode::INTERNAL_SERVER_ERROR);
+    let foreign = sealed_upload(&share, &id, 0, b"bb");
+    let foreign = call(port, "PUT", &format!("{base}api/upload/{id}/1"), foreign).await;
+    assert_eq!(foreign.status, StatusCode::INTERNAL_SERVER_ERROR);
     // A file is uploaded once.
-    let again = call(port, "PUT", &format!("{base}api/upload/{id}/0"), "data").await;
+    let again = sealed_upload(&share, &id, 0, b"data");
+    let again = call(port, "PUT", &format!("{base}api/upload/{id}/0"), again).await;
     assert_eq!(again.status, StatusCode::FORBIDDEN);
     assert!(
         tree(dest.path()).is_empty(),
@@ -432,14 +533,7 @@ async fn a_session_without_receiving_offers_only_downloads() {
     )
     .await
     .unwrap();
-    let info = call(
-        share.port(),
-        "GET",
-        &format!("{}api/info", base(&share)),
-        "",
-    )
-    .await
-    .json();
+    let info = info(&share).await;
     assert_eq!(info["receive"], false);
     assert_eq!(
         send(&share, &[("a.txt", b"a")]).await.0.status,

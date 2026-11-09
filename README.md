@@ -257,10 +257,15 @@ send files to Ferry; every batch from the browser is asked about before it is sa
 
 - The link contains a one-time token, works only for the first device that opens it, and stops
   after 30 minutes (`--minutes`) or when the session is stopped.
-- It uses plain **HTTP** on TCP port **47835**: browsers do not accept the self-signed
-  certificates a local server would need. Someone watching the local network could see the
-  files, so use it only on networks you trust. With firewalld, Ferry shows the command that opens
-  the port.
+- It uses plain **HTTP** on TCP port **47835** (browsers do not accept the self-signed
+  certificates a local server would need), but the files, their names and the list of shared files
+  are **encrypted end to end** with a key that is only in the link after `#` – browsers never send
+  that part over the network. Someone listening on the network sees only sizes and timing. Someone
+  who can *change* the traffic could change the page and make it give the key away, so use
+  sessions on networks you trust. With firewalld, Ferry shows the command that opens the port.
+- The browser encrypts and decrypts files in its memory (it cannot stream them to the disk over
+  HTTP): very large files (several GB) may not fit on a phone; use the Ferry app or LocalSend for
+  those.
 
 ## LocalSend compatibility mode
 
@@ -327,8 +332,9 @@ and which tool to choose instead.
   and, in internet mode, by the relay operator. Ferry does not offer anonymity.
 - **Pairing protects only when the codes are compared.** The [known limitations](docs/SECURITY-MODEL.md#known-limitations)
   list this and the other limits of the security model.
-- **The LocalSend mode and browser sessions are weaker by design** (no pairing, plain HTTP for
-  browsers); both are off until used and always ask before saving anything.
+- **The LocalSend mode and browser sessions are weaker by design** (no pairing; browser sessions
+  encrypt the files with the key in the link but cannot stop someone who changes the page on the
+  way); both are off until used and always ask before saving anything.
 - **Background on Android** depends on the phone: battery savers can pause Ferry; the app shows
   what limits it.
 

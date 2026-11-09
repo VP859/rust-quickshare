@@ -1,9 +1,11 @@
 //! HTTP server of a browser session.
 //!
 //! Everything lives under `/<token>/`: the page (`index.html`, `page.js`,
-//! `page.css`), `api/info`, `api/files/<n>` (download), `api/offer` (files the
-//! browser wants to send, answered after the user decided) and
-//! `api/upload/<offer>/<n>` (the content of one accepted file).
+//! `seal.js`, `page.css`, `vendor/*.js`), `api/info`, `api/files/<n>`
+//! (download), `api/offer` (files the browser wants to send, answered after
+//! the user decided) and `api/upload/<offer>/<n>` (the content of one accepted
+//! file). Everything under `api/` with content is encrypted with the session
+//! key ([`super::seal`]).
 
 use bytes::Bytes;
 use hyper::body::Incoming;
@@ -19,8 +21,9 @@ use tokio::io::AsyncReadExt;
 use tracing::{info, warn};
 
 use super::body::{self, Body};
+use super::seal::{self, Opener, Sealer, SessionKey, purpose};
 use super::{BrowserOffer, PEER_PREFIX};
-use crate::httpd::{UploadError, json, message, read_json, receive};
+use crate::httpd::{UploadError, json, message, read_bytes, receive};
 use crate::localsend::dto::{OfferedFile, split_path};
 use crate::protocol::messages::MAX_BATCH_NAMES;
 use crate::transfer::receiver::check_free_space;
@@ -37,15 +40,25 @@ const MAX_OFFER_BODY: usize = 1024 * 1024;
 const DECLINE_COOLDOWN: Duration = Duration::from_secs(15);
 /// An accepted offer that receives nothing for this long is dropped.
 const SESSION_IDLE: Duration = Duration::from_secs(120);
-/// Chunk size of downloads.
-const CHUNK: usize = 256 * 1024;
+/// Chunk size of downloads: one encrypted record.
+const CHUNK: usize = seal::RECORD;
 
 /// The page of the session.
 const INDEX_HTML: &str = include_str!("page/index.html");
 /// Its script.
 const PAGE_JS: &str = include_str!("page/page.js");
+/// Its encryption ([`super::seal`] in JavaScript).
+const SEAL_JS: &str = include_str!("page/seal.js");
 /// Its style sheet.
 const PAGE_CSS: &str = include_str!("page/page.css");
+/// ChaCha20-Poly1305 of `@noble/ciphers` (unchanged copies of the npm package,
+/// MIT licence in `page/vendor/LICENSE`).
+const VENDOR: [(&str, &str); 4] = [
+    ("chacha.js", include_str!("page/vendor/chacha.js")),
+    ("_arx.js", include_str!("page/vendor/_arx.js")),
+    ("_poly1305.js", include_str!("page/vendor/_poly1305.js")),
+    ("utils.js", include_str!("page/vendor/utils.js")),
+];
 /// The page runs only its own script and style and talks only to this server.
 const CSP: &str = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; \
                    img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
@@ -105,6 +118,8 @@ pub(super) struct WebServer<H> {
     handler: Arc<H>,
     /// The token in every path.
     token: String,
+    /// The key everything with content is encrypted with.
+    key: SessionKey,
     /// Files for download.
     files: Vec<SharedFile>,
     /// Whether the browser may send files.
@@ -164,34 +179,6 @@ fn text(status: StatusCode, text: &str) -> Response<Body> {
         HeaderValue::from_static("text/plain; charset=utf-8"),
     );
     res
-}
-
-/// `Content-Disposition` that makes the browser save `name`.
-fn attachment(name: &str) -> HeaderValue {
-    let ascii: String = name
-        .chars()
-        .map(|c| {
-            if c.is_ascii_graphic() && c != '"' && c != '\\' || c == ' ' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    let encoded: String = name
-        .bytes()
-        .map(|b| {
-            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
-                (b as char).to_string()
-            } else {
-                format!("%{b:02X}")
-            }
-        })
-        .collect();
-    HeaderValue::from_str(&format!(
-        "attachment; filename=\"{ascii}\"; filename*=UTF-8''{encoded}"
-    ))
-    .unwrap_or_else(|_| HeaderValue::from_static("attachment"))
 }
 
 /// A short description of the browser from its `User-Agent`.
@@ -274,6 +261,7 @@ impl<H: TransferHandler> WebServer<H> {
     pub fn new(
         handler: Arc<H>,
         token: String,
+        key: SessionKey,
         files: Vec<SharedFile>,
         receive: bool,
         expires_at: Option<Instant>,
@@ -281,6 +269,7 @@ impl<H: TransferHandler> WebServer<H> {
         Self {
             handler,
             token,
+            key,
             files,
             receive,
             expires_at,
@@ -336,8 +325,13 @@ impl<H: TransferHandler> WebServer<H> {
                 res
             }
             (&Method::GET, ["page.js"]) => asset("text/javascript; charset=utf-8", PAGE_JS),
+            (&Method::GET, ["seal.js"]) => asset("text/javascript; charset=utf-8", SEAL_JS),
             (&Method::GET, ["page.css"]) => asset("text/css; charset=utf-8", PAGE_CSS),
-            (&Method::GET, ["api", "info"]) => body::boxed(json(StatusCode::OK, &self.info())),
+            (&Method::GET, ["vendor", name]) => match VENDOR.iter().find(|(n, _)| n == name) {
+                Some((_, script)) => asset("text/javascript; charset=utf-8", script),
+                None => text(StatusCode::NOT_FOUND, "Not found"),
+            },
+            (&Method::GET, ["api", "info"]) => self.sealed_info(),
             (&Method::GET, ["api", "files", id]) => self.download(ip, &user_agent, id),
             (&Method::POST, ["api", "offer"]) => {
                 body::boxed(self.offer(ip, &user_agent, req).await)
@@ -350,7 +344,25 @@ impl<H: TransferHandler> WebServer<H> {
         }
     }
 
-    /// `api/info`.
+    /// `api/info`, encrypted.
+    fn sealed_info(&self) -> Response<Body> {
+        let sealed = serde_json::to_vec(&self.info())
+            .map_err(anyhow::Error::from)
+            .and_then(|plain| seal::seal_all(&self.key, purpose::INFO, &plain));
+        match sealed {
+            Ok(bytes) => {
+                let mut res = Response::new(body::full(bytes));
+                res.headers_mut().insert(
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/octet-stream"),
+                );
+                res
+            }
+            Err(e) => text(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+        }
+    }
+
+    /// What `api/info` says.
     fn info(&self) -> Info<'_> {
         Info {
             device: self.handler.device_name(),
@@ -372,18 +384,21 @@ impl<H: TransferHandler> WebServer<H> {
         }
     }
 
-    /// `api/files/<n>`: streams a shared file, reported as an upload.
+    /// `api/files/<n>`: streams a shared file, encrypted, reported as an
+    /// upload. The page decrypts it and saves it under its name (which is
+    /// therefore not in a header).
     fn download(&self, ip: IpAddr, user_agent: &str, id: &str) -> Response<Body> {
-        let Some(file) = id
+        let Some((index, file)) = id
             .parse::<usize>()
             .ok()
-            .and_then(|i| self.files.get(i))
-            .cloned()
+            .and_then(|i| self.files.get(i).map(|f| (i, f.clone())))
         else {
             return text(StatusCode::NOT_FOUND, "Not found");
         };
-        let disposition = attachment(&file.name);
-        let (tx, body) = body::Channel::open(file.size);
+        let Ok(mut sealer) = Sealer::new(&self.key, &purpose::download(index)) else {
+            return text(StatusCode::INTERNAL_SERVER_ERROR, "no random numbers");
+        };
+        let (tx, body) = body::Channel::open(seal::sealed_len(file.size));
         let handler = self.handler.clone();
         let label = super::label(&describe_browser(user_agent), ip);
         tokio::spawn(async move {
@@ -400,22 +415,29 @@ impl<H: TransferHandler> WebServer<H> {
             tracker.progress(0);
             let result = tracker
                 .cancellable(async {
+                    let closed = || anyhow::anyhow!(t!("web.download_closed"));
                     let mut source = tokio::fs::File::open(&file.path).await?;
+                    tx.send(Ok(Bytes::copy_from_slice(&sealer.prefix())))
+                        .await
+                        .map_err(|_| closed())?;
                     let (mut sent, mut buf) = (0u64, vec![0u8; CHUNK]);
-                    while sent < file.size {
-                        crate::transfer::control::pace(Direction::Upload, CHUNK as u64).await;
-                        let n = source.read(&mut buf).await?;
-                        if n == 0 {
-                            anyhow::bail!("the file became shorter while it was downloaded");
-                        }
-                        let n = n.min(usize::try_from(file.size - sent).unwrap_or(n));
-                        tx.send(Ok(Bytes::copy_from_slice(&buf[..n])))
+                    // One record per chunk; an empty file is one empty record.
+                    loop {
+                        let want = usize::try_from((file.size - sent).min(CHUNK as u64))?;
+                        crate::transfer::control::pace(Direction::Upload, want as u64).await;
+                        source.read_exact(&mut buf[..want]).await.map_err(|_| {
+                            anyhow::anyhow!("the file became shorter while it was downloaded")
+                        })?;
+                        sent += want as u64;
+                        let record = sealer.seal(&buf[..want], sent == file.size)?;
+                        tx.send(Ok(Bytes::from(record)))
                             .await
-                            .map_err(|_| anyhow::anyhow!(t!("web.download_closed")))?;
-                        sent += n as u64;
+                            .map_err(|_| closed())?;
                         tracker.progress(sent);
+                        if sent == file.size {
+                            return Ok(());
+                        }
                     }
-                    Ok(())
                 })
                 .await;
             if result.is_err() {
@@ -426,12 +448,10 @@ impl<H: TransferHandler> WebServer<H> {
             tracker.finish(&result, |()| None);
         });
         let mut res = Response::new(body);
-        let headers = res.headers_mut();
-        headers.insert(
+        res.headers_mut().insert(
             header::CONTENT_TYPE,
             HeaderValue::from_static("application/octet-stream"),
         );
-        headers.insert(header::CONTENT_DISPOSITION, disposition);
         res
     }
 
@@ -453,9 +473,21 @@ impl<H: TransferHandler> WebServer<H> {
         if self.cooling_down() {
             return message(StatusCode::TOO_MANY_REQUESTS, &t!("web.wait"));
         }
-        let offer = match read_json::<Offer>(req, MAX_OFFER_BODY).await {
-            Ok(offer) => offer,
+        let sealed = match read_bytes(
+            req,
+            usize::try_from(seal::sealed_len(MAX_OFFER_BODY as u64)).unwrap_or(usize::MAX),
+        )
+        .await
+        {
+            Ok(sealed) => sealed,
             Err(status) => return message(status, "Invalid body"),
+        };
+        let Some(offer) = seal::open_all(&self.key, purpose::OFFER, &sealed)
+            .ok()
+            .and_then(|plain| serde_json::from_slice::<Offer>(&plain).ok())
+        else {
+            warn!("Browser offer refused: it does not decrypt with the session key");
+            return message(StatusCode::BAD_REQUEST, "Invalid body");
         };
         if offer.files.is_empty() || offer.files.len() > MAX_FILES {
             return message(StatusCode::BAD_REQUEST, "Invalid number of files");
@@ -596,7 +628,10 @@ impl<H: TransferHandler> WebServer<H> {
         tracker.progress(0);
         let progress = |d| tracker.progress(d);
         let result = tracker
-            .cancellable(async { Ok(receive(req.into_body(), &file, &dest_dir, &progress).await) })
+            .cancellable(async {
+                let opener = Opener::new(&self.key, &purpose::upload(offer, index), file.size);
+                Ok(receive(req.into_body(), &file, &dest_dir, &progress, Some(opener)).await)
+            })
             .await
             .unwrap_or(Err(UploadError::Cancelled));
         let report: anyhow::Result<&PathBuf> = match &result {
@@ -707,13 +742,5 @@ mod tests {
         assert!(!same_token("abc", "abd"));
         assert!(!same_token("abc", "ab"));
         assert!(!same_token("", "a"));
-    }
-
-    #[test]
-    fn download_names_are_safe_in_the_header() {
-        let value = attachment("zdjęcie \"1\".jpg");
-        let value = value.to_str().unwrap();
-        assert!(value.starts_with("attachment; filename=\"zdj_cie _1_.jpg\""));
-        assert!(value.contains("filename*=UTF-8''zdj%C4%99cie%20%221%22.jpg"));
     }
 }

@@ -8,8 +8,13 @@
 //! send files to this device.
 //!
 //! **Security.** Browsers do not accept self-signed certificates without a
-//! frightening warning, so the link uses plain HTTP: someone who can watch the
-//! local network can see the files and the token. Against the other risks:
+//! frightening warning, so the link uses plain HTTP. What has content – the
+//! file list, the files, the names and contents of files from the browser – is
+//! encrypted end to end with a key that is only in the link after `#`
+//! ([`seal`]), so someone who watches the network sees the token, sizes and
+//! timing, not the files. Someone who can *change* the traffic could change
+//! the page and make it give the key away; against that only a trusted network
+//! helps. Against the other risks:
 //!
 //! * the token has 128 random bits and is the only way in: every other path
 //!   answers `404`, and nothing tells that a Ferry is listening;
@@ -24,9 +29,11 @@
 //!   Mark-of-the-Web as all other transfers; a declined browser must wait;
 //! * only the files chosen for the session can be downloaded;
 //! * the page is served with a strict Content-Security-Policy, downloads are
-//!   always `attachment`, and no response may be cached or framed.
+//!   decrypted and saved by the page (never shown), and no response may be
+//!   cached or framed.
 
 mod body;
+pub mod seal;
 mod server;
 
 use anyhow::{Context, Result};
@@ -174,12 +181,17 @@ impl WebShare {
         };
         let addr = listener.local_addr()?;
         let token = new_token()?;
-        let urls = urls(engine, options.bind, addr.port(), &token);
+        let key = seal::SessionKey::generate()?;
+        let urls = urls(engine, options.bind, addr.port(), &token)
+            .into_iter()
+            .map(|url| format!("{url}#{}", key.fragment()))
+            .collect();
         let expires_at = options.lifetime.map(|l| Instant::now() + l);
         let stop = CancellationToken::new();
         let server = Arc::new(server::WebServer::new(
             handler,
             token,
+            key,
             files,
             options.receive,
             expires_at,

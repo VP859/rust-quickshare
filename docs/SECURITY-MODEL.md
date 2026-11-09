@@ -298,9 +298,24 @@ deliberately runs with **LocalSend's** security model, which is weaker than Ferr
 `ferry web` and *Receive from a browser* (`src/web/`) start an HTTP server on TCP 47835 for one
 session, so a device without Ferry can download chosen files and send files with a web browser.
 
-* **No encryption.** Browsers reject self-signed certificates without a warning page, and teaching
-  users to click through it is worse. A passive attacker on the local network can read the files and
-  the token. Use sessions only on trusted networks; Ferry says so in the CLI, the GUI and on the page.
+* **Encrypted against listening, not against tampering.** Browsers reject self-signed
+  certificates without a warning page (and teaching users to click through it is worse), so the
+  session runs over plain HTTP. Everything with content is therefore encrypted end to end
+  (`src/web/seal.rs`, `src/web/page/seal.js`): the link carries a random 256-bit key after `#`,
+  which browsers never send over the network (the QR code and the copied link hold it). The file
+  list, every download, the names in an offer and every upload are ChaCha20-Poly1305 streams of
+  64 KiB records whose nonces bind the record number and the last record, and whose associated
+  data names the file, so records cannot be changed, reordered, cut off or moved to another file.
+  The page uses [`@noble/ciphers`](https://github.com/paulmillr/noble-ciphers) (audited, copied
+  unchanged into `src/web/page/vendor/` and checked against the npm package in CI), because
+  WebCrypto exists only on HTTPS pages; Ferry uses `ring`. A shared test vector checks that both
+  produce the same bytes. The page takes the key out of the address bar (keeping it for the tab
+  only), so it does not stay in the browser history.
+
+  A **passive** attacker on the network sees the token, sizes and timing – not names or content.
+  An **active** attacker who can change traffic can serve a changed page that sends the key away;
+  this cannot be prevented without HTTPS. Use sessions on trusted networks; Ferry says so in the
+  CLI, the GUI and on the page.
 * **Access:** a 128-bit random token in the path (compared in constant time); every other path is
   `404` and says nothing about Ferry. The first address that uses the token owns the session, and
   other addresses are refused, so a token seen later (network capture, photo of the QR code) is
@@ -310,8 +325,10 @@ session, so a device without Ferry can download chosen files and send files with
   file-name sanitizing, free-space and size checks, risky-file warnings and Mark-of-the-Web apply as
   for other transfers. One batch at a time, at most 1000 files, and a 15 s wait after a declined
   batch.
-* **Sending:** only the files chosen for the session can be downloaded, always as `attachment`
-  with `application/octet-stream`, so a shared HTML file never runs in the browser.
+* **Sending:** only the files chosen for the session can be downloaded, as encrypted
+  `application/octet-stream` that the page decrypts and saves (it is never shown), so a shared
+  HTML file never runs in the browser. Encrypting and decrypting happen in the browser's memory,
+  which limits the file size on phones.
 * **Page:** served with a strict Content-Security-Policy (`default-src 'none'`, scripts and styles
   only from the page itself, no frames), `no-store`, `nosniff` and `no-referrer`.
 

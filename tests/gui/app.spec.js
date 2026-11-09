@@ -256,7 +256,8 @@ test('receiving from a browser shows the link, its lifetime and a stop button', 
   await expect(app.locator('#web-url')).toHaveText('http://192.168.1.10:47835/0123456789abcdef0123456789abcdef/');
   await expect(app.locator('#web-other')).toContainText('10.5.0.2');
   await expect(app.locator('#web-expires')).toContainText('30 more minute');
-  await expect(dialog).toContainText('not encrypted');
+  await expect(dialog).toContainText('encrypted with the key in the link');
+  await expect(dialog).toContainText('network you trust');
 
   await app.locator('#btn-web-stop').click();
   await expect(dialog).not.toHaveClass(/active/);
