@@ -174,6 +174,10 @@ compatibility).
 
 ### Fixed
 
+- **Browser sessions**: opening the link on the computer itself (to try it) no longer locks out the
+  phone it was meant for, the GUI shows which device opened the link and which were turned away,
+  and only addresses of real network interfaces are offered (no Docker or VPN addresses); the
+  others wait behind *Does not work? Other addresses*.
 - Removing a trusted device now tells it (`Unpair`), so it stops listing the remover as paired
   instead of keeping a pairing the other side no longer honours. A device that is offline is
   remembered for 30 days and told as soon as it appears on the local network (GUI, TUI and daemon);

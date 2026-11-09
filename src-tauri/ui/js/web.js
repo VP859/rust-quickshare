@@ -6,6 +6,24 @@ import { copyText, invoke } from './tauri.js';
 
 let expiresAt = null;
 let timer = null;
+let accessTimer = null;
+
+/** Says who opened the link, and who was turned away because of that. */
+function renderAccess(status) {
+  const line = $('web-access');
+  line.classList.toggle('warn', status.refused.length > 0);
+  if (status.refused.length) {
+    line.textContent = t('web_refused', { refused: status.refused.join(', '), owner: status.owner });
+  } else {
+    line.textContent = status.owner ? t('web_opened', { owner: status.owner }) : t('web_waiting');
+  }
+}
+
+/** Polls the session while its dialog is open. */
+async function pollAccess() {
+  if (!$('modal-web').classList.contains('active')) { clearInterval(accessTimer); return; }
+  try { renderAccess(await invoke('web_share_status')); } catch { /* the next poll tries again */ }
+}
 
 function renderExpiry() {
   if (expiresAt === null) { $('web-expires').textContent = ''; return; }
@@ -23,8 +41,12 @@ export async function startWebShare(paths = []) {
     $('web-firewall').textContent = info.firewall ?? '';
     $('web-firewall').hidden = !info.firewall;
     const others = info.urls.filter(u => u !== info.url);
-    $('web-other').replaceChildren(...others.map(u => el('div', { class: 'mono' }, u)));
+    $('web-other-list').replaceChildren(...others.map(u => el('div', { class: 'mono' }, u)));
     $('web-other').hidden = !others.length;
+    $('web-other').open = false;
+    renderAccess({ running: true, owner: null, refused: [] });
+    clearInterval(accessTimer);
+    accessTimer = setInterval(pollAccess, 2000);
     expiresAt = info.expires_in === null ? null : Date.now() + info.expires_in * 1000;
     renderExpiry();
     clearInterval(timer);
@@ -38,6 +60,7 @@ $('btn-web-copy').onclick = () => copyText($('web-url').textContent);
 $('btn-web-stop').onclick = async () => {
   try { await invoke('stop_web_share'); } catch (e) { fail(e); return; }
   clearInterval(timer);
+  clearInterval(accessTimer);
   expiresAt = null;
   close('modal-web');
   toast(t('web_stopped'));

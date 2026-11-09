@@ -255,7 +255,8 @@ network: *Receive from a browser* (or *Open in a browser* after choosing files) 
 `ferry web [files]`, shows a link and a QR code. The browser can download the shared files and
 send files to Ferry; every batch from the browser is asked about before it is saved.
 
-- The link contains a one-time token, works only for the first device that opens it, and stops
+- The link contains a one-time token, works only for the first other device that opens it (trying
+  it on the computer itself does not count; the GUI shows who opened it), and stops
   after 30 minutes (`--minutes`) or when the session is stopped.
 - It uses plain **HTTP** on TCP port **47835** (browsers do not accept the self-signed
   certificates a local server would need), but the files, their names and the list of shared files

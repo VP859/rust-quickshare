@@ -317,9 +317,12 @@ session, so a device without Ferry can download chosen files and send files with
   this cannot be prevented without HTTPS. Use sessions on trusted networks; Ferry says so in the
   CLI, the GUI and on the page.
 * **Access:** a 128-bit random token in the path (compared in constant time); every other path is
-  `404` and says nothing about Ferry. The first address that uses the token owns the session, and
-  other addresses are refused, so a token seen later (network capture, photo of the QR code) is
-  useless. An attacker who forges that address on the local network is not stopped by this.
+  `404` and says nothing about Ferry. The first other address that uses the token owns the session,
+  and other addresses are refused, so a token seen later (network capture, photo of the QR code) is
+  useless. An attacker who forges that address on the local network is not stopped by this. The
+  computer's own addresses never take the session (opening the link there to try it would
+  otherwise lock out the phone); the GUI shows which device owns the session and which were
+  turned away.
 * **Lifetime:** 30 minutes by default, or until stopped; the server closes with the session.
 * **Receiving:** every batch is asked about in Ferry, never accepted automatically. The same
   file-name sanitizing, free-space and size checks, risky-file warnings and Mark-of-the-Web apply as

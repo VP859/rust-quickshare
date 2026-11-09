@@ -379,8 +379,8 @@ cli.web_receive:
   en: "Files sent from the browser are asked about and saved to %{path}."
   pl: "O pliki wysłane z przeglądarki zostaniesz zapytany; trafią do %{path}."
 cli.web_security:
-  en: "Files and names are encrypted with the key in the link (after #), which never crosses the network; someone who can change the traffic could still read them, so use it on a network you trust. The first device that opens it owns it."
-  pl: "Pliki i nazwy są szyfrowane kluczem z linku (po #), który nigdy nie przechodzi przez sieć; ktoś, kto może zmieniać ruch, nadal mógłby je odczytać, więc używaj go w zaufanej sieci. Należy do pierwszego urządzenia, które go otworzy."
+  en: "Files and names are encrypted with the key in the link (after #), which never crosses the network; someone who can change the traffic could still read them, so use it on a network you trust. The first other device that opens it owns it (trying it on this computer does not count)."
+  pl: "Pliki i nazwy są szyfrowane kluczem z linku (po #), który nigdy nie przechodzi przez sieć; ktoś, kto może zmieniać ruch, nadal mógłby je odczytać, więc używaj go w zaufanej sieci. Należy do pierwszego innego urządzenia, które go otworzy (otwarcie na tym komputerze się nie liczy)."
 cli.web_stop:
   en: "Press Ctrl+C to stop."
   pl: "Naciśnij Ctrl+C, aby zakończyć."

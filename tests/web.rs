@@ -594,12 +594,28 @@ async fn the_first_device_owns_the_session() {
         .unwrap();
     let (port, base) = (share.port(), base(&share));
     let page = format!("{base}api/info");
+    // This device (127.0.0.1) can try its own link without taking it …
     assert_eq!(call(port, "GET", &page, "").await.status, StatusCode::OK);
-    let other = call_from(Ipv4Addr::new(127, 0, 0, 2), port, "GET", &page, "").await;
+    assert_eq!(share.owner(), None);
+    // … so the first other device gets it.
+    let phone = Ipv4Addr::new(127, 0, 0, 2);
+    let owner = call_from(phone, port, "GET", &page, "").await;
+    assert_eq!(owner.status, StatusCode::OK);
+    assert_eq!(share.owner(), Some(phone.into()));
+    let other = call_from(Ipv4Addr::new(127, 0, 0, 3), port, "GET", &page, "").await;
     assert_eq!(
         other.status,
         StatusCode::FORBIDDEN,
         "a token seen by someone else is of no use"
     );
-    assert_eq!(call(port, "GET", &page, "").await.status, StatusCode::OK);
+    assert_eq!(share.refused(), [IpAddr::from(Ipv4Addr::new(127, 0, 0, 3))]);
+    assert_eq!(
+        call_from(phone, port, "GET", &page, "").await.status,
+        StatusCode::OK
+    );
+    assert_eq!(
+        call(port, "GET", &page, "").await.status,
+        StatusCode::OK,
+        "this device still can"
+    );
 }

@@ -112,6 +112,62 @@ enum Slot {
     Active(Upload),
 }
 
+/// Who may use the session: the first other device that opened the link.
+/// This device itself (its own addresses) never takes the session, so trying
+/// the link here first does not lock out the phone it was meant for.
+#[derive(Debug, Default)]
+pub(super) struct Access {
+    /// Addresses of this device.
+    own: std::collections::HashSet<IpAddr>,
+    /// The device that owns the session.
+    owner: Mutex<Option<IpAddr>>,
+    /// Other devices that were refused, for the interface (at most 16).
+    refused: Mutex<Vec<IpAddr>>,
+}
+
+impl Access {
+    /// Access for a session on a device with the addresses `own`.
+    pub(super) fn new(own: impl IntoIterator<Item = IpAddr>) -> Self {
+        Self {
+            own: own.into_iter().collect(),
+            ..Self::default()
+        }
+    }
+
+    /// Whether `ip` may use the session; the first other device takes it.
+    fn admit(&self, ip: IpAddr) -> bool {
+        if self.own.contains(&ip) {
+            return true;
+        }
+        let mut owner = lock(&self.owner);
+        match *owner {
+            None => {
+                info!("Browser session: opened by {ip}, which now owns it");
+                *owner = Some(ip);
+                true
+            }
+            Some(o) if o == ip => true,
+            Some(_) => {
+                let mut refused = lock(&self.refused);
+                if !refused.contains(&ip) && refused.len() < 16 {
+                    refused.push(ip);
+                }
+                false
+            }
+        }
+    }
+
+    /// The device that owns the session, if one opened it.
+    pub(super) fn owner(&self) -> Option<IpAddr> {
+        *lock(&self.owner)
+    }
+
+    /// Other devices that were refused.
+    pub(super) fn refused(&self) -> Vec<IpAddr> {
+        lock(&self.refused).clone()
+    }
+}
+
 /// Shared state of the server.
 pub(super) struct WebServer<H> {
     /// The interface asked about offers and told about transfers.
@@ -126,8 +182,8 @@ pub(super) struct WebServer<H> {
     receive: bool,
     /// When the session ends.
     expires_at: Option<Instant>,
-    /// The device that owns the session (the first one that used the token).
-    client: Mutex<Option<IpAddr>>,
+    /// Who may use the session.
+    access: Arc<Access>,
     /// The offer slot.
     slot: Mutex<Slot>,
     /// A declined browser may offer again from this instant.
@@ -265,6 +321,7 @@ impl<H: TransferHandler> WebServer<H> {
         files: Vec<SharedFile>,
         receive: bool,
         expires_at: Option<Instant>,
+        access: Arc<Access>,
     ) -> Self {
         Self {
             handler,
@@ -273,7 +330,7 @@ impl<H: TransferHandler> WebServer<H> {
             files,
             receive,
             expires_at,
-            client: Mutex::new(None),
+            access,
             slot: Mutex::new(Slot::Free),
             cooldown_until: Mutex::new(None),
         }
@@ -287,16 +344,9 @@ impl<H: TransferHandler> WebServer<H> {
         if !same_token(token, &self.token) {
             return text(StatusCode::NOT_FOUND, "Not found");
         }
-        {
-            let mut client = lock(&self.client);
-            match *client {
-                None => *client = Some(ip),
-                Some(owner) if owner == ip => {}
-                Some(_) => {
-                    warn!("Browser session: refused {ip}, the link is used by another device");
-                    return text(StatusCode::FORBIDDEN, &t!("web.taken"));
-                }
-            }
+        if !self.access.admit(ip) {
+            warn!("Browser session: refused {ip}, the link is used by another device");
+            return text(StatusCode::FORBIDDEN, &t!("web.taken"));
         }
         let Some(rest) = rest else {
             // `/<token>` → `/<token>/`, so the page's relative links work.

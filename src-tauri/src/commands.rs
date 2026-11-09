@@ -721,6 +721,39 @@ pub async fn start_web_share(
     Ok(info)
 }
 
+/// Who uses the browser session, for the GUI.
+#[derive(Serialize)]
+pub struct WebShareStatus {
+    /// The session is running.
+    running: bool,
+    /// The device that opened the link and owns the session.
+    owner: Option<String>,
+    /// Other devices that tried the link after it was taken.
+    refused: Vec<String>,
+}
+
+/// Who uses the running browser session (polled while its dialog is open).
+///
+/// # Errors
+///
+/// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
+#[tauri::command]
+pub async fn web_share_status(state: State<'_, AppState>) -> CmdResult<WebShareStatus> {
+    let web = state.web.lock().await;
+    Ok(match web.as_ref().filter(|share| !share.is_finished()) {
+        Some(share) => WebShareStatus {
+            running: true,
+            owner: share.owner().map(|ip| ip.to_string()),
+            refused: share.refused().iter().map(ToString::to_string).collect(),
+        },
+        None => WebShareStatus {
+            running: false,
+            owner: None,
+            refused: Vec::new(),
+        },
+    })
+}
+
 /// Ends the browser session; its link stops working at once.
 ///
 /// # Errors

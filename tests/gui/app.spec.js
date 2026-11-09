@@ -254,8 +254,17 @@ test('receiving from a browser shows the link, its lifetime and a stop button', 
   expect(await calls(app)).toContainEqual(['start_web_share', { paths: [] }]);
   await expect(app.locator('#web-title')).toHaveText('Receive from a browser');
   await expect(app.locator('#web-url')).toHaveText('http://192.168.1.10:47835/0123456789abcdef0123456789abcdef/');
-  await expect(app.locator('#web-other')).toContainText('10.5.0.2');
+  // Other addresses wait behind "Does not work?".
+  await expect(app.locator('#web-other-list')).toBeHidden();
+  await app.locator('#web-other summary').click();
+  await expect(app.locator('#web-other-list')).toContainText('10.5.0.2');
   await expect(app.locator('#web-expires')).toContainText('30 more minute');
+  await expect(app.locator('#web-access')).toContainText('Not opened yet');
+  // The phone opened it; then another device was turned away.
+  await app.evaluate(() => window.__respond('web_share_status', { running: true, owner: '192.168.1.20', refused: [] }));
+  await expect(app.locator('#web-access')).toContainText('Opened by 192.168.1.20', { timeout: 5000 });
+  await app.evaluate(() => window.__respond('web_share_status', { running: true, owner: '192.168.1.20', refused: ['192.168.1.30'] }));
+  await expect(app.locator('#web-access')).toContainText('Turned away: 192.168.1.30', { timeout: 5000 });
   await expect(dialog).toContainText('encrypted with the key in the link');
   await expect(dialog).toContainText('network you trust');
 

@@ -18,9 +18,13 @@
 //!
 //! * the token has 128 random bits and is the only way in: every other path
 //!   answers `404`, and nothing tells that a Ferry is listening;
-//! * the first device that uses the token owns the session; requests with it
-//!   from any other address are refused, so a token seen on the network or in
-//!   a photo of the screen is of no use once the link was opened;
+//! * the first other device that uses the token owns the session; requests
+//!   with it from any other address are refused, so a token seen on the
+//!   network or in a photo of the screen is of no use once the link was
+//!   opened. This device's own addresses never take the session, so trying
+//!   the link here does not lock out the phone it was meant for;
+//! * the links name only addresses of real network interfaces, not those of
+//!   container bridges or VPN tunnels, which a phone cannot reach anyway;
 //! * the session ends after [`WebShareOptions::lifetime`] (30 minutes by
 //!   default) or when it is stopped, and the server is gone with it;
 //! * files from the browser are saved only after the user accepted them in
@@ -137,6 +141,8 @@ pub struct WebShare {
     expires_at: Option<Instant>,
     /// Ends the session.
     stop: CancellationToken,
+    /// Who may use it.
+    access: Arc<server::Access>,
     /// The server; finishes when the session ends.
     task: JoinHandle<()>,
 }
@@ -182,6 +188,15 @@ impl WebShare {
         let addr = listener.local_addr()?;
         let token = new_token()?;
         let key = seal::SessionKey::generate()?;
+        let access = Arc::new(server::Access::new(
+            crate::discovery::local_networks(engine)
+                .into_iter()
+                .map(|(ip, _)| IpAddr::V4(ip))
+                .chain([
+                    Ipv4Addr::LOCALHOST.into(),
+                    std::net::Ipv6Addr::LOCALHOST.into(),
+                ]),
+        ));
         let urls = urls(engine, options.bind, addr.port(), &token)
             .into_iter()
             .map(|url| format!("{url}#{}", key.fragment()))
@@ -195,6 +210,7 @@ impl WebShare {
             files,
             options.receive,
             expires_at,
+            access.clone(),
         ));
         let ends = stop.clone();
         let task = tokio::spawn(async move {
@@ -216,6 +232,7 @@ impl WebShare {
             addr,
             expires_at,
             stop,
+            access,
             task,
         })
     }
@@ -233,6 +250,17 @@ impl WebShare {
     /// Port of the server.
     pub fn port(&self) -> u16 {
         self.addr.port()
+    }
+
+    /// The device that opened the link and now owns the session (this
+    /// device's own addresses never take it).
+    pub fn owner(&self) -> Option<IpAddr> {
+        self.access.owner()
+    }
+
+    /// Other devices that tried the link after it was taken.
+    pub fn refused(&self) -> Vec<IpAddr> {
+        self.access.refused()
     }
 
     /// Time left until the session ends by itself.
@@ -287,10 +315,7 @@ fn urls(engine: Option<&NodeEngine>, bind: IpAddr, port: u16, token: &str) -> Ve
     if !bind.is_unspecified() {
         return vec![link(bind)];
     }
-    let mut addresses: Vec<Ipv4Addr> = crate::discovery::local_networks(engine)
-        .into_iter()
-        .map(|(ip, _)| ip)
-        .collect();
+    let mut addresses = lan_addresses(engine);
     addresses.sort_by_key(|ip| home_network_rank(*ip));
     let mut urls: Vec<String> = addresses
         .into_iter()
@@ -300,6 +325,63 @@ fn urls(engine: Option<&NodeEngine>, bind: IpAddr, port: u16, token: &str) -> Ve
         urls.push(link(IpAddr::V4(Ipv4Addr::LOCALHOST)));
     }
     urls
+}
+
+/// Names of interfaces that do not lead to other devices of the local
+/// network: containers and virtual machines (Docker, Podman, libvirt, …) and
+/// VPN tunnels (WireGuard, NordVPN, Tailscale, …).
+const VIRTUAL_INTERFACES: [&str; 17] = [
+    "docker",
+    "br-",
+    "veth",
+    "virbr",
+    "vmnet",
+    "vboxnet",
+    "podman",
+    "cni",
+    "flannel",
+    "lxc",
+    "lxd",
+    "tun",
+    "tap",
+    "wg",
+    "nordlynx",
+    "tailscale",
+    "zt",
+];
+
+/// Whether an interface named `name` is a container bridge or a VPN tunnel.
+fn is_virtual(name: &str) -> bool {
+    VIRTUAL_INTERFACES
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
+}
+
+/// IPv4 addresses a phone on the local network could reach: those of real
+/// interfaces, or all of them when there are none.
+fn lan_addresses(engine: Option<&NodeEngine>) -> Vec<Ipv4Addr> {
+    let all: Vec<Ipv4Addr> = crate::discovery::local_networks(engine)
+        .into_iter()
+        .map(|(ip, _)| ip)
+        .collect();
+    #[cfg(not(target_os = "android"))]
+    {
+        use network_interface::{Addr, NetworkInterface, NetworkInterfaceConfig};
+        let real: Vec<Ipv4Addr> = NetworkInterface::show()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|iface| !is_virtual(&iface.name))
+            .flat_map(|iface| iface.addr)
+            .filter_map(|addr| match addr {
+                Addr::V4(v4) if all.contains(&v4.ip) => Some(v4.ip),
+                _ => None,
+            })
+            .collect();
+        if !real.is_empty() {
+            return real;
+        }
+    }
+    all
 }
 
 /// Order of addresses in the links: home routers use 192.168.0.0/16 most,
@@ -336,6 +418,25 @@ mod tests {
         ips.sort_by_key(|ip| home_network_rank(*ip));
         assert_eq!(ips[0], Ipv4Addr::new(192, 168, 1, 20));
         assert_eq!(ips[3], Ipv4Addr::new(169, 254, 1, 1));
+    }
+
+    #[test]
+    fn containers_and_vpns_are_not_offered() {
+        for name in [
+            "docker0",
+            "br-3f2a",
+            "veth12",
+            "virbr0",
+            "nordlynx",
+            "wg0",
+            "tun0",
+            "tailscale0",
+        ] {
+            assert!(is_virtual(name), "{name}");
+        }
+        for name in ["enp46s0", "eth0", "wlan0", "wlo1", "en0"] {
+            assert!(!is_virtual(name), "{name}");
+        }
     }
 
     #[test]

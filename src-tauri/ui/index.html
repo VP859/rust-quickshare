@@ -200,7 +200,12 @@
       <p class="muted small" data-i18n="web_desc"></p>
       <div class="qr" id="web-qr"></div>
       <div class="codebox mono" id="web-url"></div>
-      <div class="muted small" id="web-other" hidden></div>
+      <p class="small" id="web-access" role="status" aria-live="polite"></p>
+      <details class="small" id="web-other" hidden>
+        <summary data-i18n="web_other"></summary>
+        <p class="muted" data-i18n="web_other_hint"></p>
+        <div id="web-other-list"></div>
+      </details>
       <p class="muted small" id="web-expires"></p>
       <p class="hint warn small" id="web-firewall" hidden></p>
       <p class="compat-warning" data-i18n="web_security"></p>
