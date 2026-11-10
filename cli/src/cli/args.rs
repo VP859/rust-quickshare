@@ -194,7 +194,7 @@ pub enum SettingKey {
     DeviceName,
     /// Interface language code.
     Language,
-    /// `local` or `internet`.
+    /// `local`, `internet`, `relay` or `relay-only` (the relay modes need `relay-urls`).
     NetworkMode,
     /// Folder for received files.
     DownloadDir,

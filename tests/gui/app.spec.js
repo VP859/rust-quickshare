@@ -22,6 +22,38 @@ test('starts, lists trusted devices and loads under the strict CSP', async ({ ap
   expect(names).toEqual(expect.arrayContaining(['get_language', 'list_peers', 'get_node_info']));
 });
 
+test('a running transfer shows its speed and the time left once they are known', async ({ app }) => {
+  // A stopped clock: only runFor moves it, so the speed is exact.
+  await app.clock.install({ time: new Date('2026-11-10T12:00:00Z') });
+  await app.clock.pauseAt(new Date('2026-11-10T12:00:01Z'));
+  const at = (done) => emit(app, 'transfer', transfer({ kind: 'running' }, { done, total: 100_000_000, route: 'direct' }));
+  const row = app.locator('#transfers .transfer');
+  await at(0);
+  await app.clock.runFor(500);
+  await at(5_000_000);
+  // Not after half a second: the first values jump.
+  await expect(row).toContainText('5% · 4.8 MB / 95.4 MB · direct');
+  for (let i = 2; i <= 10; i++) {
+    await app.clock.runFor(500);
+    await at(i * 5_000_000);
+  }
+  // 10 MB/s steadily; 50 MB of 100 MB left.
+  await expect(row).toContainText('50% · 47.7 MB / 95.4 MB · 9.5 MB/s · 0:05 left · direct');
+
+  // A pause starts a new measurement after resuming.
+  await emit(app, 'transfer', transfer({ kind: 'paused' }, { done: 50_000_000, total: 100_000_000 }));
+  await at(50_000_000);
+  await expect(row).toContainText('50% · 47.7 MB / 95.4 MB · direct');
+
+  // The speed stays when only the language changes.
+  await app.clock.runFor(1000);
+  await at(60_000_000);
+  await expect(row).toContainText('· 9.5 MB/s · 0:04 left');
+  await app.locator('#btn-settings').click();
+  await app.locator('#language').selectOption('pl');
+  await expect(row).toContainText('· 9.5 MB/s · zostało 0:04 · bezpośrednio');
+});
+
 test('a download from a Ferry device can be cancelled and its partial file deleted', async ({ app }) => {
   await emit(app, 'transfer', transfer({ kind: 'running' }, { direction: 'download' }));
   const row = app.locator('#transfers .transfer');

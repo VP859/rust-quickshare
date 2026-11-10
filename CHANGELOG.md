@@ -19,6 +19,8 @@ compatibility).
 
 ### Added
 
+- **Speed and time left** for running transfers in the GUI (`45% · 120 MB / 260 MB · 11.4 MB/s ·
+  0:12 left`), smoothed over a few seconds and shown after the first second, so it does not jump.
 - **Relay-only mode** (`relay-only`, *Settings → Network → Only through own relay*): every
   connection goes through your own relays, never directly, even in the same network. Ferry opens
   no UDP socket for direct paths, so the other device sees only the relay's address instead of your

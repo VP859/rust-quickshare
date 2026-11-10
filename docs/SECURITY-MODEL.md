@@ -11,16 +11,19 @@ fits your needs without reading the code. Report problems privately as described
 
 ## In short
 
-* File and text **contents** are end-to-end encrypted between the two devices in both network
-  modes. No server ever receives them in readable form.
+* File and text **contents** are end-to-end encrypted between the two devices in every network
+  mode. No server ever receives them in readable form.
 * In **local mode** (the default) Ferry contacts **no server at all**. Everything it sends goes
   to the local network or to a device you chose.
 * In **internet mode** Ferry stays connected to a public relay server run by
   [n0](https://n0.computer) and registers its Node ID with n0's lookup service. These servers see
   your IP address, your Node ID, when you are online and whom you exchange data with through the
   relay – but never the content.
-* Anyone who knows your **Node ID** can try to contact your device: on the local network in both
-  modes, from anywhere in internet mode. They can only *ask* – nothing is accepted without your
+* In the **own relay modes** (`relay`, `relay-only`) your relay takes n0's place and nothing goes
+  to n0; in `relay-only` every connection goes through it, so other devices never see your IP
+  address.
+* Anyone who knows your **Node ID** can try to contact your device: on the local network in every
+  mode but `relay-only`, and from anywhere through a relay in the internet and relay modes. They can only *ask* – nothing is accepted without your
   consent unless you enabled Auto-Accept for that exact device.
 * There is no telemetry, analytics, account, crash reporting or update check.
 

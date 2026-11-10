@@ -61,8 +61,9 @@ const ONLINE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Whether connections may use servers on the internet.
 ///
-/// Encryption is the same in both modes: QUIC with TLS 1.3, authenticated by
-/// the Node ID. Speed is the same whenever a direct connection is possible.
+/// Encryption is the same in every mode: QUIC with TLS 1.3, authenticated by
+/// the Node ID. Speed is the same whenever a direct connection is possible
+/// (never in [`NetworkMode::RelayOnly`]).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NetworkMode {

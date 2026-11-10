@@ -22,7 +22,47 @@ export function addRow(row) {
   return row;
 }
 
-function renderTransfer(ev) {
+/** How quickly the shown speed follows a change (s): steady to read, yet current. */
+const SPEED_TAU = 3;
+/** The speed is shown after this much running time (s), so the first jumps stay hidden. */
+const SPEED_AFTER = 1;
+
+/**
+ * Updates the speed of `row` (`row.speed`: last sample and smoothed bytes/s)
+ * with a new event; a pause, a retry or a restart begins a new measurement.
+ */
+function measure(row, ev) {
+  if (ev.status.kind !== 'running') { row.speed = null; return; }
+  const now = performance.now() / 1000;
+  const s = row.speed;
+  if (!s || ev.done < s.done) { row.speed = { at: now, done: ev.done, rate: null, since: now }; return; }
+  const dt = now - s.at;
+  if (dt < 0.2) return;
+  const sample = (ev.done - s.done) / dt;
+  // An exponential moving average weighted by time, independent of how often events arrive.
+  s.rate = s.rate === null ? sample : s.rate + (sample - s.rate) * (1 - Math.exp(-dt / SPEED_TAU));
+  s.at = now;
+  s.done = ev.done;
+}
+
+/** `m:ss` or `h:mm:ss`. */
+export function fmtDuration(seconds) {
+  const total = Math.max(1, Math.round(seconds));
+  const [h, m, s] = [Math.floor(total / 3600), Math.floor(total / 60) % 60, total % 60];
+  const pad = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+/** ` · 12.3 MB/s · 0:42 left` once the speed is known, otherwise nothing. */
+function speedText(row, ev) {
+  const s = row.speed;
+  if (!s?.rate || performance.now() / 1000 - s.since < SPEED_AFTER) return '';
+  let text = ` · ${fmtSize(s.rate)}/s`;
+  if (ev.total > ev.done) text += ' · ' + t('time_left', { time: fmtDuration((ev.total - ev.done) / s.rate) });
+  return text;
+}
+
+function renderTransfer(ev, fresh = false) {
   let row = transfers.get(ev.id);
   if (!row) {
     row = { el: el('div', { class: 'row transfer' }) };
@@ -33,6 +73,8 @@ function renderTransfer(ev) {
   }
   const previous = row.ev?.status.kind;
   row.ev = ev;
+  // Only new events measure the speed (not a redraw after a language change).
+  if (fresh) measure(row, ev);
   const kind = ev.status.kind;
   if (kind !== previous && FINAL.includes(kind)) {
     $('sr-status').textContent = `${ev.file_name}: ${t('st_' + kind)}`;
@@ -41,7 +83,8 @@ function renderTransfer(ev) {
   const peer = state.peers.find(p => p.node_id === ev.peer)?.alias ?? ev.peer_name ?? shortId(ev.peer);
   // How the data travels; a relay explains a slow transfer in internet mode.
   const route = ev.route ? ' · ' + t('route_' + ev.route) : '';
-  const detail = kind === 'running' ? (ev.total ? `${pct}% · ${fmtSize(ev.done)} / ${fmtSize(ev.total)}${route}` : fmtSize(ev.done) + route)
+  const speed = kind === 'running' ? speedText(row, ev) : '';
+  const detail = kind === 'running' ? (ev.total ? `${pct}% · ${fmtSize(ev.done)} / ${fmtSize(ev.total)}${speed}${route}` : fmtSize(ev.done) + speed + route)
     : kind === 'retrying' ? t('st_retrying', { attempt: ev.status.attempt, of: ev.status.of })
     : kind === 'failed' ? t('tr_failed', { error: ev.status.error }) : kind === 'rejected' ? t('tr_rejected', { reason: ev.status.reason })
     : kind === 'completed' ? (ev.status.path ? t('tr_saved', { path: ev.status.path }) : t('st_completed')) + route
@@ -136,7 +179,7 @@ export function rerenderTransfers() {
 
 /** Subscribes to transfer events and incoming offers. */
 export async function listenTransfers() {
-  await listen('transfer', ({ payload }) => renderTransfer(payload));
+  await listen('transfer', ({ payload }) => renderTransfer(payload, true));
   await listen('transfer-error', ({ payload }) => fail(payload.message));
   await listen('incoming-offer', ({ payload }) => {
     offers.push(payload);
