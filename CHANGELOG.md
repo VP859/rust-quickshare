@@ -19,6 +19,11 @@ compatibility).
 
 ### Added
 
+- **Relay check**: *Check* next to the relay addresses in the settings and `ferry doctor` connect to
+  each relay for real and name what fails (unknown name, closed port, a certificate that is not
+  accepted, a server that is not an iroh relay) or show the round trip. `ferry doctor` fails when
+  none of the relays of a relay mode works.
+- A transfer that receives no data for 3 s shows *no data for 0:05* instead of its last speed.
 - **Speed and time left** for running transfers in the GUI (`45% · 120 MB / 260 MB · 11.4 MB/s ·
   0:12 left`), smoothed over a few seconds and shown after the first second, so it does not jump.
 - **Relay-only mode** (`relay-only`, *Settings → Network → Only through own relay*): every

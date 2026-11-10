@@ -1027,6 +1027,55 @@ pub async fn set_network_mode(
     Ok(())
 }
 
+/// The result of [`check_relays`] for one relay.
+#[derive(Serialize)]
+pub struct RelayCheck {
+    /// The address as entered.
+    url: String,
+    /// Round trip of a request to the relay in milliseconds, when it works.
+    ms: Option<u64>,
+    /// Why it does not work.
+    error: Option<String>,
+}
+
+/// Tries each relay for real (see [`ferry::node::check_relay`]), all at
+/// once; nothing is saved.
+#[tauri::command]
+pub async fn check_relays(relays: Vec<String>) -> Vec<RelayCheck> {
+    let checks = relays
+        .into_iter()
+        .map(|u| u.trim().to_string())
+        .filter(|u| !u.is_empty())
+        .map(|url| {
+            tauri::async_runtime::spawn(async move {
+                let result = match ferry::node::parse_relay_url(&url) {
+                    Ok(relay) => ferry::node::check_relay(&relay).await,
+                    Err(e) => Err(e),
+                };
+                match result {
+                    Ok(rtt) => RelayCheck {
+                        url,
+                        ms: Some(u64::try_from(rtt.as_millis()).unwrap_or(u64::MAX)),
+                        error: None,
+                    },
+                    Err(e) => RelayCheck {
+                        url,
+                        ms: None,
+                        error: Some(format!("{e:#}")),
+                    },
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut results = Vec::with_capacity(checks.len());
+    for check in checks {
+        if let Ok(result) = check.await {
+            results.push(result);
+        }
+    }
+    results
+}
+
 /// What limits Ferry in the background on Android; `null` on desktop.
 #[tauri::command]
 pub fn background_status() -> Option<crate::platform::BackgroundStatus> {

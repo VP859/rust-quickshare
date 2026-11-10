@@ -218,6 +218,10 @@ For use over the internet, run it with a configuration file that enables TLS (Le
 own certificate) and give Ferry the `https://` address. Plain `http://` is accepted only for IP
 addresses on this computer or the local network.
 
+- **Check the relay** before relying on it: *Check* next to the relay addresses in *Settings →
+  Network*, or `ferry doctor`. Ferry connects to it for real and says what fails – an unknown name,
+  a closed port, a certificate that is not accepted, a server that is not an iroh relay – or how
+  long a request takes.
 - Pair devices **after** both use a relay mode: without n0's lookup, a device is found at the
   address saved when pairing, which then contains the relay URL. Devices paired earlier are still
   found on the local network; pair them again to reach them through the relay.

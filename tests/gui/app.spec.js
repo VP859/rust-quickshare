@@ -1,4 +1,5 @@
 // Behaviour of the GUI frontend against a mocked Tauri API (see fixtures.js).
+import { axeViolations } from './audit.js';
 import { calls, emit, expect, respond, test } from './fixtures.js';
 
 const PEER = 'b'.repeat(64);
@@ -39,6 +40,20 @@ test('a running transfer shows its speed and the time left once they are known',
   }
   // 10 MB/s steadily; 50 MB of 100 MB left.
   await expect(row).toContainText('50% · 47.7 MB / 95.4 MB · 9.5 MB/s · 0:05 left · direct');
+
+  // No new data: the last speed gives way to how long nothing arrived …
+  await app.clock.runFor(2500);
+  await expect(row).toContainText('· 9.5 MB/s · 0:05 left');
+  await app.clock.runFor(1000);
+  await expect(row).toContainText('50% · 47.7 MB / 95.4 MB · no data for 0:03 · direct');
+  await app.clock.runFor(2000);
+  await expect(row).toContainText('no data for 0:05');
+  // … and data after it is measured anew, without the gap.
+  await at(55_000_000);
+  await expect(row).toContainText('55% · 52.5 MB / 95.4 MB · direct');
+  await app.clock.runFor(1000);
+  await at(65_000_000);
+  await expect(row).toContainText('· 9.5 MB/s · 0:04 left');
 
   // A pause starts a new measurement after resuming.
   await emit(app, 'transfer', transfer({ kind: 'paused' }, { done: 50_000_000, total: 100_000_000 }));
@@ -372,6 +387,33 @@ test('the relay-only mode asks for a relay first and keeps the saved one', async
   await app.locator('#btn-restart-later').click();
   await app.locator('#network-mode').selectOption('relay-only');
   expect((await calls(app)).filter(([cmd, args]) => cmd === 'set_network_mode' && args.mode === 'relay-only')).toHaveLength(2);
+});
+
+test('the entered relays can be checked before they are saved', async ({ app }) => {
+  await app.evaluate(() => window.__respond('check_relays', [
+    { url: 'https://relay.example.org', ms: 23, error: null },
+    { url: 'https://relay.exmaple.org', ms: null, error: 'Cannot connect to relay.exmaple.org on port 443 (unknown name, server off or port blocked)' },
+  ]));
+  await app.locator('#btn-settings').click();
+  await app.locator('#network-mode').selectOption('relay-only');
+  await app.locator('#btn-relay-check').click();
+  await expect(app.locator('#toast')).toContainText('Enter the address of a relay');
+  expect((await calls(app)).some(([cmd]) => cmd === 'check_relays')).toBe(false);
+
+  await app.locator('#relay-urls').fill('https://relay.example.org\nhttps://relay.exmaple.org');
+  await app.locator('#btn-relay-check').click();
+  expect(await calls(app)).toContainEqual(['check_relays', { relays: ['https://relay.example.org', 'https://relay.exmaple.org'] }]);
+  const results = app.locator('#relay-results > div');
+  await expect(results).toHaveCount(2);
+  await expect(results.nth(0)).toContainText('https://relay.example.org – works (23 ms)');
+  await expect(results.nth(0).locator('.dot.ok')).toHaveCount(1);
+  await expect(results.nth(1)).toContainText('does not work: Cannot connect to relay.exmaple.org');
+  await expect(results.nth(1).locator('.dot.bad')).toHaveCount(1);
+  await expect(app.locator('#btn-relay-check')).toBeEnabled();
+  await expect(app.locator('#btn-relay-check')).toHaveText('Check');
+  // Checking saves nothing.
+  expect((await calls(app)).some(([cmd]) => cmd === 'set_network_mode')).toBe(false);
+  expect(await axeViolations(app, '#relay-field')).toEqual([]);
 });
 
 test('a running transfer can be paused and resumed', async ({ app }) => {

@@ -2069,6 +2069,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "webpki-roots",
  "windows-native-keyring-store",
  "zbus-secret-service-keyring-store",
 ]

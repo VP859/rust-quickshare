@@ -1,5 +1,15 @@
 // The accessibility audit shared by the tests of the GUI and of the browser
-// session page: it runs in the page (`page.evaluate(audit, selector)`).
+// session page: it runs in the page (`page.evaluate(audit, selector)`), and
+// axe-core's WCAG rules (`axeViolations`), which run from the test.
+import AxeBuilder from '@axe-core/playwright';
+
+/** Violations of the WCAG 2.0–2.2 A and AA rules found by axe-core in `selector`. */
+export async function axeViolations(page, selector) {
+  let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']);
+  if (selector) builder = builder.include(selector);
+  const { violations } = await builder.analyze();
+  return violations.map((v) => `${v.id}: ${v.help} – ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+}
 
 /**
  * Problems of the visible part of the page (or of `rootSelector`), found in

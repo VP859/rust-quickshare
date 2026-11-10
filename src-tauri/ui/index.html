@@ -488,7 +488,11 @@
           <div class="relay-field" id="relay-field" hidden>
             <label for="relay-urls" class="small" data-i18n="relay_urls"></label>
             <textarea id="relay-urls" rows="2" spellcheck="false" autocomplete="off" data-i18n-ph="relay_urls_ph"></textarea>
-            <button id="btn-relay-save" data-i18n="relay_save"></button>
+            <div class="relay-actions">
+              <button id="btn-relay-save" data-i18n="relay_save"></button>
+              <button class="ghost" id="btn-relay-check" data-i18n="relay_check"></button>
+            </div>
+            <div class="relay-results" id="relay-results" role="status" aria-live="polite"></div>
           </div>
           <div class="toggle" id="network-pending" hidden>
             <div class="small" style="color: var(--warn)" data-i18n="network_restart"></div>

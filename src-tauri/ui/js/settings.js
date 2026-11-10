@@ -1,6 +1,6 @@
 // The settings dialog: device name, download folder, network mode, privacy,
 // language, autostart and close action, Android background limits, about.
-import { $, close, el, fail, open, toast } from './dom.js';
+import { $, close, dotClass, el, fail, open, toast } from './dom.js';
 import { lang, setLang, t } from './i18n.js';
 import { updateDiscoveryHint } from './nearby.js';
 import { loadNodeInfo } from './node.js';
@@ -57,8 +57,29 @@ $('network-mode').onchange = (e) => {
   }
   saveNetwork(e.target.value);
 };
+/** The relays in the text field. */
+const enteredRelays = () => $('relay-urls').value.split(/[\s,]+/).filter(Boolean);
+// Tries the entered relays for real before (or after) saving them.
+$('btn-relay-check').onclick = async () => {
+  const relays = enteredRelays();
+  if (!relays.length) { toast(t('relay_missing'), true); return; }
+  const button = $('btn-relay-check');
+  button.disabled = true;
+  button.textContent = t('relay_checking');
+  $('relay-results').replaceChildren();
+  try {
+    const results = await invoke('check_relays', { relays });
+    $('relay-results').replaceChildren(...results.map((r) => el('div', {},
+      el('span', { class: dotClass(r.error == null) }),
+      el('span', {}, el('span', { class: 'url' }, r.url), ' – ',
+        r.error == null ? t('relay_works', { ms: r.ms }) : t('relay_fails', { error: r.error })))));
+  } catch (e) { fail(e); } finally {
+    button.disabled = false;
+    button.textContent = t('relay_check');
+  }
+};
 $('btn-relay-save').onclick = () => {
-  const relays = $('relay-urls').value.split(/[\s,]+/).filter(Boolean);
+  const relays = enteredRelays();
   if (!relays.length) { toast(t('relay_missing'), true); return; }
   saveNetwork(needsRelay($('network-mode').value) ? $('network-mode').value : 'relay', relays);
 };

@@ -173,7 +173,12 @@ select {
 .compat-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--warn); border-radius: var(--radius); color: var(--warn); font-size: 13px; font-weight: 500; }
 .relay-field { display: grid; gap: 6px; margin-top: 8px; }
 .relay-field textarea { width: 100%; font: 12.5px var(--mono, ui-monospace, monospace); resize: vertical; }
-.relay-field button { justify-self: start; }
+.relay-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.relay-results { display: grid; gap: 4px; }
+.relay-results:empty { display: none; }
+.relay-results > div { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; overflow-wrap: anywhere; }
+.relay-results .dot { flex: none; transform: translateY(-1px); }
+.relay-results .url { font-family: var(--mono, ui-monospace, monospace); }
 .toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .toggle .label { font-weight: 500; }
 .toggle .desc { color: var(--muted); font-size: 12.5px; }

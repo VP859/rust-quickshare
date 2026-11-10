@@ -26,16 +26,23 @@ export function addRow(row) {
 const SPEED_TAU = 3;
 /** The speed is shown after this much running time (s), so the first jumps stay hidden. */
 const SPEED_AFTER = 1;
+/** Without new data for this long (s) a transfer shows that it waits instead of its last speed. */
+const STALL_AFTER = 3;
 
 /**
- * Updates the speed of `row` (`row.speed`: last sample and smoothed bytes/s)
- * with a new event; a pause, a retry or a restart begins a new measurement.
+ * Updates the speed of `row` (`row.speed`: last sample, smoothed bytes/s and
+ * when data last arrived) with a new event; a pause, a retry, a restart or
+ * data after a stall begins a new measurement.
  */
 function measure(row, ev) {
   if (ev.status.kind !== 'running') { row.speed = null; return; }
   const now = performance.now() / 1000;
   const s = row.speed;
-  if (!s || ev.done < s.done) { row.speed = { at: now, done: ev.done, rate: null, since: now }; return; }
+  if (!s || ev.done < s.done || (ev.done > s.done && now - s.moved >= STALL_AFTER)) {
+    row.speed = { at: now, done: ev.done, rate: null, since: now, moved: now };
+    return;
+  }
+  if (ev.done > s.done) s.moved = now;
   const dt = now - s.at;
   if (dt < 0.2) return;
   const sample = (ev.done - s.done) / dt;
@@ -53,14 +60,23 @@ export function fmtDuration(seconds) {
   return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 
-/** ` · 12.3 MB/s · 0:42 left` once the speed is known, otherwise nothing. */
+/** Whether a running transfer has had no new data for a while. */
+const stalled = (row) => row.speed && performance.now() / 1000 - row.speed.moved >= STALL_AFTER;
+
+/** ` · 12.3 MB/s · 0:42 left` once the speed is known, ` · no data for 0:05` in a stall. */
 function speedText(row, ev) {
   const s = row.speed;
+  if (stalled(row)) return ' · ' + t('stalled', { time: fmtDuration(Math.floor(performance.now() / 1000 - s.moved)) });
   if (!s?.rate || performance.now() / 1000 - s.since < SPEED_AFTER) return '';
   let text = ` · ${fmtSize(s.rate)}/s`;
   if (ev.total > ev.done) text += ' · ' + t('time_left', { time: fmtDuration((ev.total - ev.done) / s.rate) });
   return text;
 }
+
+// A stalled transfer sends no events: its row is redrawn every second instead.
+setInterval(() => {
+  for (const row of transfers.values()) if (row.ev?.status.kind === 'running' && stalled(row)) renderTransfer(row.ev);
+}, 1000);
 
 function renderTransfer(ev, fresh = false) {
   let row = transfers.get(ev.id);

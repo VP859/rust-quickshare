@@ -6,8 +6,7 @@
 // screen and every dialog, with the example data of fixtures.js: axe-core
 // (the WCAG 2.0–2.2 A and AA rules) and Ferry's own audit (audit.js), which
 // also covers what axe leaves to people, like icon-only buttons in lists.
-import AxeBuilder from '@axe-core/playwright';
-import { audit } from './audit.js';
+import { audit, axeViolations } from './audit.js';
 import { emit, expect, test } from './fixtures.js';
 
 const PEER = 'b'.repeat(64);
@@ -18,14 +17,6 @@ async function fillScreen(app) {
   await emit(app, 'transfer', { ...base, id: 't1', file_name: 'photo.jpg', done: 500_000, status: { kind: 'running' } });
   await emit(app, 'transfer', { ...base, id: 't2', file_name: 'notes.txt', done: 2_000_000, status: { kind: 'completed', path: '/home/me/notes.txt' } });
   await emit(app, 'transfer', { ...base, id: 't3', file_name: 'big.iso', done: 0, status: { kind: 'failed', error: 'connection lost' } });
-}
-
-/** Violations of the WCAG 2.0–2.2 A and AA rules found by axe-core in `selector`. */
-export async function axeViolations(page, selector) {
-  let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']);
-  if (selector) builder = builder.include(selector);
-  const { violations } = await builder.analyze();
-  return violations.map((v) => `${v.id}: ${v.help} – ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
 }
 
 /** The dialogs to check, with how to open them. */

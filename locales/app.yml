@@ -1325,6 +1325,24 @@ engine.bad_relay:
 engine.relay_http:
   en: "'%{url}' uses plain HTTP: allowed only for IP addresses on this computer or the local network (use https://)"
   pl: "'%{url}' używa zwykłego HTTP: dozwolone tylko dla adresów IP tego komputera lub sieci lokalnej (użyj https://)"
+relay_check.no_answer:
+  en: "No answer from the relay %{url} within 10 seconds"
+  pl: "Przekaźnik %{url} nie odpowiedział w ciągu 10 sekund"
+relay_check.unreachable:
+  en: "Cannot connect to %{host} on port %{port} (unknown name, server off or port blocked)"
+  pl: "Nie można połączyć się z %{host} na porcie %{port} (nieznana nazwa, wyłączony serwer lub zablokowany port)"
+relay_check.certificate:
+  en: "The secure connection (TLS) to %{host} failed: an expired, self-signed or wrong certificate, or no TLS on this port"
+  pl: "Bezpieczne połączenie (TLS) z %{host} nie powiodło się: certyfikat wygasł, jest samopodpisany lub wystawiony na inną nazwę albo na tym porcie nie ma TLS"
+relay_check.not_a_relay:
+  en: "%{url} does not answer like an iroh relay"
+  pl: "%{url} nie odpowiada jak przekaźnik iroh"
+relay_check.status:
+  en: "%{url} answered with HTTP %{status} – is it an iroh relay?"
+  pl: "%{url} odpowiedział kodem HTTP %{status} – czy to przekaźnik iroh?"
+relay_check.handshake:
+  en: "%{url} answers, but Ferry cannot connect through it as a relay"
+  pl: "%{url} odpowiada, ale Ferry nie może połączyć się przez niego jako przekaźnik"
 settings.network:
   en: "Network mode: %{mode} – %{description}"
   pl: "Tryb sieci: %{mode} – %{description}"
@@ -1343,9 +1361,12 @@ settings.network_relay_only:
 settings.network_restart:
   en: "The new mode applies after restarting Ferry (GUI, TUI or daemon)."
   pl: "Nowy tryb zacznie działać po ponownym uruchomieniu Ferry (GUI, TUI lub demona)."
-doctor.relay:
-  en: "Relay: %{url}"
-  pl: "Przekaźnik: %{url}"
+doctor.relay_ok:
+  en: "Relay %{url} works (%{ms} ms)"
+  pl: "Przekaźnik %{url} działa (%{ms} ms)"
+doctor.relay_failed:
+  en: "Relay %{url} does not work: %{error}"
+  pl: "Przekaźnik %{url} nie działa: %{error}"
 doctor.network_mode:
   en: "Network mode: %{mode}"
   pl: "Tryb sieci: %{mode}"

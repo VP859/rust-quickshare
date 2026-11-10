@@ -199,3 +199,59 @@ async fn the_local_mode_has_no_relay_in_its_address() {
     assert_eq!(node.node_addr().await.unwrap().relay_urls().count(), 0);
     node.close().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_working_relay_answers_in_time() {
+    let (_server, url) = relay().await;
+    let took = ferry::node::check_relay(&url).await.unwrap();
+    assert!(took < ferry::node::RELAY_CHECK_TIMEOUT, "{took:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_relay_that_does_not_work_says_why() {
+    let check = async |url: &str| {
+        let url: RelayUrl = url.parse().unwrap();
+        format!("{:#}", ferry::node::check_relay(&url).await.unwrap_err())
+    };
+    // Nothing listens on a port that was just free.
+    let port = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let error = check(&format!("http://127.0.0.1:{port}")).await;
+    assert!(
+        error.starts_with("Cannot connect to 127.0.0.1 on port"),
+        "{error}"
+    );
+
+    // A relay without TLS, addressed with https://.
+    let (_server, url) = relay().await;
+    let error = check(&url.as_str().replace("http://", "https://")).await;
+    assert!(error.contains("(TLS)"), "{error}");
+
+    // A web server that is not a relay.
+    let web = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+        .await
+        .unwrap();
+    let address = web.local_addr().unwrap();
+    tokio::spawn(async move {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        while let Ok((mut socket, _)) = web.accept().await {
+            let mut buffer = [0; 1024];
+            let _ = socket.read(&mut buffer).await;
+            let _ = socket
+                .write_all(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n")
+                .await;
+        }
+    });
+    let error = check(&format!("http://{address}")).await;
+    assert!(error.contains("HTTP 404"), "{error}");
+
+    // A name that does not exist (.invalid never resolves).
+    let error = check("https://relay.invalid").await;
+    assert!(
+        error.starts_with("Cannot connect to relay.invalid on port 443"),
+        "{error}"
+    );
+}

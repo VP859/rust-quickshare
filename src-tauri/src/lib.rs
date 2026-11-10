@@ -166,6 +166,7 @@ pub fn run() {
             get_language,
             get_network_mode,
             set_network_mode,
+            check_relays,
             restart_app,
             set_language,
             open_received,

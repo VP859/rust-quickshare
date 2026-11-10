@@ -14,12 +14,14 @@ pub struct DoctorReport {
     pub udp_socket_ok: bool,
     /// `config.toml` is missing or parses correctly.
     pub config_valid: bool,
+    /// Outside the relay modes, or at least one of their relays works.
+    pub relays_ok: bool,
 }
 
 impl DoctorReport {
     /// No check found a problem that prevents Ferry from working.
     pub fn healthy(&self) -> bool {
-        self.udp_socket_ok && self.config_valid
+        self.udp_socket_ok && self.config_valid && self.relays_ok
     }
 }
 
@@ -47,11 +49,26 @@ pub async fn run_doctor() -> Result<DoctorReport> {
         "[i] {}",
         t!("doctor.network_mode", mode = config.network_mode)
     );
+    let mut relays_ok = true;
     if config.network_mode.own_relays() {
+        relays_ok = false;
         match ferry::node::Network::from_config(&config) {
             Ok(network) => {
+                // Each relay is tried for real: a typo or an expired certificate shows here.
                 for relay in &network.relays {
-                    println!("[i] {}", t!("doctor.relay", url = relay));
+                    match ferry::node::check_relay(relay).await {
+                        Ok(rtt) => {
+                            relays_ok = true;
+                            println!(
+                                "[✓] {}",
+                                t!("doctor.relay_ok", url = relay, ms = rtt.as_millis())
+                            );
+                        }
+                        Err(e) => println!(
+                            "[✗] {}",
+                            t!("doctor.relay_failed", url = relay, error = format!("{e:#}"))
+                        ),
+                    }
                 }
             }
             Err(e) => println!("[✗] {e:#}"),
@@ -84,6 +101,7 @@ pub async fn run_doctor() -> Result<DoctorReport> {
     Ok(DoctorReport {
         udp_socket_ok: udp_ok,
         config_valid: config_ok,
+        relays_ok,
     })
 }
 
