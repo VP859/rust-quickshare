@@ -20,5 +20,11 @@ install-path = "CARGO_HOME"
 precise-builds = true
 # release.yml has extra Tauri and Android jobs – do not regenerate it with `dist init`.
 allow-dirty = ["ci"]
-# System service files bundled with the CLI archives.
-include = ["dist/systemd/ferry-daemon.service", "dist/windows/install-autostart.ps1"]
+# System service files, shell completions and manual pages bundled with the CLI
+# archives (completions and pages: `ferry generate-docs dist`).
+include = [
+  "dist/systemd/ferry-daemon.service",
+  "dist/windows/install-autostart.ps1",
+  "dist/completions",
+  "dist/man",
+]

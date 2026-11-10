@@ -1,0 +1,19 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-daemon 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-daemon \- Run in the background; trusted devices with Auto\-Accept are accepted automatically
+.SH SYNOPSIS
+\fBferry daemon\fR [\fB\-d\fR|\fB\-\-downloads\-dir\fR] [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Run in the background; trusted devices with Auto\-Accept are accepted automatically
+.SH OPTIONS
+.TP
+\fB\-d\fR, \fB\-\-downloads\-dir\fR \fI<DOWNLOADS_DIR>\fR
+Folder for received files (default: the saved setting or the download folder)
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

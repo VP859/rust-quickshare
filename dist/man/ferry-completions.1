@@ -1,0 +1,35 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-completions 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-completions \- Print the shell completion script, e.g. `ferry completions bash > ~/.local/share/bash\-completion/completions/ferry` (packages install it already)
+.SH SYNOPSIS
+\fBferry completions\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fISHELL\fR> 
+.SH DESCRIPTION
+Print the shell completion script, e.g. `ferry completions bash > ~/.local/share/bash\-completion/completions/ferry` (packages install it already)
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fISHELL\fR>
+Shell to complete in
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+bash
+.IP \(bu 2
+elvish
+.IP \(bu 2
+fish
+.IP \(bu 2
+powershell
+.IP \(bu 2
+zsh
+.RE

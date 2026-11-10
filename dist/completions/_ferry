@@ -1,0 +1,1479 @@
+#compdef ferry
+
+autoload -U is-at-least
+
+_ferry() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_ferry_commands" \
+"*::: :->ferry" \
+&& ret=0
+    case $state in
+    (ferry)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-command-$line[1]:"
+        case $line[1] in
+            (send)
+_arguments "${_arguments_options[@]}" : \
+'*-t+[Alias, nearby device name, Node ID or TICKET of the receiver (it must run \`ferry daemon\`, the TUI or the GUI). Repeat it to send to several devices at once]:TO:_default' \
+'*--to=[Alias, nearby device name, Node ID or TICKET of the receiver (it must run \`ferry daemon\`, the TUI or the GUI). Repeat it to send to several devices at once]:TO:_default' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+'*::files -- Files and folders to send (folders keep their structure):_files' \
+&& ret=0
+;;
+(localsend)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_ferry__subcmd__localsend_commands" \
+"*::: :->localsend" \
+&& ret=0
+
+    case $state in
+    (localsend)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-localsend-command-$line[1]:"
+        case $line[1] in
+            (scan)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Seconds to wait for answers]:TIMEOUT:_default' \
+'--timeout=[Seconds to wait for answers]:TIMEOUT:_default' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(send)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Name or IP address (\`192.168.1.20\` or \`192.168.1.20\:53317\`) of the LocalSend app, as listed by \`ferry localsend scan\`]:TO:_default' \
+'--to=[Name or IP address (\`192.168.1.20\` or \`192.168.1.20\:53317\`) of the LocalSend app, as listed by \`ferry localsend scan\`]:TO:_default' \
+'--pin=[PIN, for apps that require one]:PIN:_default' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+'*::files -- Files and folders to send (folders keep their structure):_files' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_ferry__subcmd__localsend__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-localsend-help-command-$line[1]:"
+        case $line[1] in
+            (scan)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(send)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(integrate)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'--remove[Remove the entries again]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(history)
+_arguments "${_arguments_options[@]}" : \
+'-n+[How many transfers to show]:LIMIT:_default' \
+'--limit=[How many transfers to show]:LIMIT:_default' \
+'--kind=[Show only texts and links (never their content), or only files]:KIND:((files\:"Files and folders only"
+texts\:"Texts and links only"))' \
+'(--clear)--send-again=[Send the file of transfer N of the list (as numbered) again to the same Ferry device]:N:_default' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'--clear[Delete the history]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'::query -- Show only transfers whose file name, device or detail contains this text:_default' \
+&& ret=0
+;;
+(web)
+_arguments "${_arguments_options[@]}" : \
+'--minutes=[Minutes until the link stops working]:MINUTES:_default' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'--no-receive[Do not let the browser send files here]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'*::files -- Files the browser can download (none\: only receive):_files' \
+&& ret=0
+;;
+(text)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Alias, nearby device name, Node ID or TICKET of the receiver]:TO:_default' \
+'--to=[Alias, nearby device name, Node ID or TICKET of the receiver]:TO:_default' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::text -- Text to send (default\: read from standard input):_default' \
+&& ret=0
+;;
+(receive)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+':ticket -- Share TICKET printed by `ferry send` or shown by the GUI:_default' \
+'::output_dir -- Destination folder (default\: the download folder):_files' \
+&& ret=0
+;;
+(daemon)
+_arguments "${_arguments_options[@]}" : \
+'-d+[Folder for received files (default\: the saved setting or the download folder)]:DOWNLOADS_DIR:_files' \
+'--downloads-dir=[Folder for received files (default\: the saved setting or the download folder)]:DOWNLOADS_DIR:_files' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(tui)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(ticket)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(discover)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Search duration in seconds]:TIMEOUT:_default' \
+'--timeout=[Search duration in seconds]:TIMEOUT:_default' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(pair)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'--auto-accept[Enable Auto-Accept for the paired device right away]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':target -- Name or Node ID of a nearby device, or a TICKET / Node ID:_default' \
+&& ret=0
+;;
+(pairing)
+_arguments "${_arguments_options[@]}" : \
+'-m+[How long pairing stays open, in minutes (at most 30)]:MINUTES:_default' \
+'--minutes=[How long pairing stays open, in minutes (at most 30)]:MINUTES:_default' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'--close[Close pairing now]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(guide)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::topic -- Only this topic\: send, pair, browser, apple, internet, trouble, privacy:_default' \
+&& ret=0
+;;
+(name)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::name -- New device name:_default' \
+&& ret=0
+;;
+(language)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::code -- Language code to save:_default' \
+&& ret=0
+;;
+(network)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::mode -- Mode to save\: `local`, `internet`, `relay` or `relay-only`:_default' \
+'*::relays -- With `relay` or `relay-only`\: the relay URLs (`https\://relay.example.org`); without them the saved ones are kept:_default' \
+&& ret=0
+;;
+(peer)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_ferry__subcmd__peer_commands" \
+"*::: :->peer" \
+&& ret=0
+
+    case $state in
+    (peer)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-peer-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+'-a+[Name for the device]:ALIAS:_default' \
+'--alias=[Name for the device]:ALIAS:_default' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'--auto-accept[Accept files from this device without asking]' \
+'--no-pair[Do not send a pairing request (trust only on this side)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':ticket -- TICKET or Node ID of the device:_default' \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(edit)
+_arguments "${_arguments_options[@]}" : \
+'-a+[New alias]:ALIAS:_default' \
+'--alias=[New alias]:ALIAS:_default' \
+'--auto-accept=[New Auto-Accept setting]:AUTO_ACCEPT:(true false)' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+':target -- Alias or Node ID:_default' \
+&& ret=0
+;;
+(verify)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'(--unconfirm)--confirm[The numbers are equal\: mark the device as verified]' \
+'--unconfirm[Remove the verified mark]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':target -- Alias or Node ID:_default' \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+':target -- Alias or Node ID:_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_ferry__subcmd__peer__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-peer-help-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(edit)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(verify)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(config)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_ferry__subcmd__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-config-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(get)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':key -- Setting name:((device-name\:"Name of this device visible to others"
+language\:"Interface language code"
+network-mode\:"\`local\`, \`internet\`, \`relay\` or \`relay-only\` (the relay modes need \`relay-urls\`)"
+download-dir\:"Folder for received files"
+hidden\:"Hidden on the local network from unpaired devices (\`true\`/\`false\`)"
+paired-only\:"Accept files, texts and pairing only from paired devices (\`true\`/\`false\`)"
+strip-metadata\:"Send photos (JPEG, PNG) without their location and other metadata (\`true\`/\`false\`)"
+announce-platform\:"Tell everyone on the local network which operating system this is (\`true\`/\`false\`)"
+random-port\:"Listen on a random port instead of the fixed 47824; applies at the next start (\`true\`/\`false\`)"
+auto-accept-texts\:"Copy texts from Auto-Accept devices without asking (\`true\`/\`false\`)"
+auto-accept-executables\:"Accept programs, scripts and macro documents from Auto-Accept devices without asking (\`true\`/\`false\`)"
+quit-on-close\:"Desktop app\: quit when the window is closed instead of staying in the tray (\`true\`/\`false\`)"
+relay-urls\:"Relays of the \`relay\` and \`relay-only\` network modes, separated by commas (\`https\://relay.example.org\`)"
+history\:"Keep a history of transfers (\`true\`/\`false\`)"
+speed-limit\:"Speed limit for sending and, separately, receiving (\`500K\`, \`2M\`, \`off\`)"
+localsend\:"Receive files from LocalSend apps – iPhone, Mac – without pairing (\`true\`/\`false\`)"))' \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':key -- Setting name:((device-name\:"Name of this device visible to others"
+language\:"Interface language code"
+network-mode\:"\`local\`, \`internet\`, \`relay\` or \`relay-only\` (the relay modes need \`relay-urls\`)"
+download-dir\:"Folder for received files"
+hidden\:"Hidden on the local network from unpaired devices (\`true\`/\`false\`)"
+paired-only\:"Accept files, texts and pairing only from paired devices (\`true\`/\`false\`)"
+strip-metadata\:"Send photos (JPEG, PNG) without their location and other metadata (\`true\`/\`false\`)"
+announce-platform\:"Tell everyone on the local network which operating system this is (\`true\`/\`false\`)"
+random-port\:"Listen on a random port instead of the fixed 47824; applies at the next start (\`true\`/\`false\`)"
+auto-accept-texts\:"Copy texts from Auto-Accept devices without asking (\`true\`/\`false\`)"
+auto-accept-executables\:"Accept programs, scripts and macro documents from Auto-Accept devices without asking (\`true\`/\`false\`)"
+quit-on-close\:"Desktop app\: quit when the window is closed instead of staying in the tray (\`true\`/\`false\`)"
+relay-urls\:"Relays of the \`relay\` and \`relay-only\` network modes, separated by commas (\`https\://relay.example.org\`)"
+history\:"Keep a history of transfers (\`true\`/\`false\`)"
+speed-limit\:"Speed limit for sending and, separately, receiving (\`500K\`, \`2M\`, \`off\`)"
+localsend\:"Receive files from LocalSend apps – iPhone, Mac – without pairing (\`true\`/\`false\`)"))' \
+':value -- New value:_default' \
+&& ret=0
+;;
+(unset)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+':key -- Setting name:((device-name\:"Name of this device visible to others"
+language\:"Interface language code"
+network-mode\:"\`local\`, \`internet\`, \`relay\` or \`relay-only\` (the relay modes need \`relay-urls\`)"
+download-dir\:"Folder for received files"
+hidden\:"Hidden on the local network from unpaired devices (\`true\`/\`false\`)"
+paired-only\:"Accept files, texts and pairing only from paired devices (\`true\`/\`false\`)"
+strip-metadata\:"Send photos (JPEG, PNG) without their location and other metadata (\`true\`/\`false\`)"
+announce-platform\:"Tell everyone on the local network which operating system this is (\`true\`/\`false\`)"
+random-port\:"Listen on a random port instead of the fixed 47824; applies at the next start (\`true\`/\`false\`)"
+auto-accept-texts\:"Copy texts from Auto-Accept devices without asking (\`true\`/\`false\`)"
+auto-accept-executables\:"Accept programs, scripts and macro documents from Auto-Accept devices without asking (\`true\`/\`false\`)"
+quit-on-close\:"Desktop app\: quit when the window is closed instead of staying in the tray (\`true\`/\`false\`)"
+relay-urls\:"Relays of the \`relay\` and \`relay-only\` network modes, separated by commas (\`https\://relay.example.org\`)"
+history\:"Keep a history of transfers (\`true\`/\`false\`)"
+speed-limit\:"Speed limit for sending and, separately, receiving (\`500K\`, \`2M\`, \`off\`)"
+localsend\:"Receive files from LocalSend apps – iPhone, Mac – without pairing (\`true\`/\`false\`)"))' \
+&& ret=0
+;;
+(path)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_ferry__subcmd__config__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-config-help-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(get)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(unset)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(path)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(identity)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_ferry__subcmd__identity_commands" \
+"*::: :->identity" \
+&& ret=0
+
+    case $state in
+    (identity)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-identity-command-$line[1]:"
+        case $line[1] in
+            (show)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(export)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+':file -- File to create; an existing file is never overwritten:_files' \
+&& ret=0
+;;
+(storage)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::storage -- Where to move the key; without it the current place is shown:_default' \
+&& ret=0
+;;
+(import)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'--force[Replace an existing, different key (it is kept as a \`.bak\` file)]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':file -- Backup created by `ferry identity export`:_files' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_ferry__subcmd__identity__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-identity-help-command-$line[1]:"
+        case $line[1] in
+            (show)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(export)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(storage)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(import)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(completions)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+':shell -- Shell to complete in:(bash elvish fish powershell zsh)' \
+&& ret=0
+;;
+(generate-docs)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+':dir -- Folder to write to:_files' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_ferry__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-help-command-$line[1]:"
+        case $line[1] in
+            (send)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(localsend)
+_arguments "${_arguments_options[@]}" : \
+":: :_ferry__subcmd__help__subcmd__localsend_commands" \
+"*::: :->localsend" \
+&& ret=0
+
+    case $state in
+    (localsend)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-help-localsend-command-$line[1]:"
+        case $line[1] in
+            (scan)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(send)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(integrate)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(history)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(web)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(text)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(receive)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(daemon)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(tui)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(ticket)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(discover)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(pair)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(pairing)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(guide)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(name)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(language)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(network)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(peer)
+_arguments "${_arguments_options[@]}" : \
+":: :_ferry__subcmd__help__subcmd__peer_commands" \
+"*::: :->peer" \
+&& ret=0
+
+    case $state in
+    (peer)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-help-peer-command-$line[1]:"
+        case $line[1] in
+            (add)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(edit)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(verify)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(remove)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(config)
+_arguments "${_arguments_options[@]}" : \
+":: :_ferry__subcmd__help__subcmd__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-help-config-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(get)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(set)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(unset)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(path)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(identity)
+_arguments "${_arguments_options[@]}" : \
+":: :_ferry__subcmd__help__subcmd__identity_commands" \
+"*::: :->identity" \
+&& ret=0
+
+    case $state in
+    (identity)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-help-identity-command-$line[1]:"
+        case $line[1] in
+            (show)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(export)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(storage)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(import)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(completions)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(generate-docs)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+}
+
+(( $+functions[_ferry_commands] )) ||
+_ferry_commands() {
+    local commands; commands=(
+'send:Send files and folders to a trusted or nearby device (\`--to\`), or share one file by a one-time TICKET' \
+'localsend:Send files to LocalSend apps (iPhone, iPad, Mac, …) and find them on the local network' \
+'integrate:Add "Send with Ferry" to the file managers of this user (Dolphin, Nautilus, Nemo; Linux)' \
+'history:Show finished transfers, newest first, or search them' \
+'web:Share files with a web browser on the local network and receive files from it, through a one-time link and QR code (the other device needs no app)' \
+'text:Send text or a link; the receiver copies it to the clipboard after accepting' \
+'receive:Download a file shared by TICKET' \
+'daemon:Run in the background; trusted devices with Auto-Accept are accepted automatically' \
+'tui:Interactive terminal user interface' \
+'ticket:Show this device'\''s TICKET (text and QR code) for pairing' \
+'discover:Search for Ferry devices on the local network (own UDP broadcast, no mDNS)' \
+'pair:Pair with a nearby device (name or Node ID from \`ferry discover\`); the other side confirms and both show the same code' \
+'pairing:Let unknown devices send pairing requests for a few minutes, although \`paired-only\` is on (also for a running daemon or TUI); \`--close\` ends it' \
+'guide:Short answers to the usual questions\: sending, pairing, devices without Ferry, iPhone and Mac, local or internet, devices that do not show up, privacy' \
+'name:Show or change the name of this device visible to others' \
+'language:Show or change the interface language (\`en\`, \`pl\`)' \
+'network:Show or change the network mode\: \`local\` (no external servers, default), \`internet\` (also through the free public iroh relays, for devices in different networks), \`relay\` (also through your own relays) or \`relay-only\` (only through your own relays, never directly)' \
+'peer:Manage trusted devices' \
+'config:Show or change settings (\`ferry config list\`, \`get\`, \`set\`, \`unset\`, \`path\`)' \
+'identity:Show, back up or restore this device'\''s identity (its Node ID key)' \
+'doctor:Network and configuration diagnostics' \
+'completions:Print the shell completion script, e.g. \`ferry completions bash > ~/.local/share/bash-completion/completions/ferry\` (packages install it already)' \
+'generate-docs:Write the completion scripts and manual pages to \`DIR/completions\` and \`DIR/man\` (for packaging)' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__completions_commands] )) ||
+_ferry__subcmd__completions_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry completions commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config_commands] )) ||
+_ferry__subcmd__config_commands() {
+    local commands; commands=(
+'list:Show every setting' \
+'get:Show one setting' \
+'set:Change one setting' \
+'unset:Reset one setting to its default' \
+'path:Print the path of the configuration file' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry config commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__get_commands] )) ||
+_ferry__subcmd__config__subcmd__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry config get commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__help_commands] )) ||
+_ferry__subcmd__config__subcmd__help_commands() {
+    local commands; commands=(
+'list:Show every setting' \
+'get:Show one setting' \
+'set:Change one setting' \
+'unset:Reset one setting to its default' \
+'path:Print the path of the configuration file' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry config help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__help__subcmd__get_commands] )) ||
+_ferry__subcmd__config__subcmd__help__subcmd__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry config help get commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__help__subcmd__help_commands] )) ||
+_ferry__subcmd__config__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry config help help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__help__subcmd__list_commands] )) ||
+_ferry__subcmd__config__subcmd__help__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry config help list commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__help__subcmd__path_commands] )) ||
+_ferry__subcmd__config__subcmd__help__subcmd__path_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry config help path commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__help__subcmd__set_commands] )) ||
+_ferry__subcmd__config__subcmd__help__subcmd__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry config help set commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__help__subcmd__unset_commands] )) ||
+_ferry__subcmd__config__subcmd__help__subcmd__unset_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry config help unset commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__list_commands] )) ||
+_ferry__subcmd__config__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry config list commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__path_commands] )) ||
+_ferry__subcmd__config__subcmd__path_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry config path commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__set_commands] )) ||
+_ferry__subcmd__config__subcmd__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry config set commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__config__subcmd__unset_commands] )) ||
+_ferry__subcmd__config__subcmd__unset_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry config unset commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__daemon_commands] )) ||
+_ferry__subcmd__daemon_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry daemon commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__discover_commands] )) ||
+_ferry__subcmd__discover_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry discover commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__doctor_commands] )) ||
+_ferry__subcmd__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry doctor commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__generate-docs_commands] )) ||
+_ferry__subcmd__generate-docs_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry generate-docs commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__guide_commands] )) ||
+_ferry__subcmd__guide_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry guide commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help_commands] )) ||
+_ferry__subcmd__help_commands() {
+    local commands; commands=(
+'send:Send files and folders to a trusted or nearby device (\`--to\`), or share one file by a one-time TICKET' \
+'localsend:Send files to LocalSend apps (iPhone, iPad, Mac, …) and find them on the local network' \
+'integrate:Add "Send with Ferry" to the file managers of this user (Dolphin, Nautilus, Nemo; Linux)' \
+'history:Show finished transfers, newest first, or search them' \
+'web:Share files with a web browser on the local network and receive files from it, through a one-time link and QR code (the other device needs no app)' \
+'text:Send text or a link; the receiver copies it to the clipboard after accepting' \
+'receive:Download a file shared by TICKET' \
+'daemon:Run in the background; trusted devices with Auto-Accept are accepted automatically' \
+'tui:Interactive terminal user interface' \
+'ticket:Show this device'\''s TICKET (text and QR code) for pairing' \
+'discover:Search for Ferry devices on the local network (own UDP broadcast, no mDNS)' \
+'pair:Pair with a nearby device (name or Node ID from \`ferry discover\`); the other side confirms and both show the same code' \
+'pairing:Let unknown devices send pairing requests for a few minutes, although \`paired-only\` is on (also for a running daemon or TUI); \`--close\` ends it' \
+'guide:Short answers to the usual questions\: sending, pairing, devices without Ferry, iPhone and Mac, local or internet, devices that do not show up, privacy' \
+'name:Show or change the name of this device visible to others' \
+'language:Show or change the interface language (\`en\`, \`pl\`)' \
+'network:Show or change the network mode\: \`local\` (no external servers, default), \`internet\` (also through the free public iroh relays, for devices in different networks), \`relay\` (also through your own relays) or \`relay-only\` (only through your own relays, never directly)' \
+'peer:Manage trusted devices' \
+'config:Show or change settings (\`ferry config list\`, \`get\`, \`set\`, \`unset\`, \`path\`)' \
+'identity:Show, back up or restore this device'\''s identity (its Node ID key)' \
+'doctor:Network and configuration diagnostics' \
+'completions:Print the shell completion script, e.g. \`ferry completions bash > ~/.local/share/bash-completion/completions/ferry\` (packages install it already)' \
+'generate-docs:Write the completion scripts and manual pages to \`DIR/completions\` and \`DIR/man\` (for packaging)' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__completions_commands] )) ||
+_ferry__subcmd__help__subcmd__completions_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help completions commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__config_commands] )) ||
+_ferry__subcmd__help__subcmd__config_commands() {
+    local commands; commands=(
+'list:Show every setting' \
+'get:Show one setting' \
+'set:Change one setting' \
+'unset:Reset one setting to its default' \
+'path:Print the path of the configuration file' \
+    )
+    _describe -t commands 'ferry help config commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__config__subcmd__get_commands] )) ||
+_ferry__subcmd__help__subcmd__config__subcmd__get_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help config get commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__config__subcmd__list_commands] )) ||
+_ferry__subcmd__help__subcmd__config__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help config list commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__config__subcmd__path_commands] )) ||
+_ferry__subcmd__help__subcmd__config__subcmd__path_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help config path commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__config__subcmd__set_commands] )) ||
+_ferry__subcmd__help__subcmd__config__subcmd__set_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help config set commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__config__subcmd__unset_commands] )) ||
+_ferry__subcmd__help__subcmd__config__subcmd__unset_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help config unset commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__daemon_commands] )) ||
+_ferry__subcmd__help__subcmd__daemon_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help daemon commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__discover_commands] )) ||
+_ferry__subcmd__help__subcmd__discover_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help discover commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__doctor_commands] )) ||
+_ferry__subcmd__help__subcmd__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help doctor commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__generate-docs_commands] )) ||
+_ferry__subcmd__help__subcmd__generate-docs_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help generate-docs commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__guide_commands] )) ||
+_ferry__subcmd__help__subcmd__guide_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help guide commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__help_commands] )) ||
+_ferry__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__history_commands] )) ||
+_ferry__subcmd__help__subcmd__history_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help history commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__identity_commands] )) ||
+_ferry__subcmd__help__subcmd__identity_commands() {
+    local commands; commands=(
+'show:Show the Node ID and where the key is stored' \
+'export:Write a backup of the key to a new file (keep it secret)' \
+'storage:Show or change where the key is kept\: \`file\` (default) or \`system\` (Secret Service / KWallet / GNOME Keyring on Linux, Credential Manager on Windows)' \
+'import:Replace this device'\''s key with one from a backup' \
+    )
+    _describe -t commands 'ferry help identity commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__identity__subcmd__export_commands] )) ||
+_ferry__subcmd__help__subcmd__identity__subcmd__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help identity export commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__identity__subcmd__import_commands] )) ||
+_ferry__subcmd__help__subcmd__identity__subcmd__import_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help identity import commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__identity__subcmd__show_commands] )) ||
+_ferry__subcmd__help__subcmd__identity__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help identity show commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__identity__subcmd__storage_commands] )) ||
+_ferry__subcmd__help__subcmd__identity__subcmd__storage_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help identity storage commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__integrate_commands] )) ||
+_ferry__subcmd__help__subcmd__integrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help integrate commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__language_commands] )) ||
+_ferry__subcmd__help__subcmd__language_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help language commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__localsend_commands] )) ||
+_ferry__subcmd__help__subcmd__localsend_commands() {
+    local commands; commands=(
+'scan:List the LocalSend apps on the local network. Announces this device'\''s name to them once, so they answer' \
+'send:Send files and folders to a LocalSend app. Its name is not verified\: anyone on the network can announce any name' \
+    )
+    _describe -t commands 'ferry help localsend commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__localsend__subcmd__scan_commands] )) ||
+_ferry__subcmd__help__subcmd__localsend__subcmd__scan_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help localsend scan commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__localsend__subcmd__send_commands] )) ||
+_ferry__subcmd__help__subcmd__localsend__subcmd__send_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help localsend send commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__name_commands] )) ||
+_ferry__subcmd__help__subcmd__name_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help name commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__network_commands] )) ||
+_ferry__subcmd__help__subcmd__network_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help network commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__pair_commands] )) ||
+_ferry__subcmd__help__subcmd__pair_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help pair commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__pairing_commands] )) ||
+_ferry__subcmd__help__subcmd__pairing_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help pairing commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__peer_commands] )) ||
+_ferry__subcmd__help__subcmd__peer_commands() {
+    local commands; commands=(
+'add:Add a device by TICKET or Node ID and send it a pairing request' \
+'list:List trusted devices' \
+'edit:Change the alias or Auto-Accept setting of a device' \
+'verify:Show the safety number shared with a trusted device, to compare it with the other device; \`--confirm\` records that both match' \
+'remove:Remove a trusted device' \
+    )
+    _describe -t commands 'ferry help peer commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__peer__subcmd__add_commands] )) ||
+_ferry__subcmd__help__subcmd__peer__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help peer add commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__peer__subcmd__edit_commands] )) ||
+_ferry__subcmd__help__subcmd__peer__subcmd__edit_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help peer edit commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__peer__subcmd__list_commands] )) ||
+_ferry__subcmd__help__subcmd__peer__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help peer list commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__peer__subcmd__remove_commands] )) ||
+_ferry__subcmd__help__subcmd__peer__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help peer remove commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__peer__subcmd__verify_commands] )) ||
+_ferry__subcmd__help__subcmd__peer__subcmd__verify_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help peer verify commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__receive_commands] )) ||
+_ferry__subcmd__help__subcmd__receive_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help receive commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__send_commands] )) ||
+_ferry__subcmd__help__subcmd__send_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help send commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__text_commands] )) ||
+_ferry__subcmd__help__subcmd__text_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help text commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__ticket_commands] )) ||
+_ferry__subcmd__help__subcmd__ticket_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help ticket commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__tui_commands] )) ||
+_ferry__subcmd__help__subcmd__tui_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help tui commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__web_commands] )) ||
+_ferry__subcmd__help__subcmd__web_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help web commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__history_commands] )) ||
+_ferry__subcmd__history_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry history commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__identity_commands] )) ||
+_ferry__subcmd__identity_commands() {
+    local commands; commands=(
+'show:Show the Node ID and where the key is stored' \
+'export:Write a backup of the key to a new file (keep it secret)' \
+'storage:Show or change where the key is kept\: \`file\` (default) or \`system\` (Secret Service / KWallet / GNOME Keyring on Linux, Credential Manager on Windows)' \
+'import:Replace this device'\''s key with one from a backup' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry identity commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__identity__subcmd__export_commands] )) ||
+_ferry__subcmd__identity__subcmd__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry identity export commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__identity__subcmd__help_commands] )) ||
+_ferry__subcmd__identity__subcmd__help_commands() {
+    local commands; commands=(
+'show:Show the Node ID and where the key is stored' \
+'export:Write a backup of the key to a new file (keep it secret)' \
+'storage:Show or change where the key is kept\: \`file\` (default) or \`system\` (Secret Service / KWallet / GNOME Keyring on Linux, Credential Manager on Windows)' \
+'import:Replace this device'\''s key with one from a backup' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry identity help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__identity__subcmd__help__subcmd__export_commands] )) ||
+_ferry__subcmd__identity__subcmd__help__subcmd__export_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry identity help export commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__identity__subcmd__help__subcmd__help_commands] )) ||
+_ferry__subcmd__identity__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry identity help help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__identity__subcmd__help__subcmd__import_commands] )) ||
+_ferry__subcmd__identity__subcmd__help__subcmd__import_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry identity help import commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__identity__subcmd__help__subcmd__show_commands] )) ||
+_ferry__subcmd__identity__subcmd__help__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry identity help show commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__identity__subcmd__help__subcmd__storage_commands] )) ||
+_ferry__subcmd__identity__subcmd__help__subcmd__storage_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry identity help storage commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__identity__subcmd__import_commands] )) ||
+_ferry__subcmd__identity__subcmd__import_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry identity import commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__identity__subcmd__show_commands] )) ||
+_ferry__subcmd__identity__subcmd__show_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry identity show commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__identity__subcmd__storage_commands] )) ||
+_ferry__subcmd__identity__subcmd__storage_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry identity storage commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__integrate_commands] )) ||
+_ferry__subcmd__integrate_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry integrate commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__language_commands] )) ||
+_ferry__subcmd__language_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry language commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__localsend_commands] )) ||
+_ferry__subcmd__localsend_commands() {
+    local commands; commands=(
+'scan:List the LocalSend apps on the local network. Announces this device'\''s name to them once, so they answer' \
+'send:Send files and folders to a LocalSend app. Its name is not verified\: anyone on the network can announce any name' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry localsend commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__localsend__subcmd__help_commands] )) ||
+_ferry__subcmd__localsend__subcmd__help_commands() {
+    local commands; commands=(
+'scan:List the LocalSend apps on the local network. Announces this device'\''s name to them once, so they answer' \
+'send:Send files and folders to a LocalSend app. Its name is not verified\: anyone on the network can announce any name' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry localsend help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__localsend__subcmd__help__subcmd__help_commands] )) ||
+_ferry__subcmd__localsend__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry localsend help help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__localsend__subcmd__help__subcmd__scan_commands] )) ||
+_ferry__subcmd__localsend__subcmd__help__subcmd__scan_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry localsend help scan commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__localsend__subcmd__help__subcmd__send_commands] )) ||
+_ferry__subcmd__localsend__subcmd__help__subcmd__send_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry localsend help send commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__localsend__subcmd__scan_commands] )) ||
+_ferry__subcmd__localsend__subcmd__scan_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry localsend scan commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__localsend__subcmd__send_commands] )) ||
+_ferry__subcmd__localsend__subcmd__send_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry localsend send commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__name_commands] )) ||
+_ferry__subcmd__name_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry name commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__network_commands] )) ||
+_ferry__subcmd__network_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry network commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__pair_commands] )) ||
+_ferry__subcmd__pair_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry pair commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__pairing_commands] )) ||
+_ferry__subcmd__pairing_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry pairing commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer_commands] )) ||
+_ferry__subcmd__peer_commands() {
+    local commands; commands=(
+'add:Add a device by TICKET or Node ID and send it a pairing request' \
+'list:List trusted devices' \
+'edit:Change the alias or Auto-Accept setting of a device' \
+'verify:Show the safety number shared with a trusted device, to compare it with the other device; \`--confirm\` records that both match' \
+'remove:Remove a trusted device' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry peer commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__add_commands] )) ||
+_ferry__subcmd__peer__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry peer add commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__edit_commands] )) ||
+_ferry__subcmd__peer__subcmd__edit_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry peer edit commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__help_commands] )) ||
+_ferry__subcmd__peer__subcmd__help_commands() {
+    local commands; commands=(
+'add:Add a device by TICKET or Node ID and send it a pairing request' \
+'list:List trusted devices' \
+'edit:Change the alias or Auto-Accept setting of a device' \
+'verify:Show the safety number shared with a trusted device, to compare it with the other device; \`--confirm\` records that both match' \
+'remove:Remove a trusted device' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry peer help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__help__subcmd__add_commands] )) ||
+_ferry__subcmd__peer__subcmd__help__subcmd__add_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry peer help add commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__help__subcmd__edit_commands] )) ||
+_ferry__subcmd__peer__subcmd__help__subcmd__edit_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry peer help edit commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__help__subcmd__help_commands] )) ||
+_ferry__subcmd__peer__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry peer help help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__help__subcmd__list_commands] )) ||
+_ferry__subcmd__peer__subcmd__help__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry peer help list commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__help__subcmd__remove_commands] )) ||
+_ferry__subcmd__peer__subcmd__help__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry peer help remove commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__help__subcmd__verify_commands] )) ||
+_ferry__subcmd__peer__subcmd__help__subcmd__verify_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry peer help verify commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__list_commands] )) ||
+_ferry__subcmd__peer__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry peer list commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__remove_commands] )) ||
+_ferry__subcmd__peer__subcmd__remove_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry peer remove commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__peer__subcmd__verify_commands] )) ||
+_ferry__subcmd__peer__subcmd__verify_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry peer verify commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__receive_commands] )) ||
+_ferry__subcmd__receive_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry receive commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__send_commands] )) ||
+_ferry__subcmd__send_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry send commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__text_commands] )) ||
+_ferry__subcmd__text_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry text commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__ticket_commands] )) ||
+_ferry__subcmd__ticket_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry ticket commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__tui_commands] )) ||
+_ferry__subcmd__tui_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry tui commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__web_commands] )) ||
+_ferry__subcmd__web_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry web commands' commands "$@"
+}
+
+if [ "$funcstack[1]" = "_ferry" ]; then
+    _ferry "$@"
+else
+    compdef _ferry ferry
+fi

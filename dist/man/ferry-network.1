@@ -1,0 +1,22 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-network 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-network \- Show or change the network mode: `local` (no external servers, default), `internet` (also through the free public iroh relays, for devices in different networks), `relay` (also through your own relays) or `relay\-only` (only through your own relays, never directly)
+.SH SYNOPSIS
+\fBferry network\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIMODE\fR] [\fIRELAYS\fR] 
+.SH DESCRIPTION
+Show or change the network mode: `local` (no external servers, default), `internet` (also through the free public iroh relays, for devices in different networks), `relay` (also through your own relays) or `relay\-only` (only through your own relays, never directly)
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+[\fIMODE\fR]
+Mode to save: `local`, `internet`, `relay` or `relay\-only`
+.TP
+[\fIRELAYS\fR]
+With `relay` or `relay\-only`: the relay URLs (`https://relay.example.org`); without them the saved ones are kept

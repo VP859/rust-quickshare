@@ -1,0 +1,22 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-pairing 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-pairing \- Let unknown devices send pairing requests for a few minutes, although `paired\-only` is on (also for a running daemon or TUI); `\-\-close` ends it
+.SH SYNOPSIS
+\fBferry pairing\fR [\fB\-\-lang\fR] [\fB\-m\fR|\fB\-\-minutes\fR] [\fB\-\-close\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Let unknown devices send pairing requests for a few minutes, although `paired\-only` is on (also for a running daemon or TUI); `\-\-close` ends it
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-m\fR, \fB\-\-minutes\fR \fI<MINUTES>\fR [default: 5]
+How long pairing stays open, in minutes (at most 30)
+.TP
+\fB\-\-close\fR
+Close pairing now
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

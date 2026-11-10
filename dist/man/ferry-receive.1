@@ -1,0 +1,22 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-receive 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-receive \- Download a file shared by TICKET
+.SH SYNOPSIS
+\fBferry receive\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fITICKET\fR> [\fIOUTPUT_DIR\fR] 
+.SH DESCRIPTION
+Download a file shared by TICKET
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fITICKET\fR>
+Share TICKET printed by `ferry send` or shown by the GUI
+.TP
+[\fIOUTPUT_DIR\fR]
+Destination folder (default: the download folder)

@@ -1,0 +1,22 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-identity-import 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-identity\-import \- Replace this device\*(Aqs key with one from a backup
+.SH SYNOPSIS
+\fBferry identity import\fR [\fB\-\-force\fR] [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIFILE\fR> 
+.SH DESCRIPTION
+Replace this device\*(Aqs key with one from a backup
+.SH OPTIONS
+.TP
+\fB\-\-force\fR
+Replace an existing, different key (it is kept as a `.bak` file)
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fIFILE\fR>
+Backup created by `ferry identity export`

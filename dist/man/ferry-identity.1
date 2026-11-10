@@ -1,0 +1,29 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-identity 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-identity \- Show, back up or restore this device\*(Aqs identity (its Node ID key)
+.SH SYNOPSIS
+\fBferry identity\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+Show, back up or restore this device\*(Aqs identity (its Node ID key)
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+ferry\-identity\-show(1)
+Show the Node ID and where the key is stored
+.TP
+ferry\-identity\-export(1)
+Write a backup of the key to a new file (keep it secret)
+.TP
+ferry\-identity\-storage(1)
+Show or change where the key is kept: `file` (default) or `system` (Secret Service / KWallet / GNOME Keyring on Linux, Credential Manager on Windows)
+.TP
+ferry\-identity\-import(1)
+Replace this device\*(Aqs key with one from a backup

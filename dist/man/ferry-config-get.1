@@ -1,0 +1,57 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-config-get 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-config\-get \- Show one setting
+.SH SYNOPSIS
+\fBferry config get\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIKEY\fR> 
+.SH DESCRIPTION
+Show one setting
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+<\fIKEY\fR>
+Setting name
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+device\-name: Name of this device visible to others
+.IP \(bu 2
+language: Interface language code
+.IP \(bu 2
+network\-mode: `local`, `internet`, `relay` or `relay\-only` (the relay modes need `relay\-urls`)
+.IP \(bu 2
+download\-dir: Folder for received files
+.IP \(bu 2
+hidden: Hidden on the local network from unpaired devices (`true`/`false`)
+.IP \(bu 2
+paired\-only: Accept files, texts and pairing only from paired devices (`true`/`false`)
+.IP \(bu 2
+strip\-metadata: Send photos (JPEG, PNG) without their location and other metadata (`true`/`false`)
+.IP \(bu 2
+announce\-platform: Tell everyone on the local network which operating system this is (`true`/`false`)
+.IP \(bu 2
+random\-port: Listen on a random port instead of the fixed 47824; applies at the next start (`true`/`false`)
+.IP \(bu 2
+auto\-accept\-texts: Copy texts from Auto\-Accept devices without asking (`true`/`false`)
+.IP \(bu 2
+auto\-accept\-executables: Accept programs, scripts and macro documents from Auto\-Accept devices without asking (`true`/`false`)
+.IP \(bu 2
+quit\-on\-close: Desktop app: quit when the window is closed instead of staying in the tray (`true`/`false`)
+.IP \(bu 2
+relay\-urls: Relays of the `relay` and `relay\-only` network modes, separated by commas (`https://relay.example.org`)
+.IP \(bu 2
+history: Keep a history of transfers (`true`/`false`)
+.IP \(bu 2
+speed\-limit: Speed limit for sending and, separately, receiving (`500K`, `2M`, `off`)
+.IP \(bu 2
+localsend: Receive files from LocalSend apps – iPhone, Mac – without pairing (`true`/`false`)
+.RE

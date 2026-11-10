@@ -46,6 +46,9 @@ dirs = "7.0.0"
 rust-i18n = "4.2.4"
 # Probe file when the daemon checks its download folder.
 tempfile = "3.27.0"
+# Shell completions and manual pages from the command line definition (`ferry completions`, dist/).
+clap_complete = "4.6.11"
+clap_mangen = "0.3.3"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 # System clipboard (copying the TICKET and received texts), desktop only.

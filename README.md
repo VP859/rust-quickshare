@@ -78,12 +78,12 @@ Ferry has no published release yet. When there is one, the
 
 | Platform | File | Contains |
 |---|---|---|
-| Debian, Ubuntu | `.deb` | desktop app, `ferry` CLI, systemd user service, "Send with Ferry" for the file managers |
+| Debian, Ubuntu | `.deb` | desktop app, `ferry` CLI with shell completions and `man ferry`, systemd user service, "Send with Ferry" for the file managers |
 | Fedora, openSUSE | `.rpm` | the same |
 | Other Linux | `.AppImage` | desktop app (run `ferry integrate` for the file-manager entries) |
 | Windows 10/11 | `-setup.exe` (NSIS) or `.msi` | desktop app; the `.exe` also adds *Send to → Ferry* |
 | Android 7+ | `.apk` | the app |
-| Command line only | `ferry-cli-*.tar.xz` / `.zip`, or the shell / PowerShell installer | `ferry` |
+| Command line only | `ferry-cli-*.tar.xz` / `.zip`, or the shell / PowerShell installer | `ferry`, shell completions (`completions/`) and manual pages (`man/`) |
 
 Until then, build it from source ([docs/BUILDING.md](docs/BUILDING.md) lists the requirements):
 
@@ -120,6 +120,7 @@ ferry config                            # all settings (also: get, set, unset, p
 ferry config set hidden true            # hide this device from unpaired devices
 ferry identity export ~/ferry-key.txt   # back up the device key (keep it secret)
 ferry doctor                            # network and discovery diagnostics
+ferry completions zsh > ~/.zfunc/_ferry # Tab completion (packages install it already); man ferry-send
 ```
 
 ### Settings

@@ -1,0 +1,25 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-peer-verify 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-peer\-verify \- Show the safety number shared with a trusted device, to compare it with the other device; `\-\-confirm` records that both match
+.SH SYNOPSIS
+\fBferry peer verify\fR [\fB\-\-confirm\fR] [\fB\-\-lang\fR] [\fB\-\-unconfirm\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fITARGET\fR> 
+.SH DESCRIPTION
+Show the safety number shared with a trusted device, to compare it with the other device; `\-\-confirm` records that both match
+.SH OPTIONS
+.TP
+\fB\-\-confirm\fR
+The numbers are equal: mark the device as verified
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-\-unconfirm\fR
+Remove the verified mark
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fITARGET\fR>
+Alias or Node ID

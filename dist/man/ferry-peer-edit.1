@@ -1,0 +1,35 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-peer-edit 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-peer\-edit \- Change the alias or Auto\-Accept setting of a device
+.SH SYNOPSIS
+\fBferry peer edit\fR [\fB\-a\fR|\fB\-\-alias\fR] [\fB\-\-lang\fR] [\fB\-\-auto\-accept\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fITARGET\fR> 
+.SH DESCRIPTION
+Change the alias or Auto\-Accept setting of a device
+.SH OPTIONS
+.TP
+\fB\-a\fR, \fB\-\-alias\fR \fI<ALIAS>\fR
+New alias
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-\-auto\-accept\fR \fI<AUTO_ACCEPT>\fR
+New Auto\-Accept setting
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+true
+.IP \(bu 2
+false
+.RE
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fITARGET\fR>
+Alias or Node ID

@@ -1,0 +1,19 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-identity-export 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-identity\-export \- Write a backup of the key to a new file (keep it secret)
+.SH SYNOPSIS
+\fBferry identity export\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIFILE\fR> 
+.SH DESCRIPTION
+Write a backup of the key to a new file (keep it secret)
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fIFILE\fR>
+File to create; an existing file is never overwritten

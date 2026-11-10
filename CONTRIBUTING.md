@@ -54,6 +54,9 @@ cargo rustdoc -p ferry-cli --bin ferry -- -D warnings --document-private-items
 npm ci && npm run check:ui && npm run lint:ui && npm run test:ui   # when the GUI changed
 ```
 
+After changing the command line (`cli/src/cli/args.rs`), regenerate the shell completions and
+manual pages in `dist/`: `cargo run -p ferry-cli -- generate-docs dist` (a test fails until then).
+
 Guidelines:
 
 - **Documentation:** every item, including private ones, has a doc comment (enforced by lints).

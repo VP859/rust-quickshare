@@ -1,0 +1,25 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-localsend-send 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-localsend\-send \- Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name
+.SH SYNOPSIS
+\fBferry localsend send\fR [\fB\-\-lang\fR] [\fB\-\-pin\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fB\-t\fR|\fB\-\-to\fR> <\fIFILES\fR> 
+.SH DESCRIPTION
+Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-t\fR, \fB\-\-to\fR \fI<TO>\fR
+Name or IP address (`192.168.1.20` or `192.168.1.20:53317`) of the LocalSend app, as listed by `ferry localsend scan`
+.TP
+\fB\-\-pin\fR \fI<PIN>\fR
+PIN, for apps that require one
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fIFILES\fR>
+Files and folders to send (folders keep their structure)

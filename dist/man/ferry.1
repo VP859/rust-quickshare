@@ -1,0 +1,87 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry 1  Ferry "Ferry Manual"
+.SH NAME
+ferry \- Ferry – secure P2P file sharing over QUIC, without a cloud or mDNS
+.SH SYNOPSIS
+\fBferry\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+Ferry – secure P2P file sharing over QUIC, without a cloud or mDNS
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+ferry\-send(1)
+Send files and folders to a trusted or nearby device (`\-\-to`), or share one file by a one\-time TICKET
+.TP
+ferry\-localsend(1)
+Send files to LocalSend apps (iPhone, iPad, Mac, …) and find them on the local network
+.TP
+ferry\-integrate(1)
+Add "Send with Ferry" to the file managers of this user (Dolphin, Nautilus, Nemo; Linux)
+.TP
+ferry\-history(1)
+Show finished transfers, newest first, or search them
+.TP
+ferry\-web(1)
+Share files with a web browser on the local network and receive files from it, through a one\-time link and QR code (the other device needs no app)
+.TP
+ferry\-text(1)
+Send text or a link; the receiver copies it to the clipboard after accepting
+.TP
+ferry\-receive(1)
+Download a file shared by TICKET
+.TP
+ferry\-daemon(1)
+Run in the background; trusted devices with Auto\-Accept are accepted automatically
+.TP
+ferry\-tui(1)
+Interactive terminal user interface
+.TP
+ferry\-ticket(1)
+Show this device\*(Aqs TICKET (text and QR code) for pairing
+.TP
+ferry\-discover(1)
+Search for Ferry devices on the local network (own UDP broadcast, no mDNS)
+.TP
+ferry\-pair(1)
+Pair with a nearby device (name or Node ID from `ferry discover`); the other side confirms and both show the same code
+.TP
+ferry\-pairing(1)
+Let unknown devices send pairing requests for a few minutes, although `paired\-only` is on (also for a running daemon or TUI); `\-\-close` ends it
+.TP
+ferry\-guide(1)
+Short answers to the usual questions: sending, pairing, devices without Ferry, iPhone and Mac, local or internet, devices that do not show up, privacy
+.TP
+ferry\-name(1)
+Show or change the name of this device visible to others
+.TP
+ferry\-language(1)
+Show or change the interface language (`en`, `pl`)
+.TP
+ferry\-network(1)
+Show or change the network mode: `local` (no external servers, default), `internet` (also through the free public iroh relays, for devices in different networks), `relay` (also through your own relays) or `relay\-only` (only through your own relays, never directly)
+.TP
+ferry\-peer(1)
+Manage trusted devices
+.TP
+ferry\-config(1)
+Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)
+.TP
+ferry\-identity(1)
+Show, back up or restore this device\*(Aqs identity (its Node ID key)
+.TP
+ferry\-doctor(1)
+Network and configuration diagnostics
+.TP
+ferry\-completions(1)
+Print the shell completion script, e.g. `ferry completions bash > ~/.local/share/bash\-completion/completions/ferry` (packages install it already)
+.SH EXTRA
+New to Ferry? `ferry guide` explains the first steps in a few lines.
+.SH AUTHORS
+VP859 and the Ferry contributors

@@ -1,0 +1,19 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-identity-storage 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-identity\-storage \- Show or change where the key is kept: `file` (default) or `system` (Secret Service / KWallet / GNOME Keyring on Linux, Credential Manager on Windows)
+.SH SYNOPSIS
+\fBferry identity storage\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fISTORAGE\fR] 
+.SH DESCRIPTION
+Show or change where the key is kept: `file` (default) or `system` (Secret Service / KWallet / GNOME Keyring on Linux, Credential Manager on Windows)
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+[\fISTORAGE\fR]
+Where to move the key; without it the current place is shown

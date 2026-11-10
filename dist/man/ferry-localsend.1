@@ -1,0 +1,23 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-localsend 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-localsend \- Send files to LocalSend apps (iPhone, iPad, Mac, …) and find them on the local network
+.SH SYNOPSIS
+\fBferry localsend\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+Send files to LocalSend apps (iPhone, iPad, Mac, …) and find them on the local network
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+ferry\-localsend\-scan(1)
+List the LocalSend apps on the local network. Announces this device\*(Aqs name to them once, so they answer
+.TP
+ferry\-localsend\-send(1)
+Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name

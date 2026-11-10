@@ -1,0 +1,41 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-history 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-history \- Show finished transfers, newest first, or search them
+.SH SYNOPSIS
+\fBferry history\fR [\fB\-\-lang\fR] [\fB\-n\fR|\fB\-\-limit\fR] [\fB\-\-kind\fR] [\fB\-\-clear\fR] [\fB\-\-send\-again\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIQUERY\fR] 
+.SH DESCRIPTION
+Show finished transfers, newest first, or search them
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-n\fR, \fB\-\-limit\fR \fI<LIMIT>\fR [default: 30]
+How many transfers to show
+.TP
+\fB\-\-kind\fR \fI<KIND>\fR
+Show only texts and links (never their content), or only files
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+files: Files and folders only
+.IP \(bu 2
+texts: Texts and links only
+.RE
+.TP
+\fB\-\-clear\fR
+Delete the history
+.TP
+\fB\-\-send\-again\fR \fI<N>\fR
+Send the file of transfer N of the list (as numbered) again to the same Ferry device
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+[\fIQUERY\fR]
+Show only transfers whose file name, device or detail contains this text

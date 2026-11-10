@@ -1,0 +1,32 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-config 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-config \- Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)
+.SH SYNOPSIS
+\fBferry config\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIsubcommands\fR]
+.SH DESCRIPTION
+Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+ferry\-config\-list(1)
+Show every setting
+.TP
+ferry\-config\-get(1)
+Show one setting
+.TP
+ferry\-config\-set(1)
+Change one setting
+.TP
+ferry\-config\-unset(1)
+Reset one setting to its default
+.TP
+ferry\-config\-path(1)
+Print the path of the configuration file

@@ -1,0 +1,19 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-discover 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-discover \- Search for Ferry devices on the local network (own UDP broadcast, no mDNS)
+.SH SYNOPSIS
+\fBferry discover\fR [\fB\-\-lang\fR] [\fB\-t\fR|\fB\-\-timeout\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Search for Ferry devices on the local network (own UDP broadcast, no mDNS)
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-t\fR, \fB\-\-timeout\fR \fI<TIMEOUT>\fR [default: 5]
+Search duration in seconds
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

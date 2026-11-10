@@ -85,6 +85,8 @@ async fn main() -> Result<()> {
         Commands::Peer { command } => handle_peer_cmd(command).await?,
         Commands::Config { command } => run_config(command)?,
         Commands::Identity { command } => run_identity(command)?,
+        Commands::Completions { shell } => cli::docs_cmd::print_completions(shell)?,
+        Commands::GenerateDocs { dir } => cli::docs_cmd::generate_docs(&dir)?,
         Commands::Doctor => {
             // A failed check gives exit code 1, e.g. for scripts and support.
             if !run_doctor().await?.healthy() {

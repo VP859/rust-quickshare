@@ -19,6 +19,9 @@ compatibility).
 
 ### Added
 
+- **Shell completions and manual pages** for the `ferry` CLI: `ferry completions bash|zsh|fish|powershell|elvish`,
+  and in the `.deb`/`.rpm` packages and the release archives ready-made completions and a manual
+  page per command (`man ferry`, `man ferry-send`, …), generated from the command line itself.
 - **Relay check**: *Check* next to the relay addresses in the settings and `ferry doctor` connect to
   each relay for real and name what fails (unknown name, closed port, a certificate that is not
   accepted, a server that is not an iroh relay) or show the round trip. `ferry doctor` fails when

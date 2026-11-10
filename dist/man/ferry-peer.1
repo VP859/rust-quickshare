@@ -1,0 +1,32 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-peer 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-peer \- Manage trusted devices
+.SH SYNOPSIS
+\fBferry peer\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+Manage trusted devices
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+ferry\-peer\-add(1)
+Add a device by TICKET or Node ID and send it a pairing request
+.TP
+ferry\-peer\-list(1)
+List trusted devices
+.TP
+ferry\-peer\-edit(1)
+Change the alias or Auto\-Accept setting of a device
+.TP
+ferry\-peer\-verify(1)
+Show the safety number shared with a trusted device, to compare it with the other device; `\-\-confirm` records that both match
+.TP
+ferry\-peer\-remove(1)
+Remove a trusted device

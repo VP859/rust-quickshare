@@ -1,0 +1,22 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-send 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-send \- Send files and folders to a trusted or nearby device (`\-\-to`), or share one file by a one\-time TICKET
+.SH SYNOPSIS
+\fBferry send\fR [\fB\-\-lang\fR] [\fB\-t\fR|\fB\-\-to\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIFILES\fR> 
+.SH DESCRIPTION
+Send files and folders to a trusted or nearby device (`\-\-to`), or share one file by a one\-time TICKET
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-t\fR, \fB\-\-to\fR \fI<TO>\fR
+Alias, nearby device name, Node ID or TICKET of the receiver (it must run `ferry daemon`, the TUI or the GUI). Repeat it to send to several devices at once
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fIFILES\fR>
+Files and folders to send (folders keep their structure)

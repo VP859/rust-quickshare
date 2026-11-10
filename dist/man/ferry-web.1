@@ -1,0 +1,25 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-web 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-web \- Share files with a web browser on the local network and receive files from it, through a one\-time link and QR code (the other device needs no app)
+.SH SYNOPSIS
+\fBferry web\fR [\fB\-\-lang\fR] [\fB\-\-no\-receive\fR] [\fB\-\-minutes\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIFILES\fR] 
+.SH DESCRIPTION
+Share files with a web browser on the local network and receive files from it, through a one\-time link and QR code (the other device needs no app)
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-\-no\-receive\fR
+Do not let the browser send files here
+.TP
+\fB\-\-minutes\fR \fI<MINUTES>\fR [default: 30]
+Minutes until the link stops working
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+[\fIFILES\fR]
+Files the browser can download (none: only receive)

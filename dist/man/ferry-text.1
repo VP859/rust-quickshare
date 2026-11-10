@@ -1,0 +1,22 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-text 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-text \- Send text or a link; the receiver copies it to the clipboard after accepting
+.SH SYNOPSIS
+\fBferry text\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fB\-t\fR|\fB\-\-to\fR> [\fITEXT\fR] 
+.SH DESCRIPTION
+Send text or a link; the receiver copies it to the clipboard after accepting
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-t\fR, \fB\-\-to\fR \fI<TO>\fR
+Alias, nearby device name, Node ID or TICKET of the receiver
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+[\fITEXT\fR]
+Text to send (default: read from standard input)

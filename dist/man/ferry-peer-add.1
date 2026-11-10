@@ -1,0 +1,28 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-peer-add 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-peer\-add \- Add a device by TICKET or Node ID and send it a pairing request
+.SH SYNOPSIS
+\fBferry peer add\fR [\fB\-\-lang\fR] [\fB\-\-auto\-accept\fR] [\fB\-\-no\-pair\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fB\-a\fR|\fB\-\-alias\fR> <\fITICKET\fR> 
+.SH DESCRIPTION
+Add a device by TICKET or Node ID and send it a pairing request
+.SH OPTIONS
+.TP
+\fB\-a\fR, \fB\-\-alias\fR \fI<ALIAS>\fR
+Name for the device
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-\-auto\-accept\fR
+Accept files from this device without asking
+.TP
+\fB\-\-no\-pair\fR
+Do not send a pairing request (trust only on this side)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fITICKET\fR>
+TICKET or Node ID of the device

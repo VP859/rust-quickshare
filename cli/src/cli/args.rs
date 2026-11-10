@@ -176,6 +176,18 @@ pub enum Commands {
     },
     /// Network and configuration diagnostics.
     Doctor,
+    /// Print the shell completion script, e.g. `ferry completions bash > ~/.local/share/bash-completion/completions/ferry`
+    /// (packages install it already).
+    Completions {
+        /// Shell to complete in.
+        shell: clap_complete::Shell,
+    },
+    /// Write the completion scripts and manual pages to `DIR/completions` and `DIR/man` (for packaging).
+    #[command(hide = true)]
+    GenerateDocs {
+        /// Folder to write to.
+        dir: PathBuf,
+    },
 }
 
 /// What `ferry history` shows.

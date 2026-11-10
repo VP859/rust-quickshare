@@ -48,7 +48,11 @@
           "/usr/lib/systemd/user/ferry-daemon.service": "../dist/systemd/ferry-daemon.service",
           "/usr/share/kio/servicemenus/ferry-send.desktop": "../dist/integration/ferry-send.desktop",
           "/usr/share/nautilus-python/extensions/ferry-send.py": "../dist/integration/ferry-send-nautilus.py",
-          "/usr/share/nemo/actions/ferry-send.nemo_action": "../dist/integration/ferry-send.nemo_action"
+          "/usr/share/nemo/actions/ferry-send.nemo_action": "../dist/integration/ferry-send.nemo_action",
+          "/usr/share/bash-completion/completions/ferry": "../dist/completions/ferry.bash",
+          "/usr/share/zsh/site-functions/_ferry": "../dist/completions/_ferry",
+          "/usr/share/fish/vendor_completions.d/ferry.fish": "../dist/completions/ferry.fish",
+          "/usr/share/man/man1": "../dist/man"
         }
       },
       "rpm": {
@@ -57,7 +61,11 @@
           "/usr/lib/systemd/user/ferry-daemon.service": "../dist/systemd/ferry-daemon.service",
           "/usr/share/kio/servicemenus/ferry-send.desktop": "../dist/integration/ferry-send.desktop",
           "/usr/share/nautilus-python/extensions/ferry-send.py": "../dist/integration/ferry-send-nautilus.py",
-          "/usr/share/nemo/actions/ferry-send.nemo_action": "../dist/integration/ferry-send.nemo_action"
+          "/usr/share/nemo/actions/ferry-send.nemo_action": "../dist/integration/ferry-send.nemo_action",
+          "/usr/share/bash-completion/completions/ferry": "../dist/completions/ferry.bash",
+          "/usr/share/zsh/site-functions/_ferry": "../dist/completions/_ferry",
+          "/usr/share/fish/vendor_completions.d/ferry.fish": "../dist/completions/ferry.fish",
+          "/usr/share/man/man1": "../dist/man"
         }
       }
     },

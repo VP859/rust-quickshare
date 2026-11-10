@@ -1,0 +1,19 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-localsend-scan 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-localsend\-scan \- List the LocalSend apps on the local network. Announces this device\*(Aqs name to them once, so they answer
+.SH SYNOPSIS
+\fBferry localsend scan\fR [\fB\-\-lang\fR] [\fB\-t\fR|\fB\-\-timeout\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+List the LocalSend apps on the local network. Announces this device\*(Aqs name to them once, so they answer
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-t\fR, \fB\-\-timeout\fR \fI<TIMEOUT>\fR [default: 3]
+Seconds to wait for answers
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
