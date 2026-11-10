@@ -3,7 +3,7 @@
 
 export default {
   node_starting: 'Connecting…', node_active: 'Online', node_unavailable: 'Offline',
-  mode_local: 'Local only', mode_internet: 'Local + internet', mode_relay: 'Local + own relay', mode_hidden: 'hidden', mode_pending: 'after restart',
+  mode_local: 'Local only', mode_internet: 'Local + internet', mode_relay: 'Local + own relay', mode_relay_only: 'Own relay only', mode_hidden: 'hidden', mode_pending: 'after restart',
   mode_hint: 'Network mode and visibility – click to change',
   my_ticket: 'My TICKET', settings: 'Settings',
   drop_here: 'Drop files to send', send_files: 'Send files',
@@ -116,7 +116,7 @@ export default {
   help_apple_q: 'iPhone, iPad and Mac',
   help_apple_a: 'Install the free LocalSend app there. Ferry finds LocalSend apps under Nearby and sends to them; to receive from them, turn on the LocalSend mode in Settings → Privacy. LocalSend has no pairing, so its names are not verified.',
   help_internet_q: 'Local network or internet?',
-  help_internet_a: 'By default Ferry works only in your local network and talks to no server. The internet mode (Settings) also reaches devices elsewhere through public relays or your own; the content stays end-to-end encrypted, but the relay sees who talks to whom.',
+  help_internet_a: 'By default Ferry works only in your local network and talks to no server. The internet mode (Settings) also reaches devices elsewhere through public relays or your own (“Only through own relay” never connects directly, so the other device does not see your IP); the content stays end-to-end encrypted, but the relay sees who talks to whom.',
   help_trouble_q: 'A device does not show up, or a link does not open',
   help_trouble_a: 'Both devices must be on the same network, not a guest Wi-Fi, and the firewall must allow Ferry. On Android 16 and newer, Ferry and the browser need the "Local network" permission, and a VPN on the phone can keep it off the local network. The hint under Nearby says what Ferry noticed.',
   help_privacy_q: 'What can others see?',
@@ -153,6 +153,8 @@ export default {
   network_mode: 'Network', network_local: 'Local network only', network_internet: 'Local network and internet',
   network_local_desc: 'Direct connections only – nothing is sent to external servers. Devices must be on the same network.',
   network_relay: 'Local network and own relay',
+  network_relay_only: 'Only through own relay',
+  network_relay_only_desc: 'Every connection goes through the relays you set, never directly – even in the same network. The other device sees only the relay\'s address, not your IP; the relay sees IP addresses and Node IDs, never content. Slower, and the other device must be reachable through a relay too (pair the devices after choosing a relay mode). Devices nearby are still listed; LocalSend and browser sessions stay direct.',
   network_relay_desc: 'Direct when possible, otherwise only through the relays you set – no n0 server is contacted. Paired devices are reached at the address saved when pairing, so pair the devices after choosing this mode. The relay sees IP addresses and Node IDs, never content.',
   relay_urls: 'Relay addresses (one per line)',
   relay_urls_ph: 'https://relay.example.org',

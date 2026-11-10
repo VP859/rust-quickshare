@@ -13,6 +13,11 @@
 //!   the user runs or trusts ([`Network::relays`]) and without n0's address
 //!   lookup: devices find each other through local discovery and the address
 //!   (with the relay URL) saved at pairing or carried by a TICKET.
+//! - [`NetworkMode::RelayOnly`]: every connection goes through the user's
+//!   relays, even within one network. The endpoint has no UDP socket for
+//!   direct paths, so the other device never learns this device's IP address
+//!   from Ferry's connections (only the relay sees it) and nothing on the
+//!   path sees which two devices exchange data. Slower than a direct path.
 
 use anyhow::{Context, Result};
 use iroh::endpoint::{ConnectOptions, Connection, QuicTransportConfig, presets};
@@ -74,14 +79,20 @@ pub enum NetworkMode {
     /// contacted. Paired devices are reached at the address saved at
     /// pairing, which contains their relay URL.
     Relay,
+    /// Only through the relays in [`Network::relays`], never directly: no IP
+    /// transport at all, so peers see only the relay's address. Otherwise
+    /// like [`NetworkMode::Relay`].
+    #[serde(rename = "relay-only")]
+    RelayOnly,
 }
 
 impl NetworkMode {
     /// All modes, in display order.
-    pub const ALL: [NetworkMode; 3] = [
+    pub const ALL: [NetworkMode; 4] = [
         NetworkMode::Local,
         NetworkMode::Internet,
         NetworkMode::Relay,
+        NetworkMode::RelayOnly,
     ];
 
     /// Name used in the configuration file and on the command line.
@@ -90,7 +101,20 @@ impl NetworkMode {
             NetworkMode::Local => "local",
             NetworkMode::Internet => "internet",
             NetworkMode::Relay => "relay",
+            NetworkMode::RelayOnly => "relay-only",
         }
+    }
+
+    /// Whether the relays in [`Network::relays`] are used
+    /// ([`NetworkMode::Relay`] and [`NetworkMode::RelayOnly`]).
+    pub fn own_relays(self) -> bool {
+        matches!(self, NetworkMode::Relay | NetworkMode::RelayOnly)
+    }
+
+    /// Whether direct connections are possible (all modes but
+    /// [`NetworkMode::RelayOnly`]).
+    pub fn direct(self) -> bool {
+        self != NetworkMode::RelayOnly
     }
 
     /// Whether relay servers are used (and a TICKET waits for one).
@@ -113,7 +137,7 @@ impl fmt::Display for NetworkMode {
 impl FromStr for NetworkMode {
     type Err = anyhow::Error;
 
-    /// Parses `local` or `internet` (case-insensitive).
+    /// Parses `local`, `internet`, `relay` or `relay-only` (case-insensitive).
     fn from_str(s: &str) -> Result<Self> {
         Self::ALL
             .into_iter()
@@ -122,12 +146,14 @@ impl FromStr for NetworkMode {
     }
 }
 
-/// The network mode with the relays of [`NetworkMode::Relay`].
+/// The network mode with the relays of [`NetworkMode::Relay`] and
+/// [`NetworkMode::RelayOnly`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Network {
     /// Whether and which servers may be used.
     pub mode: NetworkMode,
-    /// Relays of [`NetworkMode::Relay`]; ignored in the other modes.
+    /// Relays of [`NetworkMode::Relay`] and [`NetworkMode::RelayOnly`];
+    /// ignored in the other modes.
     pub relays: Vec<RelayUrl>,
     /// Listen on a random UDP port instead of [`QUIC_PORT`]
     /// ([`Config::random_port`](crate::config::Config::random_port)).
@@ -149,9 +175,10 @@ impl Network {
     ///
     /// # Errors
     ///
-    /// Fails in [`NetworkMode::Relay`] when no relay is set or a URL is invalid.
+    /// Fails in [`NetworkMode::Relay`] or [`NetworkMode::RelayOnly`] when no
+    /// relay is set or a URL is invalid.
     pub fn from_config(config: &crate::config::Config) -> Result<Self> {
-        let relays = if config.network_mode == NetworkMode::Relay {
+        let relays = if config.network_mode.own_relays() {
             let relays = config
                 .relay_urls
                 .iter()
@@ -238,13 +265,13 @@ fn connect_error(error: anyhow::Error) -> anyhow::Error {
 /// far below the link speed; BBRv3 does not. On a local network Wi-Fi and
 /// Ethernet retransmit lost frames themselves, losses are rare, and Cubic
 /// reaches higher speeds on fast links. So [`NetworkMode::Local`] uses Cubic
-/// and [`NetworkMode::Internet`] BBRv3.
+/// and the modes with relays BBRv3.
 pub fn transport_config(mode: NetworkMode) -> QuicTransportConfig {
     let builder = QuicTransportConfig::builder();
     match mode {
         NetworkMode::Local => builder
             .congestion_controller_factory(Arc::new(noq_proto::congestion::CubicConfig::default())),
-        NetworkMode::Internet | NetworkMode::Relay => builder
+        NetworkMode::Internet | NetworkMode::Relay | NetworkMode::RelayOnly => builder
             .congestion_controller_factory(Arc::new(noq_proto::congestion::Bbr3Config::default())),
     }
     .build()
@@ -288,7 +315,7 @@ impl NodeEngine {
     /// # Errors
     ///
     /// Fails when the endpoint cannot bind its UDP sockets, or in
-    /// [`NetworkMode::Relay`] without relays.
+    /// [`NetworkMode::Relay`] or [`NetworkMode::RelayOnly`] without relays.
     pub async fn with_network(secret_key: SecretKey, network: Network) -> Result<Self> {
         // Port 0 lets the system pick a free port.
         let ports = if network.random_port {
@@ -322,7 +349,7 @@ impl NodeEngine {
         ports: std::ops::RangeInclusive<u16>,
     ) -> Result<Self> {
         let mode = network.mode;
-        if mode == NetworkMode::Relay && network.relays.is_empty() {
+        if mode.own_relays() && network.relays.is_empty() {
             anyhow::bail!(t!("engine.no_relay"));
         }
         let builder = |key: SecretKey| {
@@ -334,6 +361,11 @@ impl NodeEngine {
                 // No address lookup service: nothing goes to n0.
                 NetworkMode::Relay => Endpoint::builder(presets::Minimal)
                     .relay_mode(RelayMode::custom(network.relays.iter().cloned())),
+                // No IP transport: no UDP socket, so no direct path and no
+                // address of this device in its EndpointAddr.
+                NetworkMode::RelayOnly => Endpoint::builder(presets::Minimal)
+                    .relay_mode(RelayMode::custom(network.relays.iter().cloned()))
+                    .clear_ip_transports(),
             };
             builder
                 .secret_key(key)
@@ -341,7 +373,8 @@ impl NodeEngine {
                 .transport_config(transport_config(mode))
         };
         let mut preferred = None;
-        for port in ports.clone() {
+        // Without IP transports there is no port to choose.
+        for port in ports.clone().filter(|_| mode.direct()) {
             let bound = match builder(secret_key.clone())
                 .bind_addr(SocketAddr::from((Ipv4Addr::UNSPECIFIED, port)))
             {
@@ -356,11 +389,13 @@ impl NodeEngine {
         let endpoint = match preferred {
             Some(endpoint) => endpoint,
             None => {
-                debug!(
-                    "UDP {}-{} is taken, binding QUIC to a random port",
-                    ports.start(),
-                    ports.end()
-                );
+                if mode.direct() {
+                    debug!(
+                        "UDP {}-{} is taken, binding QUIC to a random port",
+                        ports.start(),
+                        ports.end()
+                    );
+                }
                 builder(secret_key)
                     .bind()
                     .await
@@ -529,6 +564,18 @@ mod tests {
             NetworkMode::Local
         );
         assert_eq!("relay".parse::<NetworkMode>().unwrap(), NetworkMode::Relay);
+        assert_eq!(
+            "Relay-Only".parse::<NetworkMode>().unwrap(),
+            NetworkMode::RelayOnly
+        );
+        // The code is what the configuration file stores.
+        for mode in NetworkMode::ALL {
+            assert_eq!(mode.code().parse::<NetworkMode>().unwrap(), mode);
+            assert_eq!(
+                serde_json::to_string(&mode).unwrap(),
+                format!("\"{}\"", mode.code())
+            );
+        }
         assert!("n0".parse::<NetworkMode>().is_err());
         assert_eq!(NetworkMode::default(), NetworkMode::Local);
     }

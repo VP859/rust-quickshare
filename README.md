@@ -184,22 +184,27 @@ running window instead of opening a second one.
 
 ## Network modes
 
-| | `local` (default) | `internet` | `relay` (own relay) |
-|---|---|---|---|
-| Servers contacted | none | public iroh relays and DNS run by n0, free of charge | only the relays you set |
-| Devices reachable | on the same network (or VPN) | also on other networks (mobile data, another home) | also on other networks, through your relay |
-| Finding paired devices | local network | local network, then n0 DNS by Node ID | local network, then the address saved at pairing |
-| Encryption | end-to-end | end-to-end; relays forward only encrypted packets | end-to-end; your relay forwards only encrypted packets |
-| Visible to servers | nothing | IP addresses, Node IDs and timing – never content | the same, but only to your relay |
+| | `local` (default) | `internet` | `relay` (own relay) | `relay-only` (only own relay) |
+|---|---|---|---|---|
+| Servers contacted | none | public iroh relays and DNS run by n0, free of charge | only the relays you set | only the relays you set |
+| Devices reachable | on the same network (or VPN) | also on other networks (mobile data, another home) | also on other networks, through your relay | any device reachable through a relay – never directly |
+| Finding paired devices | local network | local network, then n0 DNS by Node ID | local network, then the address saved at pairing | local network announcements (they carry the relay URL), then the address saved at pairing |
+| Encryption | end-to-end | end-to-end; relays forward only encrypted packets | end-to-end; your relay forwards only encrypted packets | end-to-end; your relay forwards only encrypted packets |
+| Visible to servers | nothing | IP addresses, Node IDs and timing – never content | the same, but only to your relay | the same, only to your relay |
+| Visible to the other device | your IP addresses | your IP addresses | your IP addresses | only the relay's address |
 
-Every mode tries a direct connection first; a relay is only the fallback when the devices cannot
-reach each other directly. Change the mode with `ferry network local|internet`,
-`ferry network relay https://relay.example.org`, `M` in the TUI or *Settings → Network*; it applies
+The first three modes try a direct connection first; a relay is only the fallback when the devices
+cannot reach each other directly. `relay-only` never connects directly, even within one network:
+Ferry opens no UDP socket for direct paths, so the other device and the network between you see
+only traffic to the relay, never which two devices talk – at the cost of speed. Devices nearby are
+still listed; LocalSend and browser sessions are separate features and stay direct. Change the mode
+with `ferry network local|internet`, `ferry network relay https://relay.example.org`,
+`ferry network relay-only https://relay.example.org`, `M` in the TUI or *Settings → Network*; it applies
 after a restart. The desktop app always shows the active mode in the top bar.
 
 ### Own relay
 
-The `relay` mode is the internet mode without n0. It needs an
+The `relay` and `relay-only` modes are the internet mode without n0. They need an
 [iroh relay](https://github.com/n0-computer/iroh/tree/main/iroh-relay) that both devices can reach,
 for example on a small VPS or a home server with a forwarded port. Use the version of iroh-relay
 that matches Ferry's iroh (1.4):
@@ -213,7 +218,7 @@ For use over the internet, run it with a configuration file that enables TLS (Le
 own certificate) and give Ferry the `https://` address. Plain `http://` is accepted only for IP
 addresses on this computer or the local network.
 
-- Pair devices **after** both use the relay mode: without n0's lookup, a device is found at the
+- Pair devices **after** both use a relay mode: without n0's lookup, a device is found at the
   address saved when pairing, which then contains the relay URL. Devices paired earlier are still
   found on the local network; pair them again to reach them through the relay.
 - Both devices can also use different relays: Ferry reaches the other device through the relay

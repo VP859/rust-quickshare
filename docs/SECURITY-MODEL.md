@@ -43,8 +43,16 @@ contains their relay URL), so a device whose relay changed must be paired again.
 relay URLs are refused except for IP addresses on this computer or the local network, because they
 would show the Node IDs to everyone on the way.
 
+The **relay-only mode** (`relay-only`) is the own relay mode without direct paths: the endpoint has
+no IP transport (no UDP socket), so even on the same network every connection goes through the
+relay. The other device then sees the relay's address instead of yours, and devices on the network
+or the internet provider see only encrypted traffic to the relay, not which two devices exchange
+data. The relay still sees both IP addresses, Node IDs, amounts and timing (as above). Local
+network discovery, LocalSend and browser sessions are unaffected: they announce or serve on the
+local network as in the other modes (turn on *hidden* to stop the announcements).
+
 A **TICKET** (text or QR code) contains your Node ID and your current IP addresses and ports
-(local and, when known, public), and in internet or relay mode your relay URL. Treat it like a phone number:
+(local and, when known, public), and in internet or relay mode your relay URL; in relay-only mode only the Node ID and the relay URL. Treat it like a phone number:
 whoever has it can reach your device and ask for something. A share TICKET additionally lets its
 holder download the one shared file while sharing is active.
 

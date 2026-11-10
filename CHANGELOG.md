@@ -19,6 +19,11 @@ compatibility).
 
 ### Added
 
+- **Relay-only mode** (`relay-only`, *Settings → Network → Only through own relay*): every
+  connection goes through your own relays, never directly, even in the same network. Ferry opens
+  no UDP socket for direct paths, so the other device sees only the relay's address instead of your
+  IP and the network in between cannot tell which two devices talk. Slower than a direct path.
+  `ferry network relay-only URL`, `M` in the TUI cycles through it.
 - **Android: permissions with a reason.** Android's dialog appears on the first start, and again for
   *Local network* (Android 17+) when a search starts; the camera is asked for only when a QR code
   is scanned (before, the scanner failed until the camera was allowed in the settings). A card says

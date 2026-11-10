@@ -6,8 +6,9 @@
 //! Ed25519 identities) and reach devices at the addresses announced on the
 //! local network or carried by a TICKET. By default no external servers are
 //! contacted; the optional [`node::NetworkMode::Internet`] adds the public iroh
-//! relays for devices in different networks, and [`node::NetworkMode::Relay`]
-//! uses only relays the user runs.
+//! relays for devices in different networks, [`node::NetworkMode::Relay`]
+//! uses only relays the user runs, and [`node::NetworkMode::RelayOnly`] goes
+//! only through them, never directly.
 //!
 //! ## Overview
 //!

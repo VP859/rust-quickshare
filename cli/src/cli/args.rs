@@ -145,14 +145,15 @@ pub enum Commands {
         /// Language code to save.
         code: Option<String>,
     },
-    /// Show or change the network mode: `local` (no external servers, default)
-    /// or `internet` (also through the free public iroh relays, for devices in
-    /// different networks).
+    /// Show or change the network mode: `local` (no external servers, default),
+    /// `internet` (also through the free public iroh relays, for devices in
+    /// different networks), `relay` (also through your own relays) or
+    /// `relay-only` (only through your own relays, never directly).
     Network {
-        /// Mode to save: `local`, `internet` or `relay`.
+        /// Mode to save: `local`, `internet`, `relay` or `relay-only`.
         mode: Option<String>,
-        /// With `relay`: the relay URLs (`https://relay.example.org`); without
-        /// them the saved ones are kept.
+        /// With `relay` or `relay-only`: the relay URLs
+        /// (`https://relay.example.org`); without them the saved ones are kept.
         relays: Vec<String>,
     },
     /// Manage trusted devices.
@@ -213,7 +214,7 @@ pub enum SettingKey {
     AutoAcceptExecutables,
     /// Desktop app: quit when the window is closed instead of staying in the tray (`true`/`false`).
     QuitOnClose,
-    /// Relays of the `relay` network mode, separated by commas (`https://relay.example.org`).
+    /// Relays of the `relay` and `relay-only` network modes, separated by commas (`https://relay.example.org`).
     RelayUrls,
     /// Keep a history of transfers (`true`/`false`).
     History,

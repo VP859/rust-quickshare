@@ -127,15 +127,16 @@ impl App {
     }
 
     /// Switches the saved [`NetworkMode`](ferry::node::NetworkMode): local →
-    /// internet → own relay (only when relays are set) → local; it applies
-    /// after restarting the TUI.
+    /// internet → own relay → only own relay (both only when relays are set)
+    /// → local; it applies after restarting the TUI.
     pub fn toggle_network_mode(&mut self) {
         use ferry::node::NetworkMode;
         let result = Config::load().and_then(|mut c| {
             c.network_mode = match c.network_mode {
                 NetworkMode::Local => NetworkMode::Internet,
                 NetworkMode::Internet if !c.relay_urls.is_empty() => NetworkMode::Relay,
-                NetworkMode::Internet | NetworkMode::Relay => NetworkMode::Local,
+                NetworkMode::Relay => NetworkMode::RelayOnly,
+                NetworkMode::Internet | NetworkMode::RelayOnly => NetworkMode::Local,
             };
             c.save()?;
             Ok(t!("tui.network_saved", mode = c.network_mode).into_owned())

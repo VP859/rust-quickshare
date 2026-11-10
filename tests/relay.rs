@@ -1,13 +1,14 @@
-//! The relay mode (`NetworkMode::Relay`): devices that know only each other's
-//! relay URL – no IP address – connect and transfer through a relay server
-//! run in the test, and no n0 server is configured.
+//! The relay modes (`NetworkMode::Relay`, `NetworkMode::RelayOnly`): devices
+//! that know only each other's relay URL – no IP address – connect and
+//! transfer through a relay server run in the test, and no n0 server is
+//! configured; in the relay-only mode never directly, even when they could.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, missing_docs)]
 
 use ferry::node::{Network, NetworkMode, NodeEngine, NodeTicket};
 use ferry::protocol::messages::TransferOffer;
 use ferry::transfer::service::{
-    self, OfferDecision, TransferEvent, TransferHandler, TransferStatus,
+    self, OfferDecision, Route, TransferEvent, TransferHandler, TransferStatus,
 };
 use iroh::{EndpointAddr, EndpointId, RelayUrl, SecretKey, TransportAddr};
 use iroh_relay::server::{RelayConfig, Server, ServerConfig};
@@ -28,8 +29,12 @@ async fn relay() -> (Server, RelayUrl) {
 }
 
 async fn node(relay: &RelayUrl) -> NodeEngine {
+    node_in(NetworkMode::Relay, relay).await
+}
+
+async fn node_in(mode: NetworkMode, relay: &RelayUrl) -> NodeEngine {
     let network = Network {
-        mode: NetworkMode::Relay,
+        mode,
         relays: vec![relay.clone()],
         random_port: false,
     };
@@ -109,17 +114,81 @@ async fn devices_reach_each_other_through_their_own_relay() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn the_relay_mode_does_not_start_without_a_relay() {
-    let network = Network {
-        mode: NetworkMode::Relay,
-        relays: Vec::new(),
-        random_port: false,
-    };
-    assert!(
-        NodeEngine::with_network(SecretKey::generate(), network)
-            .await
-            .is_err()
+async fn the_relay_modes_do_not_start_without_a_relay() {
+    for mode in [NetworkMode::Relay, NetworkMode::RelayOnly] {
+        let network = Network {
+            mode,
+            relays: Vec::new(),
+            random_port: false,
+        };
+        assert!(
+            NodeEngine::with_network(SecretKey::generate(), network)
+                .await
+                .is_err(),
+            "{mode}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_relay_only_mode_never_connects_directly() {
+    let (_server, url) = relay().await;
+    // The receiver could be reached directly (relay mode, same computer) …
+    let receiver = node(&url).await;
+    let sender = node_in(NetworkMode::RelayOnly, &url).await;
+
+    // … the relay-only sender has no IP address to give away.
+    let own = sender.node_addr().await.unwrap();
+    assert_eq!(own.ip_addrs().count(), 0, "{own:?}");
+    assert_eq!(own.relay_urls().collect::<Vec<_>>(), [&url]);
+    let target = receiver.node_addr().await.unwrap();
+    assert!(target.ip_addrs().next().is_some(), "{target:?}");
+
+    let dst = tempfile::tempdir().unwrap();
+    tokio::spawn(service::serve(
+        receiver.clone(),
+        Arc::new(AcceptAll(dst.path().into())),
+    ));
+    let src = tempfile::tempdir().unwrap();
+    let data: Vec<u8> = (0..1_000_000u32).map(|i| (i % 251) as u8).collect();
+    std::fs::write(src.path().join("relay-only.bin"), &data).unwrap();
+    let routes = std::sync::Mutex::new(Vec::new());
+    tokio::time::timeout(
+        Duration::from_secs(60),
+        service::send_files(
+            &sender,
+            target,
+            &[src.path().join("relay-only.bin")],
+            &|e| {
+                if let Some(route) = e.route {
+                    routes.lock().unwrap().push(route);
+                }
+            },
+        ),
+    )
+    .await
+    .expect("transfer through the relay in time")
+    .unwrap();
+    let routes = routes.into_inner().unwrap();
+    assert!(!routes.is_empty());
+    assert!(routes.iter().all(|r| *r == Route::Relay), "{routes:?}");
+    assert_eq!(
+        std::fs::read(dst.path().join("relay-only.bin")).unwrap(),
+        data
     );
+
+    // A device in the local mode, knowing no relay, cannot reach it at all.
+    let local = NodeEngine::with_network(SecretKey::generate(), NetworkMode::Local.into())
+        .await
+        .unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_secs(10), local.connect(own))
+            .await
+            .map_or(true, |r| r.is_err())
+    );
+    local.close().await;
+    sender.close().await;
+    receiver.close().await;
 }
 
 #[tokio::test(flavor = "multi_thread")]

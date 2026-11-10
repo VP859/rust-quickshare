@@ -1314,11 +1314,11 @@ tui.batch_more:
 
 # ---------------------------------------------------------------- network mode
 engine.bad_mode:
-  en: "Unknown network mode '%{mode}' (use: local, internet, relay)"
-  pl: "Nieznany tryb sieci '%{mode}' (dostępne: local, internet, relay)"
+  en: "Unknown network mode '%{mode}' (use: local, internet, relay, relay-only)"
+  pl: "Nieznany tryb sieci '%{mode}' (dostępne: local, internet, relay, relay-only)"
 engine.no_relay:
-  en: "The relay mode needs the address of a relay: ferry config set relay-urls https://relay.example.org"
-  pl: "Tryb własnego przekaźnika wymaga adresu przekaźnika: ferry config set relay-urls https://relay.example.org"
+  en: "The relay modes need the address of a relay: ferry config set relay-urls https://relay.example.org"
+  pl: "Tryby własnego przekaźnika wymagają adresu przekaźnika: ferry config set relay-urls https://relay.example.org"
 engine.bad_relay:
   en: "'%{url}' is not a relay address (expected https://host[:port])"
   pl: "'%{url}' nie jest adresem przekaźnika (oczekiwano https://host[:port])"
@@ -1337,6 +1337,9 @@ settings.network_internet:
 settings.network_relay:
   en: "direct connections when possible, otherwise only through your relays (%{relays}); no n0 servers, devices are found through the local network and the address saved at pairing"
   pl: "połączenia bezpośrednie, gdy to możliwe, w przeciwnym razie tylko przez Twoje przekaźniki (%{relays}); bez serwerów n0, urządzenia są odnajdywane w sieci lokalnej i po adresie zapisanym przy parowaniu"
+settings.network_relay_only:
+  en: "only through your relays (%{relays}), never directly, even in the same network: the other device sees only the relay's address, not this device's IP; slower, and the other device must be reachable through a relay too"
+  pl: "tylko przez Twoje przekaźniki (%{relays}), nigdy bezpośrednio, nawet w tej samej sieci: drugie urządzenie widzi tylko adres przekaźnika, a nie IP tego urządzenia; wolniej, a drugie urządzenie też musi być osiągalne przez przekaźnik"
 settings.network_restart:
   en: "The new mode applies after restarting Ferry (GUI, TUI or daemon)."
   pl: "Nowy tryb zacznie działać po ponownym uruchomieniu Ferry (GUI, TUI lub demona)."
@@ -1368,8 +1371,8 @@ tui.hidden_off:
   en: "Visible to all devices on the local network"
   pl: "Widoczne dla wszystkich urządzeń w sieci lokalnej"
 tui.help_network:
-  en: "network mode: local (no servers) / internet (public iroh relays)"
-  pl: "tryb sieci: lokalny (bez serwerów) / internet (publiczne przekaźniki iroh)"
+  en: "network mode: local (no servers) / internet (public iroh relays) / own relay / only own relay"
+  pl: "tryb sieci: lokalny (bez serwerów) / internet (publiczne przekaźniki iroh) / własny przekaźnik / tylko własny przekaźnik"
 guide.intro:
   en: "Ferry moves files and texts between your devices, end-to-end encrypted. Topics: send, pair, browser, apple, internet, trouble, privacy (`ferry guide TOPIC` shows one)."
   pl: "Ferry przesyła pliki i teksty między Twoimi urządzeniami, szyfrując je end-to-end. Tematy: send, pair, browser, apple, internet, trouble, privacy (`ferry guide TEMAT` pokazuje jeden)."
@@ -1407,8 +1410,8 @@ guide.internet_q:
   en: "Local network or internet?"
   pl: "Sieć lokalna czy internet?"
 guide.internet_a:
-  en: "By default Ferry works only in your local network and talks to no server. `ferry network internet` also reaches devices elsewhere through public relays (`ferry network relay URL` through your own); the content stays end-to-end encrypted, but the relay sees who talks to whom."
-  pl: "Domyślnie Ferry działa tylko w Twojej sieci lokalnej i nie łączy się z żadnym serwerem. `ferry network internet` sięga też urządzeń w innych miejscach przez publiczne przekaźniki (`ferry network relay URL` przez własny); treść pozostaje szyfrowana end-to-end, ale przekaźnik widzi, kto z kim się łączy."
+  en: "By default Ferry works only in your local network and talks to no server. `ferry network internet` also reaches devices elsewhere through public relays (`ferry network relay URL` through your own, `ferry network relay-only URL` never directly, so the other device does not see your IP); the content stays end-to-end encrypted, but the relay sees who talks to whom."
+  pl: "Domyślnie Ferry działa tylko w Twojej sieci lokalnej i nie łączy się z żadnym serwerem. `ferry network internet` sięga też urządzeń w innych miejscach przez publiczne przekaźniki (`ferry network relay URL` przez własny, `ferry network relay-only URL` nigdy bezpośrednio, więc drugie urządzenie nie widzi Twojego IP); treść pozostaje szyfrowana end-to-end, ale przekaźnik widzi, kto z kim się łączy."
 guide.trouble_q:
   en: "A device does not show up, or a link does not open"
   pl: "Urządzenie się nie pokazuje albo link się nie otwiera"

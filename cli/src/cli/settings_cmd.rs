@@ -67,7 +67,7 @@ fn parse_relays<'a>(urls: impl IntoIterator<Item = &'a str>) -> Result<Vec<Strin
         .collect()
 }
 
-/// `ferry network [local|internet|relay [URL…]]`: shows or saves the [`NetworkMode`].
+/// `ferry network [local|internet|relay|relay-only [URL…]]`: shows or saves the [`NetworkMode`].
 ///
 /// The mode applies to nodes started afterwards (CLI commands, the daemon, the
 /// TUI and the GUI after a restart).
@@ -91,6 +91,10 @@ pub fn run_network(mode: Option<&str>, relays: &[String]) -> Result<()> {
         NetworkMode::Internet => t!("settings.network_internet"),
         NetworkMode::Relay => t!(
             "settings.network_relay",
+            relays = config.relay_urls.join(", ")
+        ),
+        NetworkMode::RelayOnly => t!(
+            "settings.network_relay_only",
             relays = config.relay_urls.join(", ")
         ),
     };
@@ -226,8 +230,8 @@ fn unset_setting(config: &mut Config, key: SettingKey) {
         SettingKey::SpeedLimit => config.speed_limit = None,
         SettingKey::RelayUrls => {
             config.relay_urls.clear();
-            // The relay mode cannot run without a relay.
-            if config.network_mode == NetworkMode::Relay {
+            // The relay modes cannot run without a relay.
+            if config.network_mode.own_relays() {
                 config.network_mode = NetworkMode::Local;
             }
         }
@@ -306,6 +310,8 @@ mod tests {
         assert_eq!(config.relay_urls.len(), 2);
         set_setting(&mut config, SettingKey::NetworkMode, "relay").unwrap();
         assert_eq!(get_setting(&config, SettingKey::NetworkMode), "relay");
+        set_setting(&mut config, SettingKey::NetworkMode, "relay-only").unwrap();
+        assert_eq!(get_setting(&config, SettingKey::NetworkMode), "relay-only");
         unset_setting(&mut config, SettingKey::RelayUrls);
         assert_eq!(
             config.network_mode,

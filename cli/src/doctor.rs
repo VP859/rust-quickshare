@@ -47,7 +47,7 @@ pub async fn run_doctor() -> Result<DoctorReport> {
         "[i] {}",
         t!("doctor.network_mode", mode = config.network_mode)
     );
-    if config.network_mode == ferry::node::NetworkMode::Relay {
+    if config.network_mode.own_relays() {
         match ferry::node::Network::from_config(&config) {
             Ok(network) => {
                 for relay in &network.relays {

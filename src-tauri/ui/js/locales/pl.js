@@ -6,7 +6,7 @@ const filesPl = (n) => n === 1 ? 'plik' : [2, 3, 4].includes(n % 10) && ![12, 13
 
 export default {
   node_starting: 'Łączenie…', node_active: 'Online', node_unavailable: 'Offline',
-  mode_local: 'Tylko lokalnie', mode_relay: 'Lokalnie + własny przekaźnik', mode_internet: 'Lokalnie + internet', mode_hidden: 'ukryte', mode_pending: 'po restarcie',
+  mode_local: 'Tylko lokalnie', mode_relay: 'Lokalnie + własny przekaźnik', mode_relay_only: 'Tylko własny przekaźnik', mode_internet: 'Lokalnie + internet', mode_hidden: 'ukryte', mode_pending: 'po restarcie',
   mode_hint: 'Tryb sieci i widoczność – kliknij, aby zmienić',
   my_ticket: 'Mój TICKET', settings: 'Ustawienia',
   drop_here: 'Upuść pliki, aby wysłać', send_files: 'Wyślij pliki',
@@ -117,7 +117,7 @@ export default {
   help_apple_q: 'iPhone, iPad i Mac',
   help_apple_a: 'Zainstaluj tam darmową aplikację LocalSend. Ferry znajduje aplikacje LocalSend w sekcji „W pobliżu” i wysyła do nich; aby od nich odbierać, włącz tryb LocalSend w Ustawieniach → Prywatność. LocalSend nie ma parowania, więc nazwy nie są weryfikowane.',
   help_internet_q: 'Sieć lokalna czy internet?',
-  help_internet_a: 'Domyślnie Ferry działa tylko w Twojej sieci lokalnej i nie łączy się z żadnym serwerem. Tryb internetowy (Ustawienia) sięga też urządzeń w innych miejscach przez publiczne przekaźniki albo Twój własny; treść pozostaje szyfrowana end-to-end, ale przekaźnik widzi, kto z kim się łączy.',
+  help_internet_a: 'Domyślnie Ferry działa tylko w Twojej sieci lokalnej i nie łączy się z żadnym serwerem. Tryb internetowy (Ustawienia) sięga też urządzeń w innych miejscach przez publiczne przekaźniki albo Twój własny („Tylko przez własny przekaźnik” nigdy nie łączy się bezpośrednio, więc drugie urządzenie nie widzi Twojego IP); treść pozostaje szyfrowana end-to-end, ale przekaźnik widzi, kto z kim się łączy.',
   help_trouble_q: 'Urządzenie się nie pokazuje albo link się nie otwiera',
   help_trouble_a: 'Oba urządzenia muszą być w tej samej sieci, nie w sieci gości, a zapora musi przepuszczać Ferry. Na Androidzie 16 i nowszym Ferry i przeglądarka potrzebują uprawnienia „Sieć lokalna”, a VPN na telefonie może odcinać go od sieci lokalnej. Podpowiedź pod sekcją „W pobliżu” mówi, co Ferry zauważył.',
   help_privacy_q: 'Co widzą inni?',
@@ -156,6 +156,8 @@ export default {
   network_mode: 'Sieć', network_local: 'Tylko sieć lokalna', network_internet: 'Sieć lokalna i internet',
   network_local_desc: 'Tylko połączenia bezpośrednie – nic nie trafia na zewnętrzne serwery. Urządzenia muszą być w tej samej sieci.',
   network_relay: 'Sieć lokalna i własny przekaźnik',
+  network_relay_only: 'Tylko przez własny przekaźnik',
+  network_relay_only_desc: 'Każde połączenie idzie przez podane przekaźniki, nigdy bezpośrednio – nawet w tej samej sieci. Drugie urządzenie widzi tylko adres przekaźnika, a nie Twoje IP; przekaźnik widzi adresy IP i Node ID, nigdy treści. Wolniej, a drugie urządzenie też musi być osiągalne przez przekaźnik (sparuj urządzenia po wybraniu trybu z przekaźnikiem). Urządzenia w pobliżu nadal są widoczne na liście; LocalSend i sesje przeglądarki działają bezpośrednio.',
   network_relay_desc: 'Bezpośrednio, gdy to możliwe, w przeciwnym razie tylko przez podane przekaźniki – żaden serwer n0 nie jest używany. Sparowane urządzenia są odnajdywane po adresie zapisanym przy parowaniu, więc sparuj je po wybraniu tego trybu. Przekaźnik widzi adresy IP i Node ID, nigdy treści.',
   relay_urls: 'Adresy przekaźników (jeden w wierszu)',
   relay_urls_ph: 'https://relay.example.org',

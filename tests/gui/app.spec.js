@@ -322,6 +322,26 @@ test('the own-relay mode is saved together with the relay address', async ({ app
   expect(await calls(app)).toContainEqual(['set_network_mode', { mode: 'local', relays: null }]);
 });
 
+test('the relay-only mode asks for a relay first and keeps the saved one', async ({ app }) => {
+  await app.locator('#btn-settings').click();
+  await app.locator('#network-mode').selectOption('relay-only');
+  await expect(app.locator('#relay-field')).toBeVisible();
+  await expect(app.locator('#network-desc')).toContainText('never directly');
+  expect((await calls(app)).some(([cmd]) => cmd === 'set_network_mode')).toBe(false);
+  await app.locator('#relay-urls').fill('https://relay.example.org');
+  await app.locator('#btn-relay-save').click();
+  expect(await calls(app)).toContainEqual(['set_network_mode', { mode: 'relay-only', relays: ['https://relay.example.org'] }]);
+  await app.locator('#btn-restart-later').click();
+  await expect(app.locator('#mode-pill')).toContainText('Own relay only');
+
+  // With a relay saved, switching between the relay modes saves at once.
+  await app.locator('#network-mode').selectOption('relay');
+  expect(await calls(app)).toContainEqual(['set_network_mode', { mode: 'relay', relays: null }]);
+  await app.locator('#btn-restart-later').click();
+  await app.locator('#network-mode').selectOption('relay-only');
+  expect((await calls(app)).filter(([cmd, args]) => cmd === 'set_network_mode' && args.mode === 'relay-only')).toHaveLength(2);
+});
+
 test('a running transfer can be paused and resumed', async ({ app }) => {
   const ev = (status) => ({ id: 't1', peer: PEER, peer_name: null, file_name: 'big.iso', direction: 'download', total: 1000, done: 400, status, route: 'direct' });
   await emit(app, 'transfer', ev({ kind: 'running' }));

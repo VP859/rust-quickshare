@@ -10,10 +10,14 @@ import { invoke, isMobile, T } from './tauri.js';
 // ---------- Network mode ----------
 // Always visible in the top bar: whether anything may go through external
 // servers (the mode the node actually runs in) and whether the device is hidden.
+/** The translation key part of a mode code (`relay-only` → `relay_only`). */
+const modeKey = (mode) => String(mode).replace('-', '_');
+/** The modes that need the address of a relay. */
+const needsRelay = (mode) => mode === 'relay' || mode === 'relay-only';
 function renderModePill() {
   const { network, privacy } = state;
   const pill = $('mode-pill');
-  const parts = [t(`mode_${network.saved}`)];
+  const parts = [t(`mode_${modeKey(network.saved)}`)];
   if (network.saved !== network.active) parts.push(t('mode_pending'));
   if (privacy.hidden) parts.push(t('mode_hidden'));
   pill.textContent = parts.join(' · ');
@@ -21,14 +25,14 @@ function renderModePill() {
   pill.classList.toggle('internet', network.saved !== 'local');
   pill.hidden = false;
 }
-/** Shows the mode (`mode`, or the saved one) and, for `relay`, the relay field. */
+/** Shows the mode (`mode`, or the saved one) and, for the relay modes, the relay field. */
 export function renderNetwork(mode = state.network.saved) {
   const { network } = state;
   renderModePill();
   $('network-mode').value = mode;
-  $('network-desc').textContent = t(`network_${mode}_desc`);
+  $('network-desc').textContent = t(`network_${modeKey(mode)}_desc`);
   $('network-pending').hidden = network.saved === network.active;
-  $('relay-field').hidden = mode !== 'relay';
+  $('relay-field').hidden = !needsRelay(mode);
   if (document.activeElement !== $('relay-urls')) $('relay-urls').value = (network.relays ?? []).join('\n');
 }
 export async function loadNetwork() {
@@ -45,9 +49,9 @@ async function saveNetwork(mode, relays = null) {
   if (state.network.saved !== state.network.active) open('modal-restart');
 }
 $('network-mode').onchange = (e) => {
-  // The relay mode needs a relay first: it is saved with the address.
-  if (e.target.value === 'relay' && !(state.network.relays ?? []).length) {
-    renderNetwork('relay');
+  // The relay modes need a relay first: they are saved with the address.
+  if (needsRelay(e.target.value) && !(state.network.relays ?? []).length) {
+    renderNetwork(e.target.value);
     $('relay-urls').focus();
     return;
   }
@@ -56,7 +60,7 @@ $('network-mode').onchange = (e) => {
 $('btn-relay-save').onclick = () => {
   const relays = $('relay-urls').value.split(/[\s,]+/).filter(Boolean);
   if (!relays.length) { toast(t('relay_missing'), true); return; }
-  saveNetwork('relay', relays);
+  saveNetwork(needsRelay($('network-mode').value) ? $('network-mode').value : 'relay', relays);
 };
 $('btn-restart-later').onclick = () => close('modal-restart');
 $('btn-restart-ok').onclick = () => invoke('restart_app').catch(fail);
