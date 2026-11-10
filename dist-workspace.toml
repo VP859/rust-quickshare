@@ -15,6 +15,9 @@ targets = [
   "x86_64-pc-windows-msvc",
 ]
 install-path = "CARGO_HOME"
+# Build only ferry-cli (`-p`), not the whole workspace: the GUI needs WebKitGTK and the
+# Tauri toolchain, which the CLI runners do not have.
+precise-builds = true
 # release.yml has extra Tauri and Android jobs – do not regenerate it with `dist init`.
 allow-dirty = ["ci"]
 # System service files bundled with the CLI archives.

@@ -36,6 +36,10 @@ codegen-units = 1
 lto = "thin"
 strip = "symbols"
 
+# The profile cargo-dist builds the CLI release archives with (dist-workspace.toml).
+[profile.dist]
+inherits = "release"
+
 [workspace.dependencies]
 tokio = { version = "1.54.1", features = ["full"] }
 serde = { version = "1.0.229", features = ["derive"] }
