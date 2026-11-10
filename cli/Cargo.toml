@@ -15,6 +15,11 @@ publish = false
 [lints]
 workspace = true
 
+# Released by cargo-dist (dist-workspace.toml) although it is not on crates.io:
+# `publish = false` alone would hide it from dist.
+[package.metadata.dist]
+dist = true
+
 # The binary keeps the name users type. Its documentation would overwrite the
 # library's (both are called `ferry`), so `cargo doc` skips it; CI checks it with
 # `cargo rustdoc -p ferry-cli --bin ferry`.
