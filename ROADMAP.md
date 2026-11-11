@@ -13,9 +13,10 @@ an item, say so in its issue first.
   (free for open-source projects), `minisign` signatures for the Linux packages and the checksums,
   and a published signing key.
 - [ ] **A first run of the release workflow** and a test of every package on a clean system.
-- [ ] **Supply-chain checks**: [OpenSSF Scorecard](https://scorecard.dev) in CI, the OpenSSF Best
-  Practices badge, `cargo auditable` for the released binaries (the dependency list built into
-  them), later `cargo vet`.
+- [ ] **Supply-chain checks**: the OpenSSF Best Practices badge, publishing the
+  [OpenSSF Scorecard](https://scorecard.dev) results once the repository is public (it already runs
+  in CI), later `cargo vet`. Done: `cargo auditable` for the released binaries (the dependency list
+  built into them).
 
 ## Soon after
 

@@ -19,6 +19,10 @@ compatibility).
 
 ### Added
 
+- **Auditable release binaries**: `ferry` (archives, `.deb`, `.rpm`) and `ferry-gui` (all desktop
+  packages) are built with `cargo auditable`, so `cargo audit bin`, Syft or Trivy can list their
+  dependencies and check them for known vulnerabilities; the release fails when a binary lacks the
+  list. **OpenSSF Scorecard** checks of the project run weekly in CI.
 - **Shell completions and manual pages** for the `ferry` CLI: `ferry completions bash|zsh|fish|powershell|elvish`,
   and in the `.deb`/`.rpm` packages and the release archives ready-made completions and a manual
   page per command (`man ferry`, `man ferry-send`, …), generated from the command line itself.

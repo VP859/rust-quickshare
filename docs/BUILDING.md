@@ -136,6 +136,20 @@ sha256sum -c SHA256SUMS.txt --ignore-missing
 gh attestation verify <file> --repo VP859/rust-quickshare
 ```
 
+The `ferry` and `ferry-gui` binaries are built with [cargo auditable](https://github.com/rust-secure-code/cargo-auditable):
+the exact list of crates and versions they contain is embedded in them, so they can be checked for
+known vulnerabilities at any time, also long after the release:
+
+```bash
+cargo install cargo-audit --locked
+cargo audit bin ferry                   # or /usr/bin/ferry-gui, ferry-gui.exe, …
+```
+
+`scripts/check-auditable.py` fails the release when a binary lacks the list. The Android app is not
+covered yet: Gradle runs its Rust build. `.github/workflows/scorecard.yml` runs the
+[OpenSSF Scorecard](https://scorecard.dev) checks every week; the results stay on GitHub (workflow
+artifact, and the Security tab once the repository is public).
+
 Android signing in CI uses the `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
 `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets.
 

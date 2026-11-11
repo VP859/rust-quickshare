@@ -6,6 +6,10 @@
 #  publish  – draft GitHub release with SHA-256 sums, an SPDX SBOM and, in public
 #             repositories, signed build provenance attestations (Sigstore)
 #
+# The `ferry` and `ferry-gui` binaries are built with cargo auditable: their
+# dependency list is embedded (section `.dep-v0`), so `cargo audit bin`, Syft and
+# Trivy can check a released file; scripts/check-auditable.py makes sure of it.
+#
 # Every job gets only the permissions it needs; actions are pinned to commit SHAs.
 #
 # Optional Android signing secrets:
@@ -24,6 +28,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   DIST_VERSION: "0.28.0"
+  CARGO_AUDITABLE_VERSION: "0.7.7"
   TAURI_CLI_VERSION: "2"
 
 jobs:
@@ -49,9 +54,19 @@ jobs:
       - name: Install cargo-dist
         shell: bash
         run: curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${DIST_VERSION}/cargo-dist-installer.sh" | sh
+      - name: Install cargo-auditable
+        run: cargo install cargo-auditable --version "${CARGO_AUDITABLE_VERSION}" --locked
+        shell: bash
       - name: Build CLI archives
         shell: bash
         run: dist build --artifacts=local --target ${{ matrix.target }}
+      - name: Check the dependency list in the binary
+        shell: bash
+        run: |
+          python=$(command -v python3 || command -v python)
+          binary=target/distrib/ferry-cli-${{ matrix.target }}/ferry
+          if [ -f "$binary.exe" ]; then binary=$binary.exe; fi
+          "$python" -I scripts/check-auditable.py "$binary"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cli-${{ matrix.target }}
@@ -91,12 +106,16 @@ jobs:
         include:
           - name: linux
             os: ubuntu-22.04
+            runner: ../scripts/cargo-auditable.sh
+            binaries: target/release/ferry-gui target/release/ferry
             bundles: |
               target/release/bundle/deb/*.deb
               target/release/bundle/appimage/*.AppImage
               target/release/bundle/rpm/*.rpm
           - name: windows
             os: windows-2022
+            runner: '..\scripts\cargo-auditable.cmd'
+            binaries: target/release/ferry-gui.exe
             bundles: |
               target/release/bundle/msi/*.msi
               target/release/bundle/nsis/*.exe
@@ -117,10 +136,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
             libayatana-appindicator3-dev librsvg2-dev patchelf file
+      - name: Install cargo-auditable
+        run: cargo install cargo-auditable --version "${CARGO_AUDITABLE_VERSION}" --locked
+        shell: bash
+      # The runner turns Tauri's `cargo build` into `cargo auditable build`; the
+      # CLI packed into the .deb/.rpm is built the same way.
       - name: Build Tauri bundles
         shell: bash
         working-directory: src-tauri
-        run: npx --yes "@tauri-apps/cli@${TAURI_CLI_VERSION}" build --ci
+        run: |
+          npx --yes "@tauri-apps/cli@${TAURI_CLI_VERSION}" build --ci \
+            --runner '${{ matrix.runner }}' \
+            --config '{"build":{"beforeBundleCommand":"cargo auditable build --release -p ferry-cli --bin ferry"}}'
+      - name: Check the dependency list in the binaries
+        shell: bash
+        run: |
+          python=$(command -v python3 || command -v python)
+          "$python" -I scripts/check-auditable.py ${{ matrix.binaries }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: gui-${{ matrix.name }}

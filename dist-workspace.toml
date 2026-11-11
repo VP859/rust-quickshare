@@ -15,6 +15,10 @@ targets = [
   "x86_64-pc-windows-msvc",
 ]
 install-path = "CARGO_HOME"
+# The dependency list (crate names and versions) is built into the binaries, so
+# `cargo audit bin` and similar tools can check a released `ferry` for known
+# vulnerabilities. Needs `cargo install cargo-auditable` (release.yml does it).
+cargo-auditable = true
 # Build only ferry-cli (`-p`), not the whole workspace: the GUI needs WebKitGTK and the
 # Tauri toolchain, which the CLI runners do not have.
 precise-builds = true
