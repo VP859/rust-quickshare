@@ -659,15 +659,25 @@ async fn hidden_device_answers_with_a_packet_nobody_else_can_read() -> Result<()
             socket.set_nonblocking(true)?;
             Ok((tokio::net::UdpSocket::from_std(socket)?, ask(engine)))
         };
+        // Asks again every half second, as a device announcing itself would:
+        // over a lossy link (CI runs this test with 1 % loss) a single request
+        // or its answer may be lost. The hidden device answers every request.
         let answer = |socket: tokio::net::UdpSocket, request: Vec<u8>| async move {
-            socket
-                .send_to(&request, std::net::SocketAddr::from(([127, 0, 0, 1], ph)))
-                .await?;
             let mut buf = vec![0u8; 4096];
-            let (len, _) =
-                tokio::time::timeout(Duration::from_secs(5), socket.recv_from(&mut buf)).await??;
-            buf.truncate(len);
-            anyhow::Ok(buf)
+            for _ in 0..20 {
+                socket
+                    .send_to(&request, std::net::SocketAddr::from(([127, 0, 0, 1], ph)))
+                    .await?;
+                if let Ok(received) =
+                    tokio::time::timeout(Duration::from_millis(500), socket.recv_from(&mut buf))
+                        .await
+                {
+                    let (len, _) = received?;
+                    buf.truncate(len);
+                    return anyhow::Ok(buf);
+                }
+            }
+            anyhow::bail!("no answer to 20 requests")
         };
         let now = || {
             std::time::SystemTime::now()
