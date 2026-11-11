@@ -1,5 +1,6 @@
 //! P2P node: endpoint, persistent identity and TICKETs.
 
+pub mod backup;
 pub mod engine;
 pub mod identity;
 pub mod keystore;

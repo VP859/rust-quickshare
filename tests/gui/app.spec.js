@@ -713,6 +713,48 @@ test('a device chosen in the Android share menu gets the files at once, or the t
   expect((await calls(app)).filter(([cmd]) => cmd === 'send_files')).toHaveLength(1);
 });
 
+test('a password-protected backup is made, on Android without a save dialog', async ({ app, isMobile }) => {
+  await app.locator('#btn-settings').click();
+  await app.locator('#btn-backup-create').click();
+  const dialog = app.locator('#modal-backup');
+  await expect(dialog).toHaveClass(/active/);
+  await expect(app.locator('#backup-modal-text')).toContainText(isMobile ? 'Download/Ferry' : 'where to save');
+
+  await app.locator('#backup-password').fill('short');
+  await app.locator('#backup-confirm').fill('short');
+  await app.locator('#btn-backup-go').click();
+  await expect(app.locator('#backup-error')).toHaveText('The password must have at least 8 characters.');
+  await app.locator('#backup-password').fill('a good password');
+  await app.locator('#backup-confirm').fill('a good passw0rd');
+  await app.locator('#btn-backup-go').click();
+  await expect(app.locator('#backup-error')).toHaveText('The passwords are not the same.');
+  expect((await calls(app)).some(([cmd]) => cmd === 'create_backup')).toBe(false);
+
+  await app.locator('#backup-confirm').fill('a good password');
+  await app.locator('#btn-backup-go').click();
+  await expect(dialog).not.toHaveClass(/active/);
+  const path = isMobile ? null : '/home/me/ferry-backup-2026-11-11.ferry-backup';
+  expect(await calls(app)).toContainEqual(['create_backup', { password: 'a good password', path }]);
+  expect((await calls(app)).some(([cmd]) => cmd === 'plugin:dialog|save')).toBe(!isMobile);
+  await expect(app.locator('#toast')).toContainText('Backup saved');
+});
+
+test('a backup is restored with its password, and the new key asks for a restart', async ({ app, isMobile }) => {
+  await app.evaluate(() => window.__respond('plugin:dialog|open', '/home/me/old-phone.ferry-backup'));
+  await app.locator('#btn-settings').click();
+  await app.locator('#btn-backup-restore').click();
+  const dialog = app.locator('#modal-backup');
+  await expect(dialog).toHaveClass(/active/);
+  await expect(app.locator('#backup-modal-text')).toContainText('old-phone.ferry-backup');
+  await expect(app.locator('#backup-confirm-field')).toBeHidden();
+  await app.locator('#backup-password').fill('a good password');
+  await app.locator('#backup-password').press('Enter');
+  expect(await calls(app)).toContainEqual(['restore_backup', { path: '/home/me/old-phone.ferry-backup', password: 'a good password' }]);
+  await expect(app.locator('#toast')).toContainText('2 paired device(s) added');
+  await expect(app.locator('#modal-restart')).toHaveClass(/active/);
+  await expect(app.locator(isMobile ? '#restart-text-mobile' : '#restart-text')).toContainText('restored key');
+});
+
 test('the device key can be moved into the system keyring', async ({ app }) => {
   await app.locator('#btn-settings').click();
   await expect(app.locator('#keyring-toggle')).toBeVisible();

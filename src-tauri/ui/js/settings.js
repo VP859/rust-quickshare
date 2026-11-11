@@ -46,7 +46,7 @@ async function saveNetwork(mode, relays = null) {
     if (relays) state.network.relays = relays;
   } catch (err) { fail(err); renderNetwork(); return; }
   renderNetwork();
-  if (state.network.saved !== state.network.active) open('modal-restart');
+  if (state.network.saved !== state.network.active) askRestart();
 }
 $('network-mode').onchange = (e) => {
   // The relay modes need a relay first: they are saved with the address.
@@ -83,6 +83,16 @@ $('btn-relay-save').onclick = () => {
   if (!relays.length) { toast(t('relay_missing'), true); return; }
   saveNetwork(needsRelay($('network-mode').value) ? $('network-mode').value : 'relay', relays);
 };
+/**
+ * Asks to restart Ferry for a change (`reason`: `network` for the network
+ * mode or port, `backup` for a restored device key).
+ */
+export function askRestart(reason = 'network') {
+  const suffix = reason === 'network' ? '' : `_${reason}`;
+  $('restart-text').textContent = t(`restart_text${suffix}`);
+  $('restart-text-mobile').textContent = t(`restart_text_mobile${suffix}`);
+  open('modal-restart');
+}
 $('btn-restart-later').onclick = () => close('modal-restart');
 $('btn-restart-ok').onclick = () => invoke('restart_app').catch(fail);
 $('btn-restart').onclick = () => invoke('restart_app').catch(fail);
@@ -125,7 +135,7 @@ $('privacy-strip').onchange = (e) => savePrivacy({ strip_metadata: e.target.chec
 $('privacy-platform').onchange = (e) => savePrivacy({ announce_platform: e.target.checked });
 $('privacy-port').onchange = async (e) => {
   await savePrivacy({ random_port: e.target.checked });
-  open('modal-restart');
+  askRestart();
 };
 $('privacy-paired').onchange = (e) => savePrivacy({ paired_only: e.target.checked });
 $('btn-pairing-window').onclick = async () => {

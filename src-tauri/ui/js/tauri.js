@@ -27,6 +27,19 @@ export async function pickFiles() {
   if (!res) return [];
   return (Array.isArray(res) ? res : [res]).map(f => typeof f === 'string' ? f : f.path ?? f.uri ?? String(f));
 }
+/** One file chosen in the system picker (a path, or a `content://` URI on Android); null when cancelled. */
+export async function pickFile() {
+  const opts = { multiple: false, directory: false };
+  const res = T?.dialog?.open ? await T.dialog.open(opts) : await invoke('plugin:dialog|open', { options: opts });
+  if (!res) return null;
+  return typeof res === 'string' ? res : res.path ?? res.uri ?? String(res);
+}
+/** Where to save a new file (desktop "Save as" dialog); null when cancelled. */
+export async function pickSavePath(defaultPath) {
+  const opts = { defaultPath };
+  const res = T?.dialog?.save ? await T.dialog.save(opts) : await invoke('plugin:dialog|save', { options: opts });
+  return res ? String(res) : null;
+}
 /**
  * The QR scanner's camera permission (`granted`, `denied`, `prompt`, …); with
  * `request`, Android's dialog appears first when it still can.

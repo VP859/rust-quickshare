@@ -1457,3 +1457,17 @@ guide.privacy_q:
 guide.privacy_a:
   en: "Contents are always end-to-end encrypted. Others on the network see that two devices exchange data, how much and when, and – unless `ferry config set hidden true` – this device's name. Ferry has no account, no telemetry and keeps its history only on this device."
   pl: "Treść jest zawsze szyfrowana end-to-end. Inni w sieci widzą, że dwa urządzenia wymieniają dane, ile i kiedy, oraz – jeśli nie ustawisz `ferry config set hidden true` – nazwę tego urządzenia. Ferry nie ma konta ani telemetrii, a historię trzyma tylko na tym urządzeniu."
+
+# ---------------------------------------------------------------- device backup
+backup.password_short:
+  en: "The password must have at least %{min} characters"
+  pl: "Hasło musi mieć co najmniej %{min} znaków"
+backup.not_a_backup:
+  en: "This is not a Ferry backup"
+  pl: "To nie jest kopia zapasowa Ferry"
+backup.damaged:
+  en: "The backup is damaged"
+  pl: "Kopia zapasowa jest uszkodzona"
+backup.wrong_password:
+  en: "Wrong password, or the backup is damaged"
+  pl: "Złe hasło albo uszkodzona kopia zapasowa"

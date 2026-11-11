@@ -34,6 +34,10 @@ const DIALOGS = {
   offer: async (app) => emit(app, 'incoming-offer', { id: 'o1', peer: PEER, alias: 'Laptop', file_name: 'setup.exe', size: 1000, count: 1, names: ['setup.exe'], risk: 'program' }),
   'LocalSend offer': async (app) => emit(app, 'incoming-offer', { id: 'o2', peer: 'localsend:192.168.1.20', alias: "Kate's iPhone", file_name: 'a.jpg', size: 1000, count: 3, names: ['a.jpg', 'b.jpg'], localsend: '192.168.1.20', risk: null }),
   'localsend PIN': async (app) => emit(app, 'localsend-pin', { fingerprint: 'AB12', alias: "Kate's iPhone", paths: ['/a.jpg'], wrong: true }),
+  backup: async (app) => {
+    await app.locator('#btn-settings').click();
+    await app.locator('#btn-backup-create').click();
+  },
   'long LocalSend text': async (app) => emit(app, 'incoming-text', { id: 'lt1', peer: 'localsend:192.168.1.20', alias: "Kate's iPhone", text: 'Lorem ipsum …', size: 90_000, long: true, localsend: '192.168.1.20' }),
 };
 

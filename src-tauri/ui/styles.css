@@ -150,7 +150,7 @@ footer { max-width: 760px; margin: 0 auto; padding: 0 20px 28px; color: var(--fa
 
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field > label { font-size: 12.5px; font-weight: 500; color: var(--muted); }
-input[type=text], input[type=search], textarea, select {
+input[type=text], input[type=search], input[type=password], textarea, select {
   background: var(--surface); border: 1px solid var(--border-strong); color: var(--text); padding: 7px 10px; border-radius: var(--radius-sm);
   font: inherit; -webkit-user-select: text; user-select: text; width: 100%; min-width: 0;
 }
@@ -182,6 +182,11 @@ select {
 .toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .toggle .label { font-weight: 500; }
 .toggle .desc { color: var(--muted); font-size: 12.5px; }
+.backup-block { display: grid; gap: 4px; }
+.backup-block .label { font-weight: 500; }
+.backup-block .desc { color: var(--muted); font-size: 12.5px; }
+.backup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.error-text { color: var(--bad); }
 .data-flow summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
 .data-flow ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 6px; color: var(--muted); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

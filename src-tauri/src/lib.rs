@@ -168,6 +168,8 @@ pub fn run() {
             get_network_mode,
             set_network_mode,
             check_relays,
+            create_backup,
+            restore_backup,
             restart_app,
             set_language,
             open_received,

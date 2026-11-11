@@ -219,10 +219,19 @@ Node IDs (earlier versions of Ferry) could be matched offline in seconds by gene
   folder on Windows and Android. It is not encrypted with a password; full-disk encryption
   protects it at rest.
 * On Android the app data is excluded from cloud backups and device-to-device transfers
-  (`allowBackup="false"` and `data_extraction_rules.xml`), so the key never ends up in a backup.
-  A new phone pairs again.
-* `ferry identity export <file>` writes a deliberate backup (a new `0600` file with a warning);
-  `ferry identity import` restores it and keeps the replaced key as a `.bak` file.
+  (`allowBackup="false"` and `data_extraction_rules.xml`), so the key never ends up in a backup
+  the user did not make.
+* **Device backup** (*Settings → Privacy → Device backup*, desktop and Android): the key, the
+  device name and the paired devices (aliases, Auto-Accept, verified marks, discovery secrets) in
+  one file, encrypted with the user's password: PBKDF2-HMAC-SHA256 with 600 000 rounds and a random
+  salt, then ChaCha20-Poly1305 (`src/node/backup.rs`). Without the password the file shows only
+  its size; with it, anyone can pose as the device to its paired devices – so the password has at
+  least 8 characters and the dialog says to keep it apart from the file. The strength of the
+  backup is the strength of the password: a weak one can be guessed offline. Restoring keeps the
+  replaced key as a `.bak` file and adds only devices not paired yet.
+* `ferry identity export <file>` writes a deliberate backup of the key alone, **not encrypted**
+  (a new `0600` file with a warning); `ferry identity import` restores it and keeps the replaced
+  key as a `.bak` file.
 * **Optionally**, on desktop Linux and Windows, the key can be kept in the system's secret store
   instead (`ferry identity storage system`, *Settings → Privacy*): Secret Service (KWallet, GNOME
   Keyring) or the Credential Manager, protected by DPAPI. It is then encrypted while the user is

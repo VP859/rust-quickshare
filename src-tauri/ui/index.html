@@ -460,6 +460,14 @@
           <div><div class="label" id="privacy-keyring-label" data-i18n="privacy_keyring"></div><div class="desc" data-i18n="privacy_keyring_hint"></div></div>
           <label class="switch"><input type="checkbox" id="privacy-keyring" aria-labelledby="privacy-keyring-label"><span></span></label>
         </div>
+        <div class="backup-block">
+          <div class="label" data-i18n="backup_title"></div>
+          <div class="desc" data-i18n="backup_hint"></div>
+          <div class="backup-actions">
+            <button id="btn-backup-create" data-i18n="backup_create"></button>
+            <button id="btn-backup-restore" data-i18n="backup_restore"></button>
+          </div>
+        </div>
         <div class="toggle">
           <div><div class="label" id="privacy-history-label" data-i18n="privacy_history"></div><div class="desc" data-i18n="privacy_history_hint"></div></div>
           <label class="switch"><input type="checkbox" id="privacy-history" aria-labelledby="privacy-history-label"><span></span></label>
@@ -511,12 +519,30 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-backup" role="dialog" aria-modal="true" aria-labelledby="backup-modal-title">
+  <div class="modal">
+    <div class="modal-head"><h3 id="backup-modal-title"></h3><button class="ghost icon" data-close="modal-backup" data-i18n-aria="close" data-i18n-title="close"><svg class="i"><use href="#i-x"/></svg></button></div>
+    <form class="modal-body" id="backup-form">
+      <p class="muted small" id="backup-modal-text"></p>
+      <div class="field"><label for="backup-password" data-i18n="backup_password"></label>
+        <input type="password" id="backup-password" autocomplete="new-password" required></div>
+      <div class="field" id="backup-confirm-field"><label for="backup-confirm" data-i18n="backup_password_again"></label>
+        <input type="password" id="backup-confirm" autocomplete="new-password"></div>
+      <p class="small error-text" id="backup-error" role="alert" hidden></p>
+      <div class="modal-actions">
+        <button type="button" data-close="modal-backup" data-i18n="cancel"></button>
+        <button type="submit" class="primary" id="btn-backup-go"></button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-restart" role="alertdialog" aria-modal="true" aria-labelledby="restart-title">
   <div class="modal">
     <div class="modal-head"><h3 id="restart-title" data-i18n="restart_title"></h3></div>
     <div class="modal-body">
-      <p class="desktop-only" data-i18n="restart_text"></p>
-      <p class="mobile-only" data-i18n="restart_text_mobile"></p>
+      <p class="desktop-only" id="restart-text" data-i18n="restart_text"></p>
+      <p class="mobile-only" id="restart-text-mobile" data-i18n="restart_text_mobile"></p>
       <div class="modal-actions">
         <button id="btn-restart-later" data-i18n="restart_later"></button>
         <button class="primary desktop-only" id="btn-restart-ok" data-i18n="ok"></button>

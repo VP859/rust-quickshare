@@ -37,6 +37,8 @@ tauri-plugin-clipboard-manager = "2"
 qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 serde = { workspace = true }
 tokio = { workspace = true }
+# Date in the name of a device backup.
+chrono = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 iroh = { workspace = true }

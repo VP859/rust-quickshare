@@ -50,6 +50,9 @@ const RESPONSES = {
   take_shared_files: [],
   take_shared_text: null,
   take_share_target: null,
+  create_backup: '/home/me/ferry-backup-2026-11-11.ferry-backup',
+  restore_backup: { node_id: 'a'.repeat(64), key_changed: true, peers_added: 2 },
+  'plugin:dialog|save': '/home/me/ferry-backup-2026-11-11.ferry-backup',
   'plugin:autostart|is_enabled': false,
 };
 

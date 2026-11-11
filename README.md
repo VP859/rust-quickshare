@@ -339,7 +339,10 @@ to this one file only.
 Paired devices appear in Android's **Share** menu (Android 10 and newer): share a photo, tap
 "Laptop", and it goes there without opening Ferry first; a text opens ready to send to it. Android
 keeps the names of these devices for its share menu; unpairing a device removes it.
-Ferry's data is excluded from Android backups – a new phone pairs again.
+Ferry's data is excluded from Android backups. To move to a new phone, make a **device backup**
+(*Settings → Privacy → Device backup*: the key and the paired devices, encrypted with a password,
+saved in `Download/Ferry`) and restore it there – the paired devices recognise the new phone
+without pairing again. The same works between computers.
 
 Android's permission dialog appears on the first start: *Local network* (Android 17 and newer –
 without it Ferry cannot find or reach devices nearby), notifications, and on Android 10 and older

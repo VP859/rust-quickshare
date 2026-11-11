@@ -19,6 +19,10 @@ compatibility).
 
 ### Added
 
+- **Device backup in the GUI** (desktop and Android, *Settings → Privacy*): the device key and the
+  paired devices in one file encrypted with a password (PBKDF2-HMAC-SHA256, 600 000 rounds, and
+  ChaCha20-Poly1305 from `ring`, no new dependency). Restored on a new phone or computer, the paired
+  devices recognise it without pairing again.
 - **Android: paired devices in the Share menu** (Direct Share, Android 10+): sharing a photo and
   tapping "Laptop" sends it there without opening Ferry first; a text opens ready to send. The list
   follows pairing, renaming and unpairing; each device has two initials ("La", "KP") on a color of
