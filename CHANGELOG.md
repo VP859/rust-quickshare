@@ -210,6 +210,10 @@ compatibility).
 
 ### Fixed
 
+- Android release builds: R8 removed or renamed the Kotlin methods that only Rust calls (through
+  JNI), so opening received files, the permission card, the background limits and keeping
+  transfers alive failed there. They are now kept (`app/proguard-rules.pro`).
+
 - **Browser sessions**: hints for a link that does not load on the phone (same Wi-Fi, Android's
   *Local network* permission for the browser, a VPN on the phone, client isolation in the router)
   under the link in the GUI, in `ferry web` and in the README.

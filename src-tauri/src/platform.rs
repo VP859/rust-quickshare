@@ -288,8 +288,9 @@ mod imp {
             },
         )
         .map_err(|e| {
+            // The Kotlin side could not be called at all (not "file missing").
             warn!("Could not open {name}: {e}");
-            t!("gui.open_unavailable", name = &name).into_owned()
+            t!("gui.open_failed", name = &name, error = e.to_string()).into_owned()
         })?;
         match outcome.as_str() {
             "" => Ok(()),

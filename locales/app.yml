@@ -1205,6 +1205,9 @@ gui.open_no_app:
 gui.open_unavailable:
   en: "%{name} cannot be opened: it was moved or deleted"
   pl: "Nie można otworzyć pliku %{name}: został przeniesiony lub usunięty"
+gui.open_failed:
+  en: "%{name} cannot be opened: %{error}"
+  pl: "Nie można otworzyć pliku %{name}: %{error}"
 gui.open_only_received:
   en: "Only received files can be opened"
   pl: "Można otwierać tylko odebrane pliki"

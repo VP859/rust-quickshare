@@ -92,7 +92,8 @@ recipient.
 * `PowerHelper.kt` – what limits the app in the background (battery optimization, battery
   saver, background restriction, data saver) and the way to the system app settings,
 * `src-tauri/src/platform.rs` – Android-specific Rust: storage folders, media scanning and the
-  calls into the Kotlin classes above via JNI.
+  calls into the Kotlin classes above via JNI. A Kotlin class or method called only from Rust
+  needs a `-keep` rule in `app/proguard-rules.pro`, or R8 removes it from release builds.
 
 ### Background limits
 
