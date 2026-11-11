@@ -87,6 +87,7 @@ recipient.
 * `ShareIntake.kt` – copies shared `content://` files into the app cache,
 * `ShareTargets.kt` – paired devices as Direct Share targets of the "Share" menu (long-lived
   dynamic shortcuts, `res/xml/shortcuts.xml`), updated whenever the frontend reads the devices,
+* `Restarter.kt` – "Restart now": starts `MainActivity` in a new task and ends the process,
 * `FileOpener.kt` – opens a received file in another app (`ACTION_VIEW` with a FileProvider
   `content://` URI that grants read access to this file only),
 * `FerryService.kt` – foreground service with a notification and a multicast lock, so the node

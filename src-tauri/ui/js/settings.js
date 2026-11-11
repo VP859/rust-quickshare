@@ -85,12 +85,11 @@ $('btn-relay-save').onclick = () => {
 };
 /**
  * Asks to restart Ferry for a change (`reason`: `network` for the network
- * mode or port, `backup` for a restored device key).
+ * mode or port, `backup` for a restored device key); "Restart now" works on
+ * the desktop and on Android.
  */
 export function askRestart(reason = 'network') {
-  const suffix = reason === 'network' ? '' : `_${reason}`;
-  $('restart-text').textContent = t(`restart_text${suffix}`);
-  $('restart-text-mobile').textContent = t(`restart_text_mobile${suffix}`);
+  $('restart-text').textContent = t(reason === 'network' ? 'restart_text' : `restart_text_${reason}`);
   open('modal-restart');
 }
 $('btn-restart-later').onclick = () => close('modal-restart');

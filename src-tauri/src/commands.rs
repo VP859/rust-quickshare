@@ -1629,14 +1629,17 @@ pub async fn dismiss_welcome(state: State<'_, AppState>) -> CmdResult<()> {
     config.save().map_err(err)
 }
 
-/// Restarts the application, e.g. to apply a new network mode (desktop only;
-/// on Android the app is restarted by closing it from the recent apps).
+/// Restarts the application, e.g. to apply a new network mode or a restored
+/// device key (on Android in a new process, see `Restarter.kt`).
 #[tauri::command]
 pub fn restart_app(app: AppHandle) {
-    #[cfg(desktop)]
+    #[cfg(target_os = "android")]
+    {
+        let _ = app;
+        crate::platform::restart_app();
+    }
+    #[cfg(not(target_os = "android"))]
     app.restart();
-    #[cfg(not(desktop))]
-    let _ = app;
 }
 
 /// The active interface language and the supported ones.

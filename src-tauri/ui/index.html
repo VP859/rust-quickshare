@@ -506,7 +506,7 @@
           </div>
           <div class="toggle" id="network-pending" hidden>
             <div class="small" style="color: var(--warn)" data-i18n="network_restart"></div>
-            <button class="desktop-only" id="btn-restart" data-i18n="restart_now"></button>
+            <button id="btn-restart" data-i18n="restart_now"></button>
           </div>
         </div>
         <div class="about">
@@ -541,11 +541,10 @@
   <div class="modal">
     <div class="modal-head"><h3 id="restart-title" data-i18n="restart_title"></h3></div>
     <div class="modal-body">
-      <p class="desktop-only" id="restart-text" data-i18n="restart_text"></p>
-      <p class="mobile-only" id="restart-text-mobile" data-i18n="restart_text_mobile"></p>
+      <p id="restart-text" data-i18n="restart_text"></p>
       <div class="modal-actions">
         <button id="btn-restart-later" data-i18n="restart_later"></button>
-        <button class="primary desktop-only" id="btn-restart-ok" data-i18n="ok"></button>
+        <button class="primary" id="btn-restart-ok" data-i18n="restart_now"></button>
       </div>
     </div>
   </div>

@@ -135,22 +135,27 @@ test('switching the language translates the page', async ({ app }) => {
   await expect(app.locator('#settings-title')).toHaveText('Ustawienia');
 });
 
-test('changing the network mode asks for a restart and shows the pending mode', async ({ app }, info) => {
+test('changing the network mode asks for a restart and shows the pending mode', async ({ app }) => {
   await app.locator('#btn-settings').click();
   await app.locator('#network-mode').selectOption('internet');
-  await expect(app.locator('#modal-restart')).toHaveClass(/active/);
+  const dialog = app.locator('#modal-restart');
+  await expect(dialog).toHaveClass(/active/);
+  await expect(app.locator('#restart-text')).toContainText('network mode');
   await expect(app.locator('#mode-pill')).toContainText('after restart');
 
-  // Only the desktop can restart itself; Android explains how to do it.
-  const ok = app.locator('#btn-restart-ok');
-  if (info.project.name === 'desktop') {
-    await expect(ok).toBeVisible();
-  } else {
-    await expect(ok).toBeHidden();
-  }
-
   await app.locator('#btn-restart-later').click();
-  await expect(app.locator('#modal-restart')).toBeHidden();
+  await expect(dialog).toBeHidden();
+  // Later: the settings keep offering it, on the desktop and on Android.
+  await expect(app.locator('#network-pending')).toBeVisible();
+  await app.locator('#btn-restart').click();
+  expect(await calls(app)).toContainEqual(['restart_app', {}]);
+});
+
+test('"Restart now" restarts Ferry right from the question', async ({ app }) => {
+  await app.locator('#btn-settings').click();
+  await app.locator('#network-mode').selectOption('internet');
+  await app.locator('#modal-restart').getByRole('button', { name: 'Restart now' }).click();
+  expect(await calls(app)).toContainEqual(['restart_app', {}]);
 });
 
 test('the close action is saved on the desktop', async ({ app }, info) => {
@@ -739,7 +744,7 @@ test('a password-protected backup is made, on Android without a save dialog', as
   await expect(app.locator('#toast')).toContainText('Backup saved');
 });
 
-test('a backup is restored with its password, and the new key asks for a restart', async ({ app, isMobile }) => {
+test('a backup is restored with its password, and the new key asks for a restart', async ({ app }) => {
   await app.evaluate(() => window.__respond('plugin:dialog|open', '/home/me/old-phone.ferry-backup'));
   await app.locator('#btn-settings').click();
   await app.locator('#btn-backup-restore').click();
@@ -752,7 +757,9 @@ test('a backup is restored with its password, and the new key asks for a restart
   expect(await calls(app)).toContainEqual(['restore_backup', { path: '/home/me/old-phone.ferry-backup', password: 'a good password' }]);
   await expect(app.locator('#toast')).toContainText('2 paired device(s) added');
   await expect(app.locator('#modal-restart')).toHaveClass(/active/);
-  await expect(app.locator(isMobile ? '#restart-text-mobile' : '#restart-text')).toContainText('restored key');
+  await expect(app.locator('#restart-text')).toContainText('restored key');
+  await app.locator('#modal-restart').getByRole('button', { name: 'Restart now' }).click();
+  expect(await calls(app)).toContainEqual(['restart_app', {}]);
 });
 
 test('the device key can be moved into the system keyring', async ({ app }) => {

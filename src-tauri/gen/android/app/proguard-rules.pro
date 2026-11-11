@@ -25,6 +25,7 @@
 # Keep this list in sync with the `jni_str!("io.github.vp859.ferry.…")` calls.
 -keep class io.github.vp859.ferry.FileOpener { *; }
 -keep class io.github.vp859.ferry.ShareTargets { *; }
+-keep class io.github.vp859.ferry.Restarter { *; }
 -keep class io.github.vp859.ferry.FerryPermissions { *; }
 -keep class io.github.vp859.ferry.PowerHelper { *; }
 -keep class io.github.vp859.ferry.FerryService { *; }

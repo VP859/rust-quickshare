@@ -346,6 +346,25 @@ mod imp {
         }
     }
 
+    /// Starts Ferry again in a new process (`Restarter.restart`).
+    pub fn restart_app() {
+        let result = with_app_class(
+            jni_str!("io.github.vp859.ferry.Restarter"),
+            |env, context, class| {
+                env.call_static_method(
+                    class,
+                    jni_str!("restart"),
+                    jni_sig!("(Landroid/content/Context;)V"),
+                    &[JValue::Object(context)],
+                )
+                .map(|_| ())
+            },
+        );
+        if let Err(e) = result {
+            warn!("Could not restart: {e}");
+        }
+    }
+
     /// Opens the system app info screen (battery usage, permissions).
     pub fn open_app_settings() {
         let result = with_app_class(
@@ -618,6 +637,12 @@ pub fn permission_status() -> Option<PermissionStatus> {
 /// network (no-op on desktop).
 pub fn request_permissions(only_local_network: bool) {
     imp::request_permissions(only_local_network);
+}
+
+/// Starts Ferry again in a new process (Android; the desktop uses Tauri's restart).
+#[cfg(target_os = "android")]
+pub fn restart_app() {
+    imp::restart_app();
 }
 
 /// Opens the system app info screen of Ferry (Android).
