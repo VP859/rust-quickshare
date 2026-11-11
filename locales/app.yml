@@ -1199,6 +1199,12 @@ gui.pair_one_sided_rejected:
 gui.pair_one_sided_failed:
   en: "\"%{alias}\" was added only on this device (pairing failed: %{error})"
   pl: "„%{alias}” dodano tylko na tym urządzeniu (parowanie nieudane: %{error})"
+gui.open_no_app:
+  en: "No app on this phone opens %{name}"
+  pl: "Żadna aplikacja na tym telefonie nie otwiera pliku %{name}"
+gui.open_unavailable:
+  en: "%{name} cannot be opened: it was moved or deleted"
+  pl: "Nie można otworzyć pliku %{name}: został przeniesiony lub usunięty"
 gui.open_only_received:
   en: "Only received files can be opened"
   pl: "Można otwierać tylko odebrane pliki"

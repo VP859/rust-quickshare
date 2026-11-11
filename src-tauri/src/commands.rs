@@ -341,12 +341,11 @@ pub fn open_received(path: String, reveal: bool, state: State<'_, AppState>) -> 
     if !allowed {
         return Err(t!("gui.open_only_received").into_owned());
     }
-    let result = if reveal {
-        ferry::system::reveal_path(&path)
+    if reveal {
+        ferry::system::reveal_path(&path).map_err(err)
     } else {
-        ferry::system::open_path(&path)
-    };
-    result.map_err(err)
+        crate::platform::open_file(&path)
+    }
 }
 
 /// Explanation why no nearby devices are visible, if discovery has a problem.

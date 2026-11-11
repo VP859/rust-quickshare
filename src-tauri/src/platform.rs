@@ -265,6 +265,39 @@ mod imp {
         serde_json::from_str(&json).ok()
     }
 
+    /// Opens a received file in another app (`FileOpener.open`): a
+    /// `content://` URI of the app's FileProvider with `ACTION_VIEW`.
+    pub fn open_file(path: &Path) -> Result<(), String> {
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let outcome = with_app_class(
+            jni_str!("io.github.vp859.ferry.FileOpener"),
+            |env, context, class| {
+                let path = env.new_string(path.to_string_lossy())?;
+                let value = env
+                    .call_static_method(
+                        class,
+                        jni_str!("open"),
+                        jni_sig!("(Landroid/content/Context;Ljava/lang/String;)Ljava/lang/String;"),
+                        &[JValue::Object(context), JValue::Object(&path)],
+                    )?
+                    .l()?;
+                env.cast_local::<JString>(value)?.try_to_string(env)
+            },
+        )
+        .map_err(|e| {
+            warn!("Could not open {name}: {e}");
+            t!("gui.open_unavailable", name = &name).into_owned()
+        })?;
+        match outcome.as_str() {
+            "" => Ok(()),
+            "no_app" => Err(t!("gui.open_no_app", name = &name).into_owned()),
+            _ => Err(t!("gui.open_unavailable", name = &name).into_owned()),
+        }
+    }
+
     /// The runtime permissions, from `FerryPermissions.status`.
     pub fn permission_status() -> Option<super::PermissionStatus> {
         let json = with_app_class(
@@ -415,7 +448,7 @@ mod imp {
 #[cfg(not(target_os = "android"))]
 mod imp {
     use ferry::transfer::service::TransferEvent;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use tauri::AppHandle;
 
     /// The default directories of the core are used.
@@ -449,6 +482,11 @@ mod imp {
         None
     }
 
+    /// The file opens in the default app for its type.
+    pub fn open_file(path: &Path) -> Result<(), String> {
+        ferry::system::open_path(path).map_err(|e| e.to_string())
+    }
+
     /// Nothing to ask for on desktop.
     pub fn request_permissions(_only_local_network: bool) {}
 
@@ -462,6 +500,16 @@ mod imp {
 /// Sets platform-specific directories; called before the configuration is loaded.
 pub fn init(app: &AppHandle) {
     imp::init(app);
+}
+
+/// Opens a received file in the app for its type (on Android through a
+/// `content://` URI, so the other app sees only this file).
+///
+/// # Errors
+///
+/// The reason as a message for the user: no app for the type, or the file is gone.
+pub fn open_file(path: &std::path::Path) -> Result<(), String> {
+    imp::open_file(path)
 }
 
 /// Post-processes a transfer event before it reaches the frontend: on Android

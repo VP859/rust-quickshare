@@ -69,6 +69,20 @@ test('a running transfer shows its speed and the time left once they are known',
   await expect(row).toContainText('· 9.5 MB/s · zostało 0:04 · bezpośrednio');
 });
 
+test('a received file opens from its row, on Android in the app for its type', async ({ app, isMobile }) => {
+  const path = isMobile ? '/storage/emulated/0/Pictures/Ferry/photo.jpg' : '/home/me/Downloads/photo.jpg';
+  await emit(app, 'transfer', transfer({ kind: 'completed', path }, { direction: 'download', done: 2_000_000 }));
+  const row = app.locator('#transfers .transfer');
+  await row.getByRole('button', { name: 'Open', exact: true }).click();
+  expect(await calls(app)).toContainEqual(['open_received', { path, reveal: false }]);
+  // Android has no folder view for a single file.
+  await expect(row.getByRole('button', { name: 'Show in folder' })).toHaveCount(isMobile ? 0 : 1);
+  // Sent files and failed downloads have nothing to open.
+  await emit(app, 'transfer', transfer({ kind: 'completed', path: null }, { id: 't2' }));
+  await emit(app, 'transfer', transfer({ kind: 'failed', error: 'lost' }, { id: 't3', direction: 'download' }));
+  await expect(app.locator('#transfers').getByRole('button', { name: 'Open', exact: true })).toHaveCount(1);
+});
+
 test('a download from a Ferry device can be cancelled and its partial file deleted', async ({ app }) => {
   await emit(app, 'transfer', transfer({ kind: 'running' }, { direction: 'download' }));
   const row = app.locator('#transfers .transfer');

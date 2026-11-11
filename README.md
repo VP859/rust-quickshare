@@ -328,6 +328,8 @@ LocalSend's list of nearby devices like another LocalSend device.
 Share any file or link from another app to **Ferry** and pick a recipient. A foreground service
 with a notification keeps Ferry reachable in the background. Received files are saved to
 `Download/Ferry`; photos and videos go to `Pictures/Ferry` so they appear in the gallery.
+*Open* next to a received file shows it in the app you choose for its type; that app gets access
+to this one file only.
 Ferry's data is excluded from Android backups – a new phone pairs again.
 
 Android's permission dialog appears on the first start: *Local network* (Android 17 and newer –

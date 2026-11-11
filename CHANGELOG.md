@@ -19,6 +19,8 @@ compatibility).
 
 ### Added
 
+- **Android: "Open" for received files**, as on the desktop: the file opens in the app chosen for
+  its type, which gets read access to this one file only (a FileProvider `content://` URI).
 - **Auditable release binaries**: `ferry` (archives, `.deb`, `.rpm`) and `ferry-gui` (all desktop
   packages) are built with `cargo auditable`, so `cargo audit bin`, Syft or Trivy can list their
   dependencies and check them for known vulnerabilities; the release fails when a binary lacks the

@@ -128,11 +128,13 @@ function renderTransfer(ev, fresh = false) {
       el('button', { class: 'ghost icon', title: t('cancel_transfer'), 'aria-label': t('cancel_transfer'),
         onclick: () => invoke('cancel_transfer', { id: ev.id }).catch(fail) }, icon('x', 'sm')), discard));
   }
-  if (kind === 'completed' && ev.direction === 'download' && ev.status.path && !isMobile) {
+  if (kind === 'completed' && ev.direction === 'download' && ev.status.path) {
     const openFile = (reveal) => invoke('open_received', { path: ev.status.path, reveal }).catch(fail);
+    // Android opens the file in the app picked for its type; it has no
+    // "show in folder" for a single file.
     parts.push(el('div', { class: 'trailing' },
       el('button', { onclick: () => openFile(false) }, t('open')),
-      el('button', { class: 'ghost icon', title: t('show_in_folder'), 'aria-label': t('show_in_folder'), onclick: () => openFile(true) }, icon('folder', 'sm'))));
+      isMobile ? '' : el('button', { class: 'ghost icon', title: t('show_in_folder'), 'aria-label': t('show_in_folder'), onclick: () => openFile(true) }, icon('folder', 'sm'))));
   }
   row.el.replaceChildren(...parts);
   $('btn-clear').style.visibility = '';
