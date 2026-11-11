@@ -104,6 +104,41 @@ pub struct LocalSendOffer {
     pub risk: Option<Risk>,
 }
 
+/// A text or link sent by a LocalSend app as a message, as passed to
+/// [`TransferHandler::receive_localsend_text`].
+///
+/// LocalSend sends a message as one `text/plain` file whose preview is the
+/// whole text; it shows the message itself and uploads the file only when the
+/// receiver asks for it.
+#[derive(Debug, Clone)]
+pub struct LocalSendText {
+    /// ID of this offer.
+    pub id: String,
+    /// Who sends it (not verified).
+    pub sender: LocalSendSender,
+    /// The whole text.
+    pub text: String,
+}
+
+/// What to do with a [`LocalSendText`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LocalSendTextDecision {
+    /// The text was taken (e.g. copied to the clipboard); nothing is uploaded.
+    Taken,
+    /// Receive it as a `.txt` file into this folder (no further question).
+    SaveAsFile {
+        /// Folder for the file.
+        dest_dir: PathBuf,
+    },
+    /// Treat it like any file offer ([`TransferHandler::decide_localsend`]).
+    AsOffer,
+    /// Decline it.
+    Reject {
+        /// Why, for the log.
+        reason: String,
+    },
+}
+
 /// How to run the LocalSend compatibility mode.
 #[derive(Debug, Clone)]
 pub struct LocalSendOptions {

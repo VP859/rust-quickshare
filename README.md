@@ -303,6 +303,10 @@ LocalSend's list of nearby devices like another LocalSend device.
   declines), marks the offer as *LocalSend · not verified* with the sender's IP address, warns about
   programs and scripts, and makes a declined sender wait before it can offer again. The transfer is
   encrypted with TLS, but the sender is not authenticated.
+- **Texts and links** sent from LocalSend are asked about too; in the desktop app and on Android an
+  accepted text goes to the clipboard, like a text from a Ferry device. A text longer than 32 KiB is
+  saved as a `.txt` file in the download folder unless you choose *Copy anyway*. The daemon and the
+  TUI receive every text as a file.
 - **Sending to LocalSend apps** works without the mode: in the GUI they are listed under *Nearby*
   (*Search* also looks for them) and in the recipient list, on the command line
   `ferry localsend scan` and `ferry localsend send FILE… --to NAME` (or `--to 192.168.1.20` when

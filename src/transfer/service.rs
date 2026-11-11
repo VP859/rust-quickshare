@@ -30,7 +30,7 @@ use super::sender::{
     PreparedFile, SendItem, SendOutcome, expand_paths, prepare_file, push_file, send_on_channel,
 };
 use crate::history::HistoryEntry;
-use crate::localsend::LocalSendOffer;
+use crate::localsend::{LocalSendOffer, LocalSendText, LocalSendTextDecision};
 use crate::node::{NodeEngine, NodeTicket};
 use crate::pairing::{PAIR_DECISION_TIMEOUT, PairRequest, answer_pairing, clean_device_name};
 use crate::protocol::codec::{read_msg, write_msg};
@@ -406,6 +406,18 @@ pub trait TransferHandler: Send + Sync + 'static {
                 reason: t!("transfer.user_rejected").into_owned(),
             }
         }
+    }
+
+    /// Handles a text a LocalSend app sends as a message ([`LocalSendText`]).
+    ///
+    /// The sender is not authenticated (see [`TransferHandler::decide_localsend`]),
+    /// so implementations ask the user. The default keeps treating it as a
+    /// file offer ([`LocalSendTextDecision::AsOffer`]), which a daemon declines.
+    fn receive_localsend_text(
+        &self,
+        _text: &LocalSendText,
+    ) -> impl Future<Output = LocalSendTextDecision> + Send {
+        async { LocalSendTextDecision::AsOffer }
     }
 
     /// Decides about files a web browser wants to send ([`crate::web`]).

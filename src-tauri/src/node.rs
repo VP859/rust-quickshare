@@ -9,7 +9,9 @@
 
 use ferry::config::Config;
 use ferry::discovery::{Discovery, DiscoveryOptions, Visibility};
-use ferry::localsend::{LocalSend, LocalSendOffer, LocalSendOptions};
+use ferry::localsend::{
+    LocalSend, LocalSendOffer, LocalSendOptions, LocalSendText, LocalSendTextDecision,
+};
 use ferry::node::NodeEngine;
 use ferry::pairing::PairRequest;
 use ferry::protocol::messages::{BatchOffer, TextDecision, TransferOffer};
@@ -36,6 +38,12 @@ const DECISION_TIMEOUT: Duration = Duration::from_secs(120);
 /// Time to confirm a pairing request in the GUI; shorter than the core's 60 s,
 /// so the dialog can be closed and the pending entry cleaned up.
 const PAIR_UI_TIMEOUT: Duration = Duration::from_secs(55);
+/// Texts from LocalSend apps up to this size go to the clipboard after the
+/// user accepts them (as Ferry texts); longer ones are saved as a file unless
+/// the user chooses to copy them anyway.
+pub const CLIPBOARD_TEXT_MAX: usize = ferry::protocol::messages::MAX_TEXT_LEN;
+/// Of a longer text, the dialog shows the beginning (bytes).
+const LONG_TEXT_PREVIEW: usize = 4096;
 
 /// State shared by all Tauri commands.
 pub struct AppState {
@@ -44,7 +52,7 @@ pub struct AppState {
     /// Current configuration; saved after every change.
     pub config: Mutex<Config>,
     /// Pending offer and pairing decisions keyed by their ID.
-    pub pending: Mutex<HashMap<String, oneshot::Sender<bool>>>,
+    pub pending: Mutex<HashMap<String, oneshot::Sender<Answer>>>,
     /// Files shared by TICKET, each served by a node with its own one-time
     /// identity; ended shares are dropped when a new one starts.
     pub shares: std::sync::Mutex<Vec<Share>>,
@@ -193,17 +201,33 @@ pub struct IncomingOffer {
     pub browser: Option<String>,
 }
 
+/// The user's answer to a question (`respond_to_offer`).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Answer {
+    /// Accepted.
+    pub accept: bool,
+    /// For a long text from a LocalSend app: copy it although it is long
+    /// (otherwise it is saved as a file).
+    pub copy: bool,
+}
+
 /// Payload of the `incoming-text` event.
 #[derive(Clone, Serialize)]
 pub struct IncomingText {
     /// ID to answer with `respond_to_offer`.
     pub id: String,
-    /// Node ID of the sender.
+    /// Node ID of the sender (`localsend:<address>` for a LocalSend app).
     pub peer: String,
-    /// Alias of the sender if it is trusted.
+    /// Alias of the sender if it is trusted, or the name a LocalSend app announces.
     pub alias: Option<String>,
-    /// The received text.
+    /// The received text; of a long text only its beginning.
     pub text: String,
+    /// Size of the whole text in bytes.
+    pub size: usize,
+    /// Longer than [`CLIPBOARD_TEXT_MAX`]: saved as a file unless the user copies it anyway.
+    pub long: bool,
+    /// Address of the LocalSend app that sent it (not verified); `None` for Ferry devices.
+    pub localsend: Option<String>,
 }
 
 /// Payload of the `text-received` event, emitted after a text was accepted.
@@ -274,16 +298,61 @@ impl GuiHandler {
         timeout: Duration,
         notification: (&str, &str),
     ) -> bool {
+        self.ask_answer(id, event, payload, timeout, notification)
+            .await
+            .accept
+    }
+
+    /// [`GuiHandler::ask`] with the whole [`Answer`]; unanswered is declined.
+    async fn ask_answer<P: Serialize + Clone>(
+        &self,
+        id: &str,
+        event: &str,
+        payload: P,
+        timeout: Duration,
+        notification: (&str, &str),
+    ) -> Answer {
         let state = self.state();
         let (tx, rx) = oneshot::channel();
         state.pending.lock().await.insert(id.to_string(), tx);
         let _ = self.app.emit(event, payload);
         self.notify(notification.0, notification.1);
-        let accepted = matches!(tokio::time::timeout(timeout, rx).await, Ok(Ok(true)));
+        let answer = match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(answer)) => answer,
+            _ => Answer::default(),
+        };
         if state.pending.lock().await.remove(id).is_some() {
             let _ = self.app.emit("request-cancelled", id);
         }
-        accepted
+        answer
+    }
+
+    /// Copies an accepted text to the clipboard and shows it among the
+    /// transfers (`text-received`); whether it was copied.
+    fn take_text(&self, peer: String, alias: Option<String>, text: String) -> bool {
+        let copied = self
+            .app
+            .clipboard()
+            .write_text(text.clone())
+            .inspect_err(|e| warn!("Could not copy the received text: {e}"))
+            .is_ok();
+        let sender = alias
+            .clone()
+            .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
+        let _ = self.app.emit(
+            "text-received",
+            ReceivedText {
+                peer,
+                alias,
+                text,
+                copied,
+            },
+        );
+        self.notify(
+            &t!("gui.notify_text_title"),
+            &t!("gui.notify_text_copied", sender = &sender),
+        );
+        copied
     }
 }
 
@@ -570,7 +639,10 @@ impl TransferHandler for GuiHandler {
             id: id.clone(),
             peer: peer.to_string(),
             alias: alias.clone(),
+            size: text.len(),
             text: text.clone(),
+            long: false,
+            localsend: None,
         };
         let notification = (
             &*t!("gui.notify_text_title"),
@@ -592,26 +664,64 @@ impl TransferHandler for GuiHandler {
             };
         }
 
-        let copied = self
-            .app
-            .clipboard()
-            .write_text(text.clone())
-            .inspect_err(|e| warn!("Could not copy the received text: {e}"))
-            .is_ok();
-        let _ = self.app.emit(
-            "text-received",
-            ReceivedText {
-                peer: peer.to_string(),
-                alias,
-                text,
-                copied,
-            },
-        );
-        self.notify(
-            &t!("gui.notify_text_title"),
-            &t!("gui.notify_text_copied", sender = &sender),
-        );
+        self.take_text(peer.to_string(), alias, text);
         TextDecision::Accepted
+    }
+
+    /// LocalSend senders are not authenticated: a message is always asked
+    /// about. A short one then goes to the clipboard; a long one is saved as a
+    /// file unless the user copies it anyway.
+    async fn receive_localsend_text(&self, message: &LocalSendText) -> LocalSendTextDecision {
+        let text = &message.text;
+        let long = text.len() > CLIPBOARD_TEXT_MAX;
+        let shown = if long {
+            let mut end = LONG_TEXT_PREVIEW;
+            while !text.is_char_boundary(end) {
+                end -= 1;
+            }
+            format!("{}…", &text[..end])
+        } else {
+            text.clone()
+        };
+        let id = format!("localsend-text-{}", message.id);
+        let sender = message.sender.label();
+        let request = IncomingText {
+            id: id.clone(),
+            peer: message.sender.peer_id(),
+            alias: Some(sender.clone()),
+            text: shown,
+            size: text.len(),
+            long,
+            localsend: Some(message.sender.address.to_string()),
+        };
+        let notification = (
+            &*t!("gui.notify_text_title"),
+            &*t!("gui.notify_text", sender = &sender),
+        );
+        let answer = self
+            .ask_answer(
+                &id,
+                "incoming-text",
+                request,
+                DECISION_TIMEOUT,
+                notification,
+            )
+            .await;
+        if !answer.accept {
+            return LocalSendTextDecision::Reject {
+                reason: t!("transfer.user_rejected").into_owned(),
+            };
+        }
+        let dest_dir = self.state().download_dir().await;
+        if long && !answer.copy {
+            return LocalSendTextDecision::SaveAsFile { dest_dir };
+        }
+        // Not lost when the clipboard cannot take it: saved as a file instead.
+        if self.take_text(message.sender.peer_id(), Some(sender), text.clone()) {
+            LocalSendTextDecision::Taken
+        } else {
+            LocalSendTextDecision::SaveAsFile { dest_dir }
+        }
     }
 
     fn on_event(&self, mut event: TransferEvent) {

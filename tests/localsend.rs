@@ -9,7 +9,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, missing_docs)]
 
 use bytes::Bytes;
-use ferry::localsend::{LocalSend, LocalSendOffer, LocalSendOptions};
+use ferry::localsend::{
+    LocalSend, LocalSendOffer, LocalSendOptions, LocalSendText, LocalSendTextDecision,
+};
 use ferry::node::NodeEngine;
 use ferry::protocol::messages::TransferOffer;
 use ferry::transfer::risk::Risk;
@@ -50,6 +52,9 @@ struct Interface {
     answer: Mutex<Answer>,
     offers: Mutex<Vec<LocalSendOffer>>,
     events: Mutex<Vec<TransferEvent>>,
+    /// The answer to messages; `None` keeps the default (a file offer).
+    text_answer: Mutex<Option<LocalSendTextDecision>>,
+    texts: Mutex<Vec<LocalSendText>>,
 }
 
 impl Interface {
@@ -58,6 +63,8 @@ impl Interface {
             answer: Mutex::new(answer),
             offers: Mutex::default(),
             events: Mutex::default(),
+            text_answer: Mutex::default(),
+            texts: Mutex::default(),
         })
     }
 
@@ -83,6 +90,15 @@ impl TransferHandler for Interface {
 
     fn device_name(&self) -> String {
         "Ferry Laptop".into()
+    }
+
+    async fn receive_localsend_text(&self, text: &LocalSendText) -> LocalSendTextDecision {
+        self.texts.lock().unwrap().push(text.clone());
+        self.text_answer
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or(LocalSendTextDecision::AsOffer)
     }
 
     async fn decide_localsend(&self, offer: &LocalSendOffer) -> OfferDecision {
@@ -1311,4 +1327,95 @@ async fn an_app_that_asks_for_the_text_as_a_file_gets_it() {
         .await
         .unwrap();
     assert_eq!(declined, SendResult::Rejected);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_from_a_localsend_app_is_taken_saved_or_declined() {
+    use ferry::localsend::client::{SendResult, send_text};
+    let dest = tempfile::tempdir().unwrap();
+    let interface = Interface::new(Answer::Reject);
+    let setup = start(interface.clone()).await;
+    let device = localsend_device(&setup, setup.server.fingerprint());
+    let mine = tempfile::tempdir().unwrap();
+    let me = own_device(mine.path());
+
+    // Taken (copied by the interface): answered like LocalSend, no upload.
+    *interface.text_answer.lock().unwrap() = Some(LocalSendTextDecision::Taken);
+    let sent = send_text(&device, "Meet at 7 – żółw", &me, None)
+        .await
+        .unwrap();
+    assert_eq!(sent, SendResult::Sent);
+    let texts = interface.texts.lock().unwrap().clone();
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0].text, "Meet at 7 – żółw");
+    assert_eq!(texts[0].sender.alias, "Ferry Laptop");
+    assert!(walk(dest.path()).is_empty());
+    assert!(
+        interface.offers.lock().unwrap().is_empty(),
+        "no file question"
+    );
+
+    // Saved as a file: received without asking about the file again.
+    *interface.text_answer.lock().unwrap() = Some(LocalSendTextDecision::SaveAsFile {
+        dest_dir: dest.path().to_path_buf(),
+    });
+    let sent = send_text(&device, "a long text", &me, None).await.unwrap();
+    assert_eq!(sent, SendResult::Sent);
+    let saved = walk(dest.path());
+    assert_eq!(saved.len(), 1, "{saved:?}");
+    assert_eq!(std::fs::read(&saved[0]).unwrap(), b"a long text");
+    assert!(
+        interface.offers.lock().unwrap().is_empty(),
+        "no file question"
+    );
+
+    // Declined.
+    *interface.text_answer.lock().unwrap() = Some(LocalSendTextDecision::Reject {
+        reason: "no".into(),
+    });
+    let declined = send_text(&device, "spam", &me, None).await.unwrap();
+    assert_eq!(declined, SendResult::Rejected);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn only_a_whole_text_counts_as_a_message() {
+    let interface = Interface::new(Answer::Reject);
+    *interface.text_answer.lock().unwrap() = Some(LocalSendTextDecision::Taken);
+    let setup = start(interface.clone()).await;
+    let port = setup.server.port();
+    let offer = |files: Value| json!({ "info": sender_info(), "files": files }).to_string();
+    // One `text/*` file with the whole text as its preview is a message …
+    let whole = offer(json!({ "0": {
+        "id": "0", "fileName": "a.txt", "size": 10, "fileType": "text/plain",
+        "preview": "Dear Kate,"
+    }}));
+    let reply = call(port, None, "POST", "prepare-upload", whole)
+        .await
+        .unwrap();
+    assert_eq!(reply.status, StatusCode::NO_CONTENT);
+    assert_eq!(interface.texts.lock().unwrap().len(), 1);
+    assert!(interface.offers.lock().unwrap().is_empty());
+    // … a text file whose preview is only its beginning is a file offer.
+    let partial = offer(json!({ "0": {
+        "id": "0", "fileName": "notes.txt", "size": 5000, "fileType": "text/plain",
+        "preview": "Dear Kate,"
+    }}));
+    let reply = call(port, None, "POST", "prepare-upload", partial)
+        .await
+        .unwrap();
+    assert_eq!(reply.status, StatusCode::FORBIDDEN);
+    assert_eq!(interface.texts.lock().unwrap().len(), 1);
+    assert_eq!(interface.offers.lock().unwrap().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn without_an_interface_that_takes_texts_a_message_is_a_file_offer() {
+    // The default (daemon, TUI): a file offer, which a daemon declines.
+    let setup = start(Arc::new(DefaultInterface)).await;
+    let device = localsend_device(&setup, setup.server.fingerprint());
+    let mine = tempfile::tempdir().unwrap();
+    let result = ferry::localsend::client::send_text(&device, "hi", &own_device(mine.path()), None)
+        .await
+        .unwrap();
+    assert_eq!(result, ferry::localsend::client::SendResult::Rejected);
 }

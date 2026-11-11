@@ -1,6 +1,6 @@
 // Texts and links: composing and sending one, and texts received from other
 // devices (copied to the clipboard after confirmation).
-import { $, close, el, fail, icon, isLink, open, preview, shortId, toast } from './dom.js';
+import { $, close, el, fail, fmtSize, icon, isLink, open, preview, shortId, toast } from './dom.js';
 import { t } from './i18n.js';
 import { askPin } from './localsend.js';
 import { chooseRecipient } from './send.js';
@@ -107,16 +107,28 @@ export function showNextTextRequest() {
   const r = textRequests[0];
   if (!r) return close('modal-text-in');
   $('text-in-from').textContent = t('text_from', { name: r.alias ?? t('unknown_device', { id: shortId(r.peer) }) });
+  // From a LocalSend app: its name is not verified.
+  $('text-in-localsend').hidden = !r.localsend;
+  $('text-in-localsend').textContent = r.localsend ? t('localsend_offer', { address: r.localsend }) : '';
   $('text-in-body').textContent = r.text;
+  // A long text is saved as a file, unless the user copies it anyway.
+  $('text-in-long').hidden = !r.long;
+  $('text-in-long').textContent = r.long ? t('text_long', { size: fmtSize(r.size) }) : '';
+  $('btn-text-copy-anyway').hidden = !r.long;
+  $('btn-text-accept').textContent = t(r.long ? 'save_as_file' : 'accept_copy');
   $('text-in-queue').textContent = textRequests.length > 1 ? t('queued', { n: textRequests.length - 1 }) : '';
   open('modal-text-in');
 }
-async function answerTextRequest(accept) {
+async function answerTextRequest(accept, copy = false) {
   const r = textRequests.shift();
-  if (r) { try { await invoke('respond_to_offer', { transferId: r.id, accept }); } catch (e) { fail(e); } }
+  if (r) {
+    try { await invoke('respond_to_offer', { transferId: r.id, accept, copy }); } catch (e) { fail(e); }
+    if (accept && r.long && !copy) toast(t('text_saved_as_file', { name: r.alias }));
+  }
   showNextTextRequest();
 }
 $('btn-text-accept').onclick = () => answerTextRequest(true);
+$('btn-text-copy-anyway').onclick = () => answerTextRequest(true, true);
 $('btn-text-reject').onclick = () => answerTextRequest(false);
 
 function onTextReceived(x) {

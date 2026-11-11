@@ -19,6 +19,9 @@ compatibility).
 
 ### Added
 
+- **Texts from LocalSend apps go to the clipboard**: after you accept one it is copied, like a text
+  from a Ferry device; a text over 32 KiB is saved as a file unless you choose *Copy anyway*. The
+  daemon and the TUI still save texts as files.
 - **Texts and links to LocalSend apps**: *Send text* lists LocalSend apps among the recipients and
   `ferry localsend text "…" --to NAME` sends one; the app shows it as a message (with its PIN when
   it needs one).

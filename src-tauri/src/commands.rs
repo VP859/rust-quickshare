@@ -862,7 +862,9 @@ pub async fn receive_from_ticket(
     Ok(())
 }
 
-/// Answers an `incoming-offer` or `pair-request` event by its ID.
+/// Answers an `incoming-offer`, `incoming-text` or `pair-request` event by
+/// its ID; `copy` copies a long text from a LocalSend app instead of saving it
+/// as a file.
 ///
 /// # Errors
 ///
@@ -871,10 +873,14 @@ pub async fn receive_from_ticket(
 pub async fn respond_to_offer(
     transfer_id: String,
     accept: bool,
+    copy: Option<bool>,
     state: State<'_, AppState>,
 ) -> CmdResult<()> {
     if let Some(tx) = state.pending.lock().await.remove(&transfer_id) {
-        let _ = tx.send(accept);
+        let _ = tx.send(crate::node::Answer {
+            accept,
+            copy: copy.unwrap_or(false),
+        });
     }
     Ok(())
 }

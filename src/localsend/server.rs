@@ -19,7 +19,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use super::dto::{DeviceInfo, OfferedFile, PrepareUpload, PrepareUploadResponse};
-use super::{LocalSendOffer, LocalSendSender, PROTOCOL_VERSION};
+use super::{
+    LocalSendOffer, LocalSendSender, LocalSendText, LocalSendTextDecision, PROTOCOL_VERSION,
+};
 use crate::httpd::{UploadError, json, message, parse_query, read_json, receive};
 use crate::protocol::messages::MAX_BATCH_NAMES;
 use crate::transfer::receiver::check_free_space;
@@ -278,6 +280,45 @@ impl<H: TransferHandler> Server<H> {
             model: offer.info.clean_model(),
             address: ip,
         };
+        // A message: the user may take the text itself (e.g. into the
+        // clipboard), have it saved as a file, or decline it.
+        let mut chosen_dir = None;
+        if let Some(text) = offer.message() {
+            let request = LocalSendText {
+                id: id.clone(),
+                sender: sender.clone(),
+                text: text.to_string(),
+            };
+            info!(
+                "LocalSend message from '{}' at {ip}: {} B",
+                sender.alias,
+                text.len()
+            );
+            let decision = tokio::select! {
+                decision = tokio::time::timeout(QUESTION_TIMEOUT, self.handler.receive_localsend_text(&request)) => {
+                    decision.unwrap_or_else(|_| LocalSendTextDecision::Reject {
+                        reason: t!("transfer.user_rejected").into_owned(),
+                    })
+                }
+                () = cancel.cancelled() => return message(StatusCode::FORBIDDEN, "Cancelled by sender"),
+            };
+            match decision {
+                // As LocalSend apps answer a message they showed.
+                LocalSendTextDecision::Taken => {
+                    let mut response = Response::new(Body::default());
+                    *response.status_mut() = StatusCode::NO_CONTENT;
+                    return response;
+                }
+                LocalSendTextDecision::Reject { reason } => {
+                    info!("LocalSend message from {ip} declined: {reason}");
+                    self.start_cooldown(ip);
+                    return message(StatusCode::FORBIDDEN, "Rejected");
+                }
+                LocalSendTextDecision::SaveAsFile { dest_dir } => chosen_dir = Some(dest_dir),
+                LocalSendTextDecision::AsOffer => {}
+            }
+        }
+
         let total_size = files.iter().map(|f| f.size).sum();
         let request = LocalSendOffer {
             id: id.clone(),
@@ -295,13 +336,17 @@ impl<H: TransferHandler> Server<H> {
             "LocalSend offer from '{}' at {ip}: {} file(s), {total_size} B",
             sender.alias, request.count
         );
-        let decision = tokio::select! {
-            decision = tokio::time::timeout(QUESTION_TIMEOUT, self.handler.decide_localsend(&request)) => {
-                decision.unwrap_or_else(|_| OfferDecision::Reject {
-                    reason: t!("transfer.user_rejected").into_owned(),
-                })
+        let decision = if let Some(dest_dir) = chosen_dir {
+            OfferDecision::Accept { dest_dir }
+        } else {
+            tokio::select! {
+                decision = tokio::time::timeout(QUESTION_TIMEOUT, self.handler.decide_localsend(&request)) => {
+                    decision.unwrap_or_else(|_| OfferDecision::Reject {
+                        reason: t!("transfer.user_rejected").into_owned(),
+                    })
+                }
+                () = cancel.cancelled() => return message(StatusCode::FORBIDDEN, "Cancelled by sender"),
             }
-            () = cancel.cancelled() => return message(StatusCode::FORBIDDEN, "Cancelled by sender"),
         };
         let dest_dir = match decision {
             OfferDecision::Reject { reason } => {

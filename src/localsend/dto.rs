@@ -200,6 +200,18 @@ pub fn parse_sha256(hex: &str) -> Option<[u8; 32]> {
 }
 
 impl PrepareUpload {
+    /// The text of a message: one `text/*` file whose preview is all of it
+    /// (its size is the preview's length in UTF-8). `None` for anything else,
+    /// e.g. a text file with only the beginning as its preview.
+    pub fn message(&self) -> Option<&str> {
+        let [(_, file)] = self.files.iter().collect::<Vec<_>>()[..] else {
+            return None;
+        };
+        let text = file.preview.as_deref()?;
+        (file.file_type.starts_with("text/") && !text.is_empty() && text.len() as u64 == file.size)
+            .then_some(text)
+    }
+
     /// Checks the limits and turns every offered file into an [`OfferedFile`],
     /// sorted by display name.
     ///

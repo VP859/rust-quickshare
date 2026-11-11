@@ -346,9 +346,11 @@
     <div class="modal-head"><h3 id="text-in-title" data-i18n="incoming_text"></h3></div>
     <div class="modal-body">
       <p class="muted small" id="text-in-from"></p>
+      <p class="compat-warning" id="text-in-localsend" hidden></p>
       <div class="codebox textbox" id="text-in-body" style="-webkit-user-select:text; user-select:text"></div>
+      <p class="muted small" id="text-in-long" hidden></p>
       <p class="muted small" id="text-in-queue"></p>
-      <div class="modal-actions"><button class="danger" id="btn-text-reject" data-i18n="reject"></button><button class="primary" id="btn-text-accept" data-i18n="accept_copy"></button></div>
+      <div class="modal-actions"><button class="danger" id="btn-text-reject" data-i18n="reject"></button><button id="btn-text-copy-anyway" data-i18n="copy_anyway" hidden></button><button class="primary" id="btn-text-accept"></button></div>
     </div>
   </div>
 </div>

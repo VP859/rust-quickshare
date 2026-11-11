@@ -652,6 +652,39 @@ test('a text goes to a LocalSend app as a message, with its PIN when it needs on
   await expect(rows.first()).toContainText("Kate's iPhone declined the text.");
 });
 
+test('a text from a LocalSend app is copied, and a long one saved as a file unless copied anyway', async ({ app }) => {
+  const dialog = app.locator('#modal-text-in');
+  const from = { peer: 'localsend:192.168.1.20', alias: "Kate's iPhone", localsend: '192.168.1.20' };
+
+  // A short text: as from a Ferry device, but marked as not verified.
+  await emit(app, 'incoming-text', { ...from, id: 'lt1', text: 'Meet at 7', size: 9, long: false });
+  await expect(dialog).toHaveClass(/active/);
+  await expect(app.locator('#text-in-localsend')).toContainText('the sender is not verified');
+  await expect(app.locator('#text-in-long')).toBeHidden();
+  await expect(app.locator('#btn-text-copy-anyway')).toBeHidden();
+  await dialog.getByRole('button', { name: 'Accept and copy' }).click();
+  expect(await calls(app)).toContainEqual(['respond_to_offer', { transferId: 'lt1', accept: true, copy: false }]);
+  await expect(dialog).not.toHaveClass(/active/);
+
+  // A long text: saved as a file by default …
+  await emit(app, 'incoming-text', { ...from, id: 'lt2', text: 'Lorem ipsum…', size: 90_000, long: true });
+  await expect(app.locator('#text-in-long')).toContainText('88 KB');
+  await dialog.getByRole('button', { name: 'Save as a file' }).click();
+  expect(await calls(app)).toContainEqual(['respond_to_offer', { transferId: 'lt2', accept: true, copy: false }]);
+  await expect(app.locator('#toast')).toContainText('saved as a file');
+
+  // … or copied when the user wants it all the same.
+  await emit(app, 'incoming-text', { ...from, id: 'lt3', text: 'Lorem ipsum…', size: 90_000, long: true });
+  await dialog.getByRole('button', { name: 'Copy anyway' }).click();
+  expect(await calls(app)).toContainEqual(['respond_to_offer', { transferId: 'lt3', accept: true, copy: true }]);
+
+  // A text from a Ferry device has no LocalSend note.
+  await emit(app, 'incoming-text', { id: 't9', peer: PEER, alias: 'Laptop', text: 'hi', size: 2, long: false, localsend: null });
+  await expect(app.locator('#text-in-localsend')).toBeHidden();
+  await dialog.getByRole('button', { name: 'Decline' }).click();
+  expect(await calls(app)).toContainEqual(['respond_to_offer', { transferId: 't9', accept: false, copy: false }]);
+});
+
 test('the device key can be moved into the system keyring', async ({ app }) => {
   await app.locator('#btn-settings').click();
   await expect(app.locator('#keyring-toggle')).toBeVisible();
