@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.util.Log
 import androidx.core.app.Person
 import androidx.core.content.pm.ShortcutInfoCompat
@@ -68,7 +69,7 @@ object ShareTargets {
     return ShortcutInfoCompat.Builder(context, PREFIX + id)
       .setShortLabel(name)
       .setLongLabel(name)
-      .setIcon(IconCompat.createWithAdaptiveBitmap(initials(name)))
+      .setIcon(IconCompat.createWithAdaptiveBitmap(icon(id, name)))
       // Required by Android; the share intent itself replaces it when chosen.
       .setIntent(Intent(context, MainActivity::class.java).setAction(Intent.ACTION_SEND))
       .setCategories(setOf(CATEGORY))
@@ -78,21 +79,57 @@ object ShareTargets {
       .build()
   }
 
-  /** A round icon with the initials of [name], like the avatars in the app. */
-  private fun initials(name: String): Bitmap {
-    // Adaptive icons are cut to the inner 72 of 108 units.
+  /**
+   * Backgrounds of the icons: each has a contrast of at least 4.5:1 with the
+   * white letters (WCAG AA), and a device always gets the same one.
+   */
+  private val COLORS = intArrayOf(
+    0xFF1D4ED8.toInt(), // blue
+    0xFF4338CA.toInt(), // indigo
+    0xFF7C3AED.toInt(), // violet
+    0xFFBE185D.toInt(), // pink
+    0xFFB91C1C.toInt(), // red
+    0xFFC2410C.toInt(), // orange
+    0xFF047857.toInt(), // green
+    0xFF0F766E.toInt(), // teal
+  )
+
+  /** Characters of [text] (code points, so an emoji is not cut in half). */
+  private fun characters(text: String): List<String> =
+    text.codePoints().toArray().map { String(Character.toChars(it)) }
+
+  /**
+   * Two characters that tell devices apart: the first letters of two words
+   * ("Kate's Phone" → "KP", "work-pc" → "WP"), or the first two characters
+   * of a single word ("Laptop" → "La").
+   */
+  internal fun initials(name: String): String {
+    val words = name.trim().split(Regex("[\\s_.\\-]+")).filter { it.isNotEmpty() }
+    return when {
+      words.isEmpty() -> "?"
+      words.size == 1 -> characters(words[0]).take(2).let { chars ->
+        chars.first().uppercase() + chars.drop(1).joinToString("")
+      }
+      else -> words.take(2).joinToString("") { characters(it).first().uppercase() }
+    }
+  }
+
+  /** A square icon (Android makes it round) with the initials of [name] on a color of its own. */
+  private fun icon(id: String, name: String): Bitmap {
     val bitmap = Bitmap.createBitmap(ICON_SIZE, ICON_SIZE, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    canvas.drawColor(Color.rgb(37, 99, 235))
-    val letters = name.trim().split(Regex("\\s+")).take(2)
-      .mapNotNull { word -> word.firstOrNull()?.toString() }
-      .joinToString("").uppercase().ifEmpty { "?" }
+    canvas.drawColor(COLORS[Math.floorMod(id.hashCode(), COLORS.size)])
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       color = Color.WHITE
       textAlign = Paint.Align.CENTER
+      typeface = Typeface.DEFAULT_BOLD
       textSize = ICON_SIZE * 0.3f
-      isFakeBoldText = true
     }
+    val letters = initials(name)
+    // Adaptive icons show only the inner 72 of 108 units: wide letters shrink to fit.
+    val room = ICON_SIZE * 0.5f
+    val width = paint.measureText(letters)
+    if (width > room) paint.textSize *= room / width
     val y = ICON_SIZE / 2f - (paint.descent() + paint.ascent()) / 2f
     canvas.drawText(letters, ICON_SIZE / 2f, y, paint)
     return bitmap

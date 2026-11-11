@@ -21,7 +21,8 @@ compatibility).
 
 - **Android: paired devices in the Share menu** (Direct Share, Android 10+): sharing a photo and
   tapping "Laptop" sends it there without opening Ferry first; a text opens ready to send. The list
-  follows pairing, renaming and unpairing.
+  follows pairing, renaming and unpairing; each device has two initials ("La", "KP") on a color of
+  its own.
 - **Texts from LocalSend apps go to the clipboard**: after you accept one it is copied, like a text
   from a Ferry device; a text over 32 KiB is saved as a file unless you choose *Copy anyway*. The
   daemon and the TUI still save texts as files.
