@@ -19,6 +19,9 @@ compatibility).
 
 ### Added
 
+- **Texts and links to LocalSend apps**: *Send text* lists LocalSend apps among the recipients and
+  `ferry localsend text "…" --to NAME` sends one; the app shows it as a message (with its PIN when
+  it needs one).
 - **Android: "Open" for received files**, as on the desktop: the file opens in the app chosen for
   its type, which gets read access to this one file only (a FileProvider `content://` URI).
 - **Auditable release binaries**: `ferry` (archives, `.deb`, `.rpm`) and `ferry-gui` (all desktop

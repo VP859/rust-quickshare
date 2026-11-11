@@ -35,7 +35,6 @@ an item, say so in its issue first.
 
 These are ideas, not promises; an issue with a use case makes them more likely.
 
-- Sending texts to LocalSend apps (files and folders already work).
 - Benchmarks on real Wi-Fi and mobile networks, published on the [benchmarks](docs/BENCHMARKS.md)
   page.
 - More background reliability on Android phones with aggressive battery savers.

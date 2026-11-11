@@ -978,6 +978,9 @@ struct StrictApp {
     client_fingerprints: Mutex<Vec<String>>,
     offered_fingerprint: Mutex<Option<String>>,
     uploaded: Mutex<Vec<u8>>,
+    /// Messages shown, as LocalSend shows them: one `text/plain` file with a
+    /// preview, answered with 204 and no upload.
+    messages: Mutex<Vec<Value>>,
 }
 
 #[derive(Debug)]
@@ -1042,6 +1045,7 @@ impl StrictApp {
             client_fingerprints: Mutex::default(),
             offered_fingerprint: Mutex::default(),
             uploaded: Mutex::default(),
+            messages: Mutex::default(),
         })
     }
 
@@ -1118,6 +1122,14 @@ impl StrictApp {
             let offer: Value = serde_json::from_slice(&body).unwrap();
             *self.offered_fingerprint.lock().unwrap() =
                 offer["info"]["fingerprint"].as_str().map(str::to_string);
+            let files = offer["files"].as_object().unwrap();
+            if let [file] = files.values().collect::<Vec<_>>()[..]
+                && file["fileType"] == "text/plain"
+                && file["preview"].is_string()
+            {
+                self.messages.lock().unwrap().push(file.clone());
+                return reply(StatusCode::NO_CONTENT, String::new());
+            }
             let files: serde_json::Map<String, Value> = offer["files"]
                 .as_object()
                 .unwrap()
@@ -1245,4 +1257,58 @@ async fn apps_that_answer_a_scan_with_register_are_listed() {
         found.iter().any(|d| d.alias == "Answering Phone"),
         "{found:?}"
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_text_is_shown_as_a_message_without_an_upload() {
+    use ferry::localsend::client::{PinRequired, SendResult, send_text};
+    let app = StrictApp::new(Some("4711"));
+    let port = app.start().await;
+    let mine = tempfile::tempdir().unwrap();
+    let (device, me) = (strict_device(&app, port), own_device(mine.path()));
+    let text = "Meet at 7 – https://example.org/ż";
+
+    let missing = send_text(&device, text, &me, None).await.unwrap_err();
+    assert_eq!(
+        missing.downcast_ref::<PinRequired>(),
+        Some(&PinRequired { wrong: false })
+    );
+    let result = send_text(&device, text, &me, Some("4711")).await.unwrap();
+    assert_eq!(result, SendResult::Sent);
+    let messages = app.messages.lock().unwrap().clone();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0]["preview"], text);
+    assert_eq!(messages[0]["size"], text.len());
+    assert!(messages[0]["fileName"].as_str().unwrap().ends_with(".txt"));
+    assert!(app.uploaded.lock().unwrap().is_empty(), "nothing uploaded");
+
+    // Too long or empty texts are refused before anything is sent.
+    let long = "x".repeat(ferry::protocol::messages::MAX_TEXT_LEN + 1);
+    assert!(send_text(&device, &long, &me, Some("4711")).await.is_err());
+    assert!(send_text(&device, "  ", &me, Some("4711")).await.is_err());
+    assert_eq!(app.messages.lock().unwrap().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_app_that_asks_for_the_text_as_a_file_gets_it() {
+    use ferry::localsend::client::{SendResult, send_text};
+    let dest = tempfile::tempdir().unwrap();
+    // Ferry's own server asks for every file, also a text, and saves it.
+    let interface = Interface::new(Answer::Accept(dest.path().to_path_buf()));
+    let setup = start(interface.clone()).await;
+    let device = localsend_device(&setup, setup.server.fingerprint());
+    let mine = tempfile::tempdir().unwrap();
+    let result = send_text(&device, "hello there", &own_device(mine.path()), None)
+        .await
+        .unwrap();
+    assert_eq!(result, SendResult::Sent);
+    let saved = walk(dest.path());
+    assert_eq!(saved.len(), 1, "{saved:?}");
+    assert_eq!(std::fs::read(&saved[0]).unwrap(), b"hello there");
+
+    *interface.answer.lock().unwrap() = Answer::Reject;
+    let declined = send_text(&device, "no", &own_device(mine.path()), None)
+        .await
+        .unwrap();
+    assert_eq!(declined, SendResult::Rejected);
 }

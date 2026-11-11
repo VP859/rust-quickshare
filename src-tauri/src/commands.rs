@@ -580,6 +580,49 @@ pub async fn send_to_localsend(
     Ok(())
 }
 
+/// How a text sent to a LocalSend app ended.
+#[derive(Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum LocalSendText {
+    /// The app shows it.
+    Sent,
+    /// The user of the app declined it.
+    Rejected,
+    /// The app needs a PIN (`wrong`: the one given was not accepted).
+    Pin {
+        /// A PIN was given and refused.
+        wrong: bool,
+    },
+}
+
+/// Sends text or a link to the LocalSend app with this certificate
+/// fingerprint, which shows it as a message, and waits for the answer.
+///
+/// # Errors
+///
+/// When the text is empty or too long, the device is no longer known, cannot
+/// be reached or is busy.
+#[tauri::command]
+pub async fn send_text_to_localsend(
+    text: String,
+    fingerprint: String,
+    pin: Option<String>,
+    state: State<'_, AppState>,
+) -> CmdResult<LocalSendText> {
+    let device = ferry::localsend::client::find_by_fingerprint(&fingerprint)
+        .ok_or_else(|| t!("localsend.not_found", name = &fingerprint).into_owned())?;
+    let me = ferry::localsend::client::OwnDevice::named(&state.config.lock().await.device_name());
+    let pin = pin.filter(|p| !p.trim().is_empty());
+    match ferry::localsend::client::send_text(&device, &text, &me, pin.as_deref()).await {
+        Ok(ferry::localsend::client::SendResult::Sent) => Ok(LocalSendText::Sent),
+        Ok(ferry::localsend::client::SendResult::Rejected) => Ok(LocalSendText::Rejected),
+        Err(e) => match e.downcast_ref::<ferry::localsend::client::PinRequired>() {
+            Some(asked) => Ok(LocalSendText::Pin { wrong: asked.wrong }),
+            None => Err(format!("{e:#}")),
+        },
+    }
+}
+
 /// Sends text or a link to a device given by alias, nearby name, Node ID or
 /// TICKET and waits until the receiver accepts it (it then lands in the
 /// receiver's clipboard).

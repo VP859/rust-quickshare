@@ -298,7 +298,7 @@ test('a text goes through the recipient list and appears among the transfers', a
   const recipients = app.locator('#modal-recipient');
   await expect(recipients).toHaveClass(/active/);
   await expect(app.locator('#btn-share-ticket')).toBeHidden();
-  await expect(app.locator('#localsend-section')).toBeHidden();
+  await expect(app.locator('#localsend-section')).toBeVisible();
   await recipients.getByRole('button', { name: /Laptop/ }).click();
   await expect(recipients).not.toHaveClass(/active/);
   expect(await calls(app)).toContainEqual(['send_text', { text: 'https://example.org/x', target: PEER }]);
@@ -613,6 +613,43 @@ test('a LocalSend app that asks for a PIN gets it, and a wrong one is said so', 
   await app.locator('#btn-pin-send').click();
   await expect(dialog).not.toHaveClass(/active/);
   expect(await calls(app)).toContainEqual(['send_to_localsend', { paths: ['/home/me/a.jpg'], fingerprint: 'AB12', pin: '4711' }]);
+});
+
+test('a text goes to a LocalSend app as a message, with its PIN when it needs one', async ({ app }) => {
+  const writeTo = async (text) => {
+    await app.locator('#btn-send-text').click();
+    await app.locator('#text-input').fill(text);
+    await app.locator('#btn-text-next').click();
+    await app.locator('#localsend-recipients').getByRole('button', { name: /Kate's iPhone/ }).click();
+  };
+  const rows = app.locator('#transfers .row.transfer');
+
+  await app.evaluate(() => window.__respond('send_text_to_localsend', { status: 'sent' }));
+  await writeTo('Meet at 7');
+  expect(await calls(app)).toContainEqual(['send_text_to_localsend', { text: 'Meet at 7', fingerprint: 'AB12', pin: null }]);
+  await expect(rows.first()).toContainText("Shown on Kate's iPhone");
+
+  // The app asks for a PIN: the same row waits and follows the retry.
+  await app.evaluate(() => window.__respond('send_text_to_localsend', { status: 'pin', wrong: false }));
+  await writeTo('With a PIN');
+  const dialog = app.locator('#modal-localsend-pin');
+  await expect(dialog).toHaveClass(/active/);
+  await expect(app.locator('#localsend-pin-wrong')).toBeHidden();
+  await app.evaluate(() => window.__respond('send_text_to_localsend', { status: 'sent' }));
+  await app.locator('#localsend-pin').fill('4711');
+  await app.locator('#btn-pin-send').click();
+  expect(await calls(app)).toContainEqual(['send_text_to_localsend', { text: 'With a PIN', fingerprint: 'AB12', pin: '4711' }]);
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText("Shown on Kate's iPhone");
+
+  // Without a PIN nothing is sent; a declined text says so.
+  await app.evaluate(() => window.__respond('send_text_to_localsend', { status: 'pin', wrong: false }));
+  await writeTo('No PIN');
+  await app.locator('#btn-pin-cancel').click();
+  await expect(rows.first()).toContainText('Not sent – no PIN');
+  await app.evaluate(() => window.__respond('send_text_to_localsend', { status: 'rejected' }));
+  await writeTo('Declined');
+  await expect(rows.first()).toContainText("Kate's iPhone declined the text.");
 });
 
 test('the device key can be moved into the system keyring', async ({ app }) => {

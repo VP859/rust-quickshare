@@ -1,4 +1,4 @@
-//! `ferry localsend scan` and `ferry localsend send`: sending to LocalSend apps.
+//! `ferry localsend scan`, `send` and `text`: sending to LocalSend apps.
 
 use anyhow::{Context, Result};
 use rust_i18n::t;
@@ -28,6 +28,7 @@ pub async fn run(command: LocalsendCommands) -> Result<()> {
             scan(Duration::from_secs(timeout.clamp(1, 60))).await
         }
         LocalsendCommands::Send { files, to, pin } => send(&files, &to, pin.as_deref()).await,
+        LocalsendCommands::Text { text, to, pin } => send_text(text, &to, pin.as_deref()).await,
     }
 }
 
@@ -115,6 +116,39 @@ async fn send(files: &[PathBuf], to: &str, pin: Option<&str>) -> Result<()> {
     match result {
         SendResult::Sent => println!("{}", t!("localsend.sent", name = device.label())),
         SendResult::Rejected => println!("{}", t!("localsend.rejected", name = device.label())),
+    }
+    Ok(())
+}
+
+/// Sends a text (or, without one, standard input) to the LocalSend app `to`.
+async fn send_text(text: Option<String>, to: &str, pin: Option<&str>) -> Result<()> {
+    // Read standard input first: a PIN can then only be typed when the text
+    // was given as an argument.
+    let text = match text {
+        Some(text) => text,
+        None => {
+            let mut buf = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf)?;
+            buf.trim_end_matches(['\r', '\n']).to_string()
+        }
+    };
+    let device = resolve(to).await?;
+    println!("{}", t!("localsend.unverified", name = device.label()));
+    let mut pin = pin.map(str::to_string);
+    let result = loop {
+        match client::send_text(&device, &text, &me(), pin.as_deref()).await {
+            Err(e) if e.is::<client::PinRequired>() && std::io::stdin().is_terminal() => {
+                eprintln!("{e}");
+                pin = Some(ask_pin(&device.label())?);
+            }
+            other => break other?,
+        }
+    };
+    match result {
+        SendResult::Sent => println!("{}", t!("localsend.sent", name = device.label())),
+        SendResult::Rejected => {
+            println!("{}", t!("localsend.text_rejected", name = device.label()));
+        }
     }
     Ok(())
 }

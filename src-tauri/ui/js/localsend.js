@@ -1,5 +1,6 @@
 // LocalSend apps (iPhone, Mac, …): the list of those heard on the network,
-// searching for them, sending files to them and asking for their PIN.
+// searching for them, sending files to them and asking for their PIN (also
+// for texts, see texts.js).
 // Their names are not verified, so every place that lists them says so.
 import { $, baseName, close, el, fail, icon, open, toast } from './dom.js';
 import { t } from './i18n.js';
@@ -51,15 +52,29 @@ export async function sendToLocalSend(paths, device, pin = null) {
 }
 
 // ---------- PIN ----------
+/** The open PIN question: `retry(pin)` sends again, `cancel()` gives up. */
 let pinRequest = null;
-$('btn-pin-cancel').onclick = () => { pinRequest = null; close('modal-localsend-pin'); };
+/** Asks for the PIN of the LocalSend app `alias` (`wrong`: the last one was refused). */
+export function askPin({ alias, wrong, retry, cancel = () => {} }) {
+  pinRequest = { retry, cancel };
+  $('localsend-pin-title').textContent = t('localsend_pin_title', { name: alias });
+  $('localsend-pin-wrong').hidden = !wrong;
+  $('localsend-pin').value = '';
+  open('modal-localsend-pin');
+  $('localsend-pin').focus();
+}
+$('btn-pin-cancel').onclick = () => {
+  pinRequest?.cancel();
+  pinRequest = null;
+  close('modal-localsend-pin');
+};
 $('btn-pin-send').onclick = () => {
   const pin = $('localsend-pin').value.trim();
   if (!pin || !pinRequest) return;
-  const { paths, fingerprint, alias } = pinRequest;
+  const { retry } = pinRequest;
   pinRequest = null;
   close('modal-localsend-pin');
-  sendToLocalSend(paths, { fingerprint, alias }, pin);
+  retry(pin);
 };
 $('localsend-pin').onkeydown = (e) => { if (e.key === 'Enter') $('btn-pin-send').click(); };
 
@@ -67,12 +82,8 @@ $('localsend-pin').onkeydown = (e) => { if (e.key === 'Enter') $('btn-pin-send')
 export async function listenLocalSend() {
   await listen('localsend-nearby', ({ payload }) => { state.localsend = payload || []; changed(); });
   await listen('localsend-pin', ({ payload }) => {
-    pinRequest = payload;
-    $('localsend-pin-title').textContent = t('localsend_pin_title', { name: payload.alias });
-    $('localsend-pin-wrong').hidden = !payload.wrong;
-    $('localsend-pin').value = '';
-    open('modal-localsend-pin');
-    $('localsend-pin').focus();
+    const { paths, fingerprint, alias, wrong } = payload;
+    askPin({ alias, wrong, retry: (pin) => sendToLocalSend(paths, { fingerprint, alias }, pin) });
   });
   await loadLocalSend();
 }

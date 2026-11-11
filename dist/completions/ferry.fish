@@ -53,11 +53,12 @@ complete -c ferry -n "__fish_ferry_needs_command" -f -a "help" -d 'Print this me
 complete -c ferry -n "__fish_ferry_using_subcommand send" -s t -l to -d 'Alias, nearby device name, Node ID or TICKET of the receiver (it must run `ferry daemon`, the TUI or the GUI). Repeat it to send to several devices at once' -r
 complete -c ferry -n "__fish_ferry_using_subcommand send" -l lang -d 'Interface language for this run (`en`, `pl`); overrides the saved setting' -r
 complete -c ferry -n "__fish_ferry_using_subcommand send" -s h -l help -d 'Print help'
-complete -c ferry -n "__fish_ferry_using_subcommand localsend; and not __fish_seen_subcommand_from scan send help" -l lang -d 'Interface language for this run (`en`, `pl`); overrides the saved setting' -r
-complete -c ferry -n "__fish_ferry_using_subcommand localsend; and not __fish_seen_subcommand_from scan send help" -s h -l help -d 'Print help'
-complete -c ferry -n "__fish_ferry_using_subcommand localsend; and not __fish_seen_subcommand_from scan send help" -f -a "scan" -d 'List the LocalSend apps on the local network. Announces this device\'s name to them once, so they answer'
-complete -c ferry -n "__fish_ferry_using_subcommand localsend; and not __fish_seen_subcommand_from scan send help" -f -a "send" -d 'Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name'
-complete -c ferry -n "__fish_ferry_using_subcommand localsend; and not __fish_seen_subcommand_from scan send help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c ferry -n "__fish_ferry_using_subcommand localsend; and not __fish_seen_subcommand_from scan send text help" -l lang -d 'Interface language for this run (`en`, `pl`); overrides the saved setting' -r
+complete -c ferry -n "__fish_ferry_using_subcommand localsend; and not __fish_seen_subcommand_from scan send text help" -s h -l help -d 'Print help'
+complete -c ferry -n "__fish_ferry_using_subcommand localsend; and not __fish_seen_subcommand_from scan send text help" -f -a "scan" -d 'List the LocalSend apps on the local network. Announces this device\'s name to them once, so they answer'
+complete -c ferry -n "__fish_ferry_using_subcommand localsend; and not __fish_seen_subcommand_from scan send text help" -f -a "send" -d 'Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name'
+complete -c ferry -n "__fish_ferry_using_subcommand localsend; and not __fish_seen_subcommand_from scan send text help" -f -a "text" -d 'Send a text or a link to a LocalSend app, which shows it as a message'
+complete -c ferry -n "__fish_ferry_using_subcommand localsend; and not __fish_seen_subcommand_from scan send text help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from scan" -s t -l timeout -d 'Seconds to wait for answers' -r
 complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from scan" -l lang -d 'Interface language for this run (`en`, `pl`); overrides the saved setting' -r
 complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from scan" -s h -l help -d 'Print help'
@@ -65,8 +66,13 @@ complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_s
 complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from send" -l pin -d 'PIN, for apps that require one' -r
 complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from send" -l lang -d 'Interface language for this run (`en`, `pl`); overrides the saved setting' -r
 complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from send" -s h -l help -d 'Print help'
+complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from text" -s t -l to -d 'Name or IP address of the LocalSend app, as listed by `ferry localsend scan`' -r
+complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from text" -l pin -d 'PIN, for apps that require one' -r
+complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from text" -l lang -d 'Interface language for this run (`en`, `pl`); overrides the saved setting' -r
+complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from text" -s h -l help -d 'Print help'
 complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from help" -f -a "scan" -d 'List the LocalSend apps on the local network. Announces this device\'s name to them once, so they answer'
 complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from help" -f -a "send" -d 'Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name'
+complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from help" -f -a "text" -d 'Send a text or a link to a LocalSend app, which shows it as a message'
 complete -c ferry -n "__fish_ferry_using_subcommand localsend; and __fish_seen_subcommand_from help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c ferry -n "__fish_ferry_using_subcommand integrate" -l lang -d 'Interface language for this run (`en`, `pl`); overrides the saved setting' -r
 complete -c ferry -n "__fish_ferry_using_subcommand integrate" -l remove -d 'Remove the entries again'
@@ -221,6 +227,7 @@ complete -c ferry -n "__fish_ferry_using_subcommand help; and not __fish_seen_su
 complete -c ferry -n "__fish_ferry_using_subcommand help; and not __fish_seen_subcommand_from send localsend integrate history web text receive daemon tui ticket discover pair pairing guide name language network peer config identity doctor completions generate-docs help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c ferry -n "__fish_ferry_using_subcommand help; and __fish_seen_subcommand_from localsend" -f -a "scan" -d 'List the LocalSend apps on the local network. Announces this device\'s name to them once, so they answer'
 complete -c ferry -n "__fish_ferry_using_subcommand help; and __fish_seen_subcommand_from localsend" -f -a "send" -d 'Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name'
+complete -c ferry -n "__fish_ferry_using_subcommand help; and __fish_seen_subcommand_from localsend" -f -a "text" -d 'Send a text or a link to a LocalSend app, which shows it as a message'
 complete -c ferry -n "__fish_ferry_using_subcommand help; and __fish_seen_subcommand_from peer" -f -a "add" -d 'Add a device by TICKET or Node ID and send it a pairing request'
 complete -c ferry -n "__fish_ferry_using_subcommand help; and __fish_seen_subcommand_from peer" -f -a "list" -d 'List trusted devices'
 complete -c ferry -n "__fish_ferry_using_subcommand help; and __fish_seen_subcommand_from peer" -f -a "edit" -d 'Change the alias or Auto-Accept setting of a device'

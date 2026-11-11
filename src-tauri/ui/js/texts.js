@@ -2,6 +2,7 @@
 // devices (copied to the clipboard after confirmation).
 import { $, close, el, fail, icon, isLink, open, preview, shortId, toast } from './dom.js';
 import { t } from './i18n.js';
+import { askPin } from './localsend.js';
 import { chooseRecipient } from './send.js';
 import { copyText, invoke, isMobile, listen, T } from './tauri.js';
 import { addRow } from './transfers.js';
@@ -45,7 +46,7 @@ function renderTextRow(row) {
   row.el.className = 'row transfer' + (x.state === 'done' ? ' done' : x.state === 'failed' ? ' failed' : '');
   const detail = x.state === 'sending' ? t('text_sending', { name: x.label })
     : x.state === 'failed' ? x.error
-    : x.dir === 'upload' ? t('text_delivered', { name: x.label })
+    : x.dir === 'upload' ? (x.done ?? t('text_delivered', { name: x.label }))
     : x.copied ? t('text_copied') : t('text_not_copied');
   const trailing = el('div', { class: 'trailing' },
     el('button', { class: 'ghost icon', title: t('copy'), 'aria-label': t('copy'), onclick: () => copyText(x.text) }, icon('copy', 'sm')));
@@ -72,6 +73,32 @@ export async function sendText(text, nodeId, label) {
     fail(e);
   }
   row.render();
+}
+
+/**
+ * Sends `text` to the LocalSend app `device`, which shows it as a message;
+ * asks for a PIN when the app needs one (the same row follows the retry).
+ */
+export async function sendTextToLocalSend(text, device, pin = null, row = null) {
+  row ??= addTextRow({ dir: 'upload', text, label: device.alias, state: 'sending' });
+  const end = (state, extra) => { Object.assign(row.text, { state }, extra); row.render(); };
+  end('sending');
+  try {
+    const answer = await invoke('send_text_to_localsend', { text, fingerprint: device.fingerprint, pin });
+    if (answer.status === 'sent') end('done', { done: t('text_shown', { name: device.alias }) });
+    else if (answer.status === 'rejected') end('failed', { error: t('text_declined', { name: device.alias }) });
+    else {
+      askPin({
+        alias: device.alias,
+        wrong: answer.wrong,
+        retry: (next) => sendTextToLocalSend(text, device, next, row),
+        cancel: () => end('failed', { error: t('text_not_sent') }),
+      });
+    }
+  } catch (e) {
+    end('failed', { error: String(e?.message ?? e) });
+    fail(e);
+  }
 }
 
 // ---------- Texts from other devices ----------

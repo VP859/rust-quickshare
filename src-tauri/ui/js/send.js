@@ -8,7 +8,7 @@ import { allowCamera } from './permissions.js';
 import { isScanning, loadLocalSend, localSendRow, onLocalSendChange, scanLocalSend, sendToLocalSend } from './localsend.js';
 import { isTrusted, platformIcon, platformLabel, state } from './state.js';
 import { invoke, pickFiles, pickFolder, scanQr, T } from './tauri.js';
-import { sendText } from './texts.js';
+import { sendText, sendTextToLocalSend } from './texts.js';
 import { startWebShare } from './web.js';
 
 export async function sendFiles(paths, target, label) {
@@ -78,9 +78,10 @@ export function chooseRecipient(paths, text = null, isFolder = false) {
     box.append(recipientRow([icon(platformIcon(d.platform)), el('span', { class: 'dot ok' })], d.name, platformLabel(d.platform),
       d.node_id));
   }
-  // LocalSend apps take files and folders, not texts.
-  $('localsend-section').hidden = text !== null;
-  if (text === null) { renderLocalSendRecipients(); loadLocalSend(); }
+  // LocalSend apps take files, folders and texts (shown as a message).
+  $('localsend-section').hidden = false;
+  renderLocalSendRecipients();
+  loadLocalSend();
   // A TICKET shares exactly one file, so it is not offered for texts and folders.
   $('btn-share-ticket').style.display = text !== null || pendingIsFolder ? 'none' : '';
   $('btn-share-ticket').disabled = paths.length !== 1;
@@ -95,7 +96,11 @@ function renderLocalSendRecipients() {
   box.replaceChildren();
   if (!state.localsend.length) box.append(el('p', { class: 'muted small' }, t(isScanning() ? 'localsend_searching' : 'localsend_none')));
   for (const d of state.localsend) {
-    box.append(localSendRow(d, () => { close('modal-recipient'); sendToLocalSend(pendingFiles, d); }));
+    box.append(localSendRow(d, () => {
+      close('modal-recipient');
+      if (pendingText !== null) sendTextToLocalSend(pendingText, d);
+      else sendToLocalSend(pendingFiles, d);
+    }));
   }
   $('btn-localsend-scan').disabled = isScanning();
 }

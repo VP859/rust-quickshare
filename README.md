@@ -306,7 +306,8 @@ LocalSend's list of nearby devices like another LocalSend device.
 - **Sending to LocalSend apps** works without the mode: in the GUI they are listed under *Nearby*
   (*Search* also looks for them) and in the recipient list, on the command line
   `ferry localsend scan` and `ferry localsend send FILE… --to NAME` (or `--to 192.168.1.20` when
-  multicast does not get through). An app that requires a PIN gets it from a dialog, or from
+  multicast does not get through). **Texts and links** go the same way – *Send text* in the GUI,
+  `ferry localsend text "…" --to NAME` – and the LocalSend app shows them as a message. An app that requires a PIN gets it from a dialog, or from
   `--pin` / a prompt on the command line. Searching listens on port 53317 for a few seconds, as
   LocalSend apps answer there; when the compatibility mode runs (in the GUI, the TUI or the daemon),
   its server takes the answers, and a search from the command line then finds fewer apps. The same weakness applies the

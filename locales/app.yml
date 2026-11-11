@@ -647,6 +647,9 @@ localsend.sent:
 localsend.rejected:
   en: "'%{name}' declined the files."
   pl: "'%{name}' odrzuciło pliki."
+localsend.text_rejected:
+  en: "'%{name}' declined the text."
+  pl: "'%{name}' odrzuciło tekst."
 localsend.not_localsend:
   en: "No LocalSend app answers at %{address}"
   pl: "Pod adresem %{address} nie odpowiada żadna aplikacja LocalSend"
@@ -1434,8 +1437,8 @@ guide.apple_q:
   en: "iPhone, iPad and Mac"
   pl: "iPhone, iPad i Mac"
 guide.apple_a:
-  en: "Install the free LocalSend app there. `ferry localsend send FILE… --to NAME` sends to it; to receive from it, turn on `ferry config set localsend true`. LocalSend has no pairing, so its names are not verified."
-  pl: "Zainstaluj tam darmową aplikację LocalSend. `ferry localsend send PLIK… --to NAZWA` wysyła do niej; aby od niej odbierać, włącz `ferry config set localsend true`. LocalSend nie ma parowania, więc nazwy nie są weryfikowane."
+  en: "Install the free LocalSend app there. `ferry localsend send FILE… --to NAME` sends files to it, `ferry localsend text \"…\" --to NAME` a text; to receive from it, turn on `ferry config set localsend true`. LocalSend has no pairing, so its names are not verified."
+  pl: "Zainstaluj tam darmową aplikację LocalSend. `ferry localsend send PLIK… --to NAZWA` wysyła do niej pliki, `ferry localsend text \"…\" --to NAZWA` tekst; aby od niej odbierać, włącz `ferry config set localsend true`. LocalSend nie ma parowania, więc nazwy nie są weryfikowane."
 guide.internet_q:
   en: "Local network or internet?"
   pl: "Sieć lokalna czy internet?"

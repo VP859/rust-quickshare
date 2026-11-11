@@ -64,6 +64,7 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('scan', 'scan', [CompletionResultType]::ParameterValue, 'List the LocalSend apps on the local network. Announces this device''s name to them once, so they answer')
             [CompletionResult]::new('send', 'send', [CompletionResultType]::ParameterValue, 'Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name')
+            [CompletionResult]::new('text', 'text', [CompletionResultType]::ParameterValue, 'Send a text or a link to a LocalSend app, which shows it as a message')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -84,9 +85,19 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'ferry;localsend;text' {
+            [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Name or IP address of the LocalSend app, as listed by `ferry localsend scan`')
+            [CompletionResult]::new('--to', '--to', [CompletionResultType]::ParameterName, 'Name or IP address of the LocalSend app, as listed by `ferry localsend scan`')
+            [CompletionResult]::new('--pin', '--pin', [CompletionResultType]::ParameterName, 'PIN, for apps that require one')
+            [CompletionResult]::new('--lang', '--lang', [CompletionResultType]::ParameterName, 'Interface language for this run (`en`, `pl`); overrides the saved setting')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'ferry;localsend;help' {
             [CompletionResult]::new('scan', 'scan', [CompletionResultType]::ParameterValue, 'List the LocalSend apps on the local network. Announces this device''s name to them once, so they answer')
             [CompletionResult]::new('send', 'send', [CompletionResultType]::ParameterValue, 'Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name')
+            [CompletionResult]::new('text', 'text', [CompletionResultType]::ParameterValue, 'Send a text or a link to a LocalSend app, which shows it as a message')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -94,6 +105,9 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             break
         }
         'ferry;localsend;help;send' {
+            break
+        }
+        'ferry;localsend;help;text' {
             break
         }
         'ferry;localsend;help;help' {
@@ -464,12 +478,16 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
         'ferry;help;localsend' {
             [CompletionResult]::new('scan', 'scan', [CompletionResultType]::ParameterValue, 'List the LocalSend apps on the local network. Announces this device''s name to them once, so they answer')
             [CompletionResult]::new('send', 'send', [CompletionResultType]::ParameterValue, 'Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name')
+            [CompletionResult]::new('text', 'text', [CompletionResultType]::ParameterValue, 'Send a text or a link to a LocalSend app, which shows it as a message')
             break
         }
         'ferry;help;localsend;scan' {
             break
         }
         'ferry;help;localsend;send' {
+            break
+        }
+        'ferry;help;localsend;text' {
             break
         }
         'ferry;help;integrate' {

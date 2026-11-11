@@ -361,4 +361,15 @@ pub enum LocalsendCommands {
         #[arg(long)]
         pin: Option<String>,
     },
+    /// Send a text or a link to a LocalSend app, which shows it as a message.
+    Text {
+        /// Text to send (default: read from standard input).
+        text: Option<String>,
+        /// Name or IP address of the LocalSend app, as listed by `ferry localsend scan`.
+        #[arg(short, long)]
+        to: String,
+        /// PIN, for apps that require one.
+        #[arg(long)]
+        pin: Option<String>,
+    },
 }

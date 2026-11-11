@@ -1,0 +1,25 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-localsend-text 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-localsend\-text \- Send a text or a link to a LocalSend app, which shows it as a message
+.SH SYNOPSIS
+\fBferry localsend text\fR [\fB\-\-lang\fR] [\fB\-\-pin\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fB\-t\fR|\fB\-\-to\fR> [\fITEXT\fR] 
+.SH DESCRIPTION
+Send a text or a link to a LocalSend app, which shows it as a message
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-t\fR, \fB\-\-to\fR \fI<TO>\fR
+Name or IP address of the LocalSend app, as listed by `ferry localsend scan`
+.TP
+\fB\-\-pin\fR \fI<PIN>\fR
+PIN, for apps that require one
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+[\fITEXT\fR]
+Text to send (default: read from standard input)

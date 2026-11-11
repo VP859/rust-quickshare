@@ -161,6 +161,7 @@ pub fn run() {
             list_localsend,
             scan_localsend,
             send_to_localsend,
+            send_text_to_localsend,
             get_device_name,
             set_device_name,
             get_language,

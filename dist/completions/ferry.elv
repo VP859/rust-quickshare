@@ -59,6 +59,7 @@ set edit:completion:arg-completer[ferry] = {|@words|
             cand --help 'Print help'
             cand scan 'List the LocalSend apps on the local network. Announces this device''s name to them once, so they answer'
             cand send 'Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name'
+            cand text 'Send a text or a link to a LocalSend app, which shows it as a message'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'ferry;localsend;scan'= {
@@ -76,14 +77,25 @@ set edit:completion:arg-completer[ferry] = {|@words|
             cand -h 'Print help'
             cand --help 'Print help'
         }
+        &'ferry;localsend;text'= {
+            cand -t 'Name or IP address of the LocalSend app, as listed by `ferry localsend scan`'
+            cand --to 'Name or IP address of the LocalSend app, as listed by `ferry localsend scan`'
+            cand --pin 'PIN, for apps that require one'
+            cand --lang 'Interface language for this run (`en`, `pl`); overrides the saved setting'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
         &'ferry;localsend;help'= {
             cand scan 'List the LocalSend apps on the local network. Announces this device''s name to them once, so they answer'
             cand send 'Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name'
+            cand text 'Send a text or a link to a LocalSend app, which shows it as a message'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'ferry;localsend;help;scan'= {
         }
         &'ferry;localsend;help;send'= {
+        }
+        &'ferry;localsend;help;text'= {
         }
         &'ferry;localsend;help;help'= {
         }
@@ -395,10 +407,13 @@ set edit:completion:arg-completer[ferry] = {|@words|
         &'ferry;help;localsend'= {
             cand scan 'List the LocalSend apps on the local network. Announces this device''s name to them once, so they answer'
             cand send 'Send files and folders to a LocalSend app. Its name is not verified: anyone on the network can announce any name'
+            cand text 'Send a text or a link to a LocalSend app, which shows it as a message'
         }
         &'ferry;help;localsend;scan'= {
         }
         &'ferry;help;localsend;send'= {
+        }
+        &'ferry;help;localsend;text'= {
         }
         &'ferry;help;integrate'= {
         }

@@ -72,6 +72,17 @@ _arguments "${_arguments_options[@]}" : \
 '*::files -- Files and folders to send (folders keep their structure):_files' \
 && ret=0
 ;;
+(text)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Name or IP address of the LocalSend app, as listed by \`ferry localsend scan\`]:TO:_default' \
+'--to=[Name or IP address of the LocalSend app, as listed by \`ferry localsend scan\`]:TO:_default' \
+'--pin=[PIN, for apps that require one]:PIN:_default' \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::text -- Text to send (default\: read from standard input):_default' \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 ":: :_ferry__subcmd__localsend__subcmd__help_commands" \
@@ -89,6 +100,10 @@ _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (send)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(text)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -635,6 +650,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(text)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
         esac
     ;;
 esac
@@ -1118,6 +1137,7 @@ _ferry__subcmd__help__subcmd__localsend_commands() {
     local commands; commands=(
 'scan:List the LocalSend apps on the local network. Announces this device'\''s name to them once, so they answer' \
 'send:Send files and folders to a LocalSend app. Its name is not verified\: anyone on the network can announce any name' \
+'text:Send a text or a link to a LocalSend app, which shows it as a message' \
     )
     _describe -t commands 'ferry help localsend commands' commands "$@"
 }
@@ -1130,6 +1150,11 @@ _ferry__subcmd__help__subcmd__localsend__subcmd__scan_commands() {
 _ferry__subcmd__help__subcmd__localsend__subcmd__send_commands() {
     local commands; commands=()
     _describe -t commands 'ferry help localsend send commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__localsend__subcmd__text_commands] )) ||
+_ferry__subcmd__help__subcmd__localsend__subcmd__text_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help localsend text commands' commands "$@"
 }
 (( $+functions[_ferry__subcmd__help__subcmd__name_commands] )) ||
 _ferry__subcmd__help__subcmd__name_commands() {
@@ -1304,6 +1329,7 @@ _ferry__subcmd__localsend_commands() {
     local commands; commands=(
 'scan:List the LocalSend apps on the local network. Announces this device'\''s name to them once, so they answer' \
 'send:Send files and folders to a LocalSend app. Its name is not verified\: anyone on the network can announce any name' \
+'text:Send a text or a link to a LocalSend app, which shows it as a message' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'ferry localsend commands' commands "$@"
@@ -1313,6 +1339,7 @@ _ferry__subcmd__localsend__subcmd__help_commands() {
     local commands; commands=(
 'scan:List the LocalSend apps on the local network. Announces this device'\''s name to them once, so they answer' \
 'send:Send files and folders to a LocalSend app. Its name is not verified\: anyone on the network can announce any name' \
+'text:Send a text or a link to a LocalSend app, which shows it as a message' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'ferry localsend help commands' commands "$@"
@@ -1332,6 +1359,11 @@ _ferry__subcmd__localsend__subcmd__help__subcmd__send_commands() {
     local commands; commands=()
     _describe -t commands 'ferry localsend help send commands' commands "$@"
 }
+(( $+functions[_ferry__subcmd__localsend__subcmd__help__subcmd__text_commands] )) ||
+_ferry__subcmd__localsend__subcmd__help__subcmd__text_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry localsend help text commands' commands "$@"
+}
 (( $+functions[_ferry__subcmd__localsend__subcmd__scan_commands] )) ||
 _ferry__subcmd__localsend__subcmd__scan_commands() {
     local commands; commands=()
@@ -1341,6 +1373,11 @@ _ferry__subcmd__localsend__subcmd__scan_commands() {
 _ferry__subcmd__localsend__subcmd__send_commands() {
     local commands; commands=()
     _describe -t commands 'ferry localsend send commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__localsend__subcmd__text_commands] )) ||
+_ferry__subcmd__localsend__subcmd__text_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry localsend text commands' commands "$@"
 }
 (( $+functions[_ferry__subcmd__name_commands] )) ||
 _ferry__subcmd__name_commands() {

@@ -229,6 +229,9 @@ _ferry() {
             ferry__subcmd__help__subcmd__localsend,send)
                 cmd="ferry__subcmd__help__subcmd__localsend__subcmd__send"
                 ;;
+            ferry__subcmd__help__subcmd__localsend,text)
+                cmd="ferry__subcmd__help__subcmd__localsend__subcmd__text"
+                ;;
             ferry__subcmd__help__subcmd__peer,add)
                 cmd="ferry__subcmd__help__subcmd__peer__subcmd__add"
                 ;;
@@ -283,6 +286,9 @@ _ferry() {
             ferry__subcmd__localsend,send)
                 cmd="ferry__subcmd__localsend__subcmd__send"
                 ;;
+            ferry__subcmd__localsend,text)
+                cmd="ferry__subcmd__localsend__subcmd__text"
+                ;;
             ferry__subcmd__localsend__subcmd__help,help)
                 cmd="ferry__subcmd__localsend__subcmd__help__subcmd__help"
                 ;;
@@ -291,6 +297,9 @@ _ferry() {
                 ;;
             ferry__subcmd__localsend__subcmd__help,send)
                 cmd="ferry__subcmd__localsend__subcmd__help__subcmd__send"
+                ;;
+            ferry__subcmd__localsend__subcmd__help,text)
+                cmd="ferry__subcmd__localsend__subcmd__help__subcmd__text"
                 ;;
             ferry__subcmd__peer,add)
                 cmd="ferry__subcmd__peer__subcmd__add"
@@ -991,7 +1000,7 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__help__subcmd__localsend)
-            opts="scan send"
+            opts="scan send text"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1019,6 +1028,20 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__help__subcmd__localsend__subcmd__send)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__help__subcmd__localsend__subcmd__text)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -1501,7 +1524,7 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__localsend)
-            opts="-h --lang --help scan send help"
+            opts="-h --lang --help scan send text help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1519,7 +1542,7 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__localsend__subcmd__help)
-            opts="scan send help"
+            opts="scan send text help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1574,6 +1597,20 @@ _ferry() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        ferry__subcmd__localsend__subcmd__help__subcmd__text)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         ferry__subcmd__localsend__subcmd__scan)
             opts="-t -h --timeout --lang --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
@@ -1601,6 +1638,36 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__localsend__subcmd__send)
+            opts="-t -h --to --pin --lang --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --to)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -t)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --pin)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --lang)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__localsend__subcmd__text)
             opts="-t -h --to --pin --lang --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )

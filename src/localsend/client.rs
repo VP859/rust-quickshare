@@ -583,12 +583,7 @@ pub async fn send(
             return Err(error.into());
         }
         other => {
-            let reason = match other {
-                StatusCode::CONFLICT => t!("localsend.busy"),
-                StatusCode::TOO_MANY_REQUESTS => t!("localsend.too_many"),
-                _ => t!("localsend.http_error", status = other.as_u16()),
-            }
-            .into_owned();
+            let reason = refusal(other);
             for tracker in trackers.values() {
                 tracker.emit(
                     0,
@@ -655,6 +650,100 @@ pub async fn send(
         ));
     }
     Ok(SendResult::Sent)
+}
+
+/// Why an offer was refused, for a status other than accepted, declined or
+/// "PIN required".
+fn refusal(status: StatusCode) -> String {
+    match status {
+        StatusCode::CONFLICT => t!("localsend.busy"),
+        StatusCode::TOO_MANY_REQUESTS => t!("localsend.too_many"),
+        _ => t!("localsend.http_error", status = status.as_u16()),
+    }
+    .into_owned()
+}
+
+/// Sends a text or a link to a LocalSend app, which shows it as a message.
+///
+/// LocalSend sends a message as an offer of one `text/plain` file whose
+/// `preview` is the whole text; the app shows it and answers "204 No Content"
+/// without asking for the file. Should an app ask for it anyway, the text is
+/// uploaded as that file. `pin` is for apps that require one.
+///
+/// # Errors
+///
+/// Fails when the text is empty or longer than [`MAX_TEXT_LEN`] bytes, the
+/// device cannot be reached, asks for a PIN ([`PinRequired`]) or is busy.
+///
+/// [`MAX_TEXT_LEN`]: crate::protocol::messages::MAX_TEXT_LEN
+pub async fn send_text(
+    device: &LocalSendDevice,
+    text: &str,
+    me: &OwnDevice,
+    pin: Option<&str>,
+) -> Result<SendResult> {
+    if text.trim().is_empty() {
+        anyhow::bail!(t!("service.text_empty"));
+    }
+    if text.len() > crate::protocol::messages::MAX_TEXT_LEN {
+        anyhow::bail!(t!(
+            "service.text_too_long",
+            max = crate::protocol::messages::MAX_TEXT_LEN
+        ));
+    }
+    let id = "0".to_string();
+    let file = FileInfo {
+        id: id.clone(),
+        file_name: format!("{}.txt", uuid::Uuid::new_v4()),
+        size: text.len() as u64,
+        file_type: "text/plain".into(),
+        sha256: None,
+        preview: Some(text.to_string()),
+    };
+    let (info, identity) = own_info(me)?;
+    let client = Client::new(device, pin, Some(identity));
+    let offer = PrepareUpload {
+        info,
+        files: [(id.clone(), file)].into_iter().collect(),
+    };
+    let (status, body, _) = tokio::time::timeout(
+        DECISION_TIMEOUT,
+        client.call("POST", "prepare-upload", json_body(&offer)?, None),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!(t!("localsend.no_decision")))??;
+    match status {
+        StatusCode::NO_CONTENT => Ok(SendResult::Sent),
+        StatusCode::FORBIDDEN => Ok(SendResult::Rejected),
+        StatusCode::UNAUTHORIZED => Err(PinRequired {
+            wrong: pin.is_some(),
+        }
+        .into()),
+        StatusCode::OK => {
+            let accepted: PrepareUploadResponse =
+                serde_json::from_slice(&body).context("prepare-upload answer")?;
+            let Some(token) = accepted.files.get(&id) else {
+                return Ok(SendResult::Rejected);
+            };
+            let query = format!(
+                "upload?sessionId={}&fileId={}&token={}",
+                encode(&accepted.session_id),
+                encode(&id),
+                encode(token)
+            );
+            let bytes = Full::new(Bytes::from(text.to_string()))
+                .map_err(|never| match never {})
+                .boxed_unsync();
+            let (status, ..) = client
+                .call("POST", &query, bytes, Some(text.len() as u64))
+                .await?;
+            if status != StatusCode::OK {
+                anyhow::bail!(t!("localsend.http_error", status = status.as_u16()));
+            }
+            Ok(SendResult::Sent)
+        }
+        other => anyhow::bail!(refusal(other)),
+    }
 }
 
 /// The size of the file a tracker follows (its final progress).
