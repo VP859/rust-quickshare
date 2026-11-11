@@ -220,6 +220,14 @@ pub async fn list_peers(state: State<'_, AppState>) -> CmdResult<Vec<TrustedPeer
         })
         .collect();
     peers.sort_by_key(|p| p.alias.to_lowercase());
+    // The frontend reads the list after every change (pairing, renaming,
+    // removing), so the Android share menu follows it from here.
+    crate::platform::set_share_targets(
+        &peers
+            .iter()
+            .map(|p| (p.node_id.clone(), p.alias.clone()))
+            .collect::<Vec<_>>(),
+    );
     Ok(peers)
 }
 
@@ -1628,6 +1636,13 @@ pub fn open_link(url: String) -> CmdResult<()> {
 #[tauri::command]
 pub fn take_shared_text(app: AppHandle) -> Option<String> {
     crate::platform::take_shared_text(&app)
+}
+
+/// The paired device chosen in the Android "Share" menu (Direct Share) for
+/// what `take_shared_files` / `take_shared_text` return; `None` otherwise.
+#[tauri::command]
+pub fn take_share_target(app: AppHandle) -> Option<String> {
+    crate::platform::take_share_target(&app)
 }
 
 /// Loads the configuration into the state and activates the saved language.

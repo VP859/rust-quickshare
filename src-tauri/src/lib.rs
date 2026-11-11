@@ -175,6 +175,7 @@ pub fn run() {
             set_download_dir,
             take_shared_files,
             take_shared_text,
+            take_share_target,
             send_text,
             open_link,
             app_info,

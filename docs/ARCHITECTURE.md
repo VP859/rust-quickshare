@@ -85,6 +85,8 @@ recipient.
   network, when a search starts; their state for the frontend's explanation card (the camera
   is asked for by the barcode-scanner plugin, only before a scan),
 * `ShareIntake.kt` – copies shared `content://` files into the app cache,
+* `ShareTargets.kt` – paired devices as Direct Share targets of the "Share" menu (long-lived
+  dynamic shortcuts, `res/xml/shortcuts.xml`), updated whenever the frontend reads the devices,
 * `FileOpener.kt` – opens a received file in another app (`ACTION_VIEW` with a FileProvider
   `content://` URI that grants read access to this file only),
 * `FerryService.kt` – foreground service with a notification and a multicast lock, so the node

@@ -685,6 +685,34 @@ test('a text from a LocalSend app is copied, and a long one saved as a file unle
   expect(await calls(app)).toContainEqual(['respond_to_offer', { transferId: 't9', accept: false, copy: false }]);
 });
 
+test('a device chosen in the Android share menu gets the files at once, or the text ready to send', async ({ app }) => {
+  const share = (files, text, target) => app.evaluate(([f, x, d]) => {
+    window.__respond('take_shared_files', f);
+    window.__respond('take_shared_text', x);
+    window.__respond('take_share_target', d);
+    window.dispatchEvent(new Event('ferry-share'));
+  }, [files, text, target]);
+
+  // Direct Share to a paired device: no recipient list.
+  await share(['/data/cache/share-in/a.jpg'], null, PEER);
+  await expect.poll(() => calls(app)).toContainEqual(['send_files', { paths: ['/data/cache/share-in/a.jpg'], target: PEER }]);
+  await expect(app.locator('#modal-recipient')).not.toHaveClass(/active/);
+  await expect(app.locator('#toast')).toContainText('Laptop');
+
+  // A text opens with the device set; one tap sends it.
+  await share([], 'https://example.org', PEER);
+  await expect(app.locator('#modal-text-send')).toHaveClass(/active/);
+  await expect(app.locator('#text-input')).toHaveValue('https://example.org');
+  await expect(app.locator('#btn-text-next')).toHaveText('Send text');
+  await app.locator('#btn-text-next').click();
+  expect(await calls(app)).toContainEqual(['send_text', { text: 'https://example.org', target: PEER }]);
+
+  // A device that is no longer paired: the recipient list as usual.
+  await share(['/data/cache/share-in/b.jpg'], null, 'c'.repeat(64));
+  await expect(app.locator('#modal-recipient')).toHaveClass(/active/);
+  expect((await calls(app)).filter(([cmd]) => cmd === 'send_files')).toHaveLength(1);
+});
+
 test('the device key can be moved into the system keyring', async ({ app }) => {
   await app.locator('#btn-settings').click();
   await expect(app.locator('#keyring-toggle')).toBeVisible();

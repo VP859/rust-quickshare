@@ -49,6 +49,7 @@ const RESPONSES = {
   web_share_status: { running: true, owner: null, refused: [] },
   take_shared_files: [],
   take_shared_text: null,
+  take_share_target: null,
   'plugin:autostart|is_enabled': false,
 };
 

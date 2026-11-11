@@ -335,6 +335,10 @@ with a notification keeps Ferry reachable in the background. Received files are 
 `Download/Ferry`; photos and videos go to `Pictures/Ferry` so they appear in the gallery.
 *Open* next to a received file shows it in the app you choose for its type; that app gets access
 to this one file only.
+
+Paired devices appear in Android's **Share** menu (Android 10 and newer): share a photo, tap
+"Laptop", and it goes there without opening Ferry first; a text opens ready to send to it. Android
+keeps the names of these devices for its share menu; unpairing a device removes it.
 Ferry's data is excluded from Android backups – a new phone pairs again.
 
 Android's permission dialog appears on the first start: *Local network* (Android 17 and newer –

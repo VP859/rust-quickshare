@@ -22,8 +22,9 @@ import { listenLocalSend } from './localsend.js';
 import { loadPermissions } from './permissions.js';
 import { loadNodeInfo, renderNodeStatus } from './node.js';
 import { checkOnline, refreshPeers, renderPeers } from './peers.js';
-import { chooseRecipient, setupDragDrop } from './send.js';
+import { chooseRecipient, sendFiles, setupDragDrop } from './send.js';
 import { loadAppInfo, loadLanguage, loadNetwork, loadPrivacy, onLanguageChange, renderNetwork } from './settings.js';
+import { state } from './state.js';
 import { invoke, isMobile, listen } from './tauri.js';
 import { composeText, listenTexts, showNextTextRequest, textRequests } from './texts.js';
 import { listenTransfers, offers, renderNoTransfers, rerenderTransfers, showNextOffer } from './transfers.js';
@@ -44,12 +45,24 @@ function rerender() {
 onLanguageChange(rerender);
 
 // ---------- Android integration ----------
+/** The paired device chosen in the Android share menu (Direct Share), if any and still paired. */
+async function shareTarget() {
+  const target = await invoke('take_share_target');
+  if (!target) return null;
+  const find = () => state.peers.find((p) => p.node_id === target);
+  // Started by the share menu: the list may not be loaded yet.
+  if (!find()) await refreshPeers();
+  return find() ?? null;
+}
 async function checkSharedFiles() {
   try {
     const files = await invoke('take_shared_files');
-    if (files.length) return chooseRecipient(files);
-    const text = await invoke('take_shared_text');
-    if (text) composeText(null, null, text);
+    const text = files.length ? null : await invoke('take_shared_text');
+    if (!files.length && !text) return;
+    const peer = await shareTarget();
+    // Files go to the chosen device at once; a text opens ready to send to it.
+    if (files.length) return peer ? sendFiles(files, peer.node_id, peer.alias) : chooseRecipient(files);
+    composeText(peer?.node_id ?? null, peer?.alias ?? null, text);
   } catch (e) { fail(e); }
 }
 window.addEventListener('ferry-share', checkSharedFiles);

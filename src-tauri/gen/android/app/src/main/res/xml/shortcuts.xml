@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Direct Share: paired devices (dynamic shortcuts of this category, see
+     ShareTargets.kt) appear in the system "Share" menu for any shared content. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <share-target android:targetClass="io.github.vp859.ferry.MainActivity">
+        <data android:mimeType="*/*" />
+        <category android:name="io.github.vp859.ferry.category.SHARE_TARGET" />
+    </share-target>
+</shortcuts>

@@ -66,6 +66,7 @@ class MainActivity : TauriActivity() {
   private fun restartProcess(source: Intent?) {
     val text = ShareIntake.extractText(source)
     val uris = ShareIntake.extractUris(source)
+    if (text != null || uris.isNotEmpty()) ShareTargets.storeTarget(this, ShareTargets.targetOf(source))
     Thread {
       if (text != null) {
         ShareIntake.storeText(this, text)
@@ -92,15 +93,20 @@ class MainActivity : TauriActivity() {
     handleShareIntent(intent)
   }
 
-  /** Takes files or a text from `ACTION_SEND` / `ACTION_SEND_MULTIPLE` and notifies the frontend. */
+  /**
+   * Takes files or a text from `ACTION_SEND` / `ACTION_SEND_MULTIPLE` and
+   * notifies the frontend; a paired device chosen in the share menu (Direct
+   * Share) is kept as the recipient.
+   */
   private fun handleShareIntent(intent: Intent?) {
     val text = ShareIntake.extractText(intent)
+    val uris = ShareIntake.extractUris(intent)
+    if (text != null || uris.isNotEmpty()) ShareTargets.storeTarget(this, ShareTargets.targetOf(intent))
     if (text != null) {
       ShareIntake.storeText(this, text)
       notifyShare()
       return
     }
-    val uris = ShareIntake.extractUris(intent)
     if (uris.isEmpty()) return
     Thread {
       if (ShareIntake.copyToCache(this, uris) > 0) runOnUiThread { notifyShare() }

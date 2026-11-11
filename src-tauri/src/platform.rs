@@ -442,6 +442,61 @@ mod imp {
         let _ = std::fs::remove_file(&file);
         text.filter(|t| !t.trim().is_empty())
     }
+
+    /// Takes (and forgets) the paired device chosen in the "Share" menu
+    /// (Direct Share, `ShareTargets.storeTarget`).
+    pub fn take_share_target(app: &AppHandle) -> Option<String> {
+        let file = share_dir(app)?.join("pending-target.txt");
+        let target = std::fs::read_to_string(&file).ok();
+        let _ = std::fs::remove_file(&file);
+        target
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+    }
+
+    /// The share targets last given to Android, so an unchanged list is not
+    /// sent again (the frontend reads the devices often).
+    static SHARE_TARGETS: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+
+    /// Makes the paired devices (`(Node ID, alias)`, most important first)
+    /// the Direct Share targets of the "Share" menu (`ShareTargets.update`).
+    pub fn set_share_targets(devices: &[(String, String)]) {
+        let json = serde_json::Value::Array(
+            devices
+                .iter()
+                .map(|(id, name)| serde_json::json!({ "id": id, "name": name }))
+                .collect(),
+        )
+        .to_string();
+        {
+            let Ok(mut last) = SHARE_TARGETS.lock() else {
+                return;
+            };
+            if *last == json {
+                return;
+            }
+            last.clone_from(&json);
+        }
+        let result = with_app_class(
+            jni_str!("io.github.vp859.ferry.ShareTargets"),
+            |env, context, class| {
+                let json = env.new_string(json.as_str())?;
+                env.call_static_method(
+                    class,
+                    jni_str!("update"),
+                    jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
+                    &[JValue::Object(context), JValue::Object(&json)],
+                )
+                .map(|_| ())
+            },
+        );
+        if let Err(e) = result {
+            warn!("Could not update the share targets: {e}");
+            if let Ok(mut last) = SHARE_TARGETS.lock() {
+                last.clear();
+            }
+        }
+    }
 }
 
 /// Desktop: nothing to set up, paths are used as they are and there is no
@@ -473,6 +528,14 @@ mod imp {
         None
     }
 
+    /// There is no "Share" menu on desktop.
+    pub fn take_share_target(_app: &AppHandle) -> Option<String> {
+        None
+    }
+
+    /// There is no "Share" menu on desktop.
+    pub fn set_share_targets(_devices: &[(String, String)]) {}
+
     /// Desktop systems do not limit the app in the background.
     pub fn background_status() -> Option<super::BackgroundStatus> {
         None
@@ -501,6 +564,18 @@ mod imp {
 /// Sets platform-specific directories; called before the configuration is loaded.
 pub fn init(app: &AppHandle) {
     imp::init(app);
+}
+
+/// The paired device chosen in the Android "Share" menu for the shared
+/// files or text (Direct Share); `None` when Ferry itself was chosen.
+pub fn take_share_target(app: &AppHandle) -> Option<String> {
+    imp::take_share_target(app)
+}
+
+/// Makes the paired devices (`(Node ID, alias)`) the Direct Share targets of
+/// the Android "Share" menu (no-op on desktop).
+pub fn set_share_targets(devices: &[(String, String)]) {
+    imp::set_share_targets(devices);
 }
 
 /// Opens a received file in the app for its type (on Android through a
