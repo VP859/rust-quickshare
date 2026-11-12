@@ -40,7 +40,7 @@ Both interfaces use only the library's public API.
 | `node` | `NodeEngine` wraps an iroh `Endpoint` (local or internet [`NetworkMode`](../src/node/engine.rs)), loads the device key, builds TICKETs. |
 | `transfer::sender` / `receiver` | One file over one control stream: offer, decision, chunk streams, verification, resume. |
 | `transfer::security` | Turns names and folders from peers into safe paths inside the download folder. |
-| `transfer::service` | The accept loop shared by all interfaces (`serve`), outgoing `send_files` / `pull_shared` / `send_text`, events, cancellation and rate limits. |
+| `transfer::service` | The accept loop shared by all interfaces (`serve`), outgoing `send_files` / `pull_shared` / `send_text`, events, cancellation and rate limits – one file each in `src/transfer/service/`: `events`, `handler`, `gate` (limits on questions), `tracker`, `incoming`, `outgoing`. |
 | `discovery` | Announces this device and keeps the list of nearby devices; hidden mode. |
 | `pairing` | Both sides of the pairing exchange and the verification code. |
 | `config` | `config.toml` (trusted devices, download folder, name, language, network mode, privacy). |
@@ -64,7 +64,9 @@ only in how they ask the user:
 | Daemon | `cli/src/daemon/` | terminal prompts, or Auto-Accept only without a terminal |
 | GUI | `src-tauri/src/node.rs` | Tauri events to the web view, system notifications |
 
-The GUI talks to the frontend through Tauri commands (`src-tauri/src/commands.rs`) and events
+The GUI talks to the frontend through Tauri commands (`src-tauri/src/commands/`, one file per
+topic: `app`, `peers`, `transfers`, `localsend`, `web`, `network`, `identity`, `settings`,
+`android`, `shared`) and events
 (`transfer`, `incoming-offer`, `pair-request`, `pairing-code`, `pair-result`, `nearby`, …).
 
 ### File managers

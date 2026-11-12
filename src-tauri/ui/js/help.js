@@ -23,7 +23,7 @@ function renderHelp() {
 }
 
 /** Opens the help window, with `topic` unfolded when given. */
-export function openHelp(topic = null) {
+function openHelp(topic = null) {
   renderHelp();
   if (topic) {
     const details = $('help-topics').querySelector(`[data-topic="${topic}"]`);

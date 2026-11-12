@@ -4,7 +4,7 @@
 |------|-------|---------|-------|
 | Unit tests | next to the code (`#[cfg(test)]`) | `cargo test --workspace` | every push |
 | End-to-end tests (two real iroh nodes) | `tests/integration_tests.rs` | `cargo test --test integration_tests` | every push |
-| Property-based tests | `tests/properties.rs`, `transfer/service.rs` | `cargo test --test properties` (more cases: `PROPTEST_CASES=20000`) | every push |
+| Property-based tests | `tests/properties.rs`, `transfer/service/gate.rs` | `cargo test --test properties` (more cases: `PROPTEST_CASES=20000`) | every push |
 | Bad network conditions | `tests/network_conditions.rs` | `cargo test --release --test network_conditions -- --include-ignored` | every push (job *Bad network conditions*) |
 | The same end-to-end tests over a lossy kernel link | `tc netem` on loopback | see below | every push |
 | Sharing by TICKET (one-time identity) | `tests/share.rs` | `cargo test --test share` | every push |

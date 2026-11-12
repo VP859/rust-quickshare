@@ -4,7 +4,7 @@
 // names a heading that exists (the texts are help_<id>_q and help_<id>_a).
 
 /** The project website (docs built from the repository, see BUILDING.md). */
-export const SITE = 'https://vp859.github.io/rust-quickshare/';
+const SITE = 'https://vp859.github.io/rust-quickshare/';
 
 export const TOPICS = [
   { id: 'send', doc: 'README.md#quick-start' },

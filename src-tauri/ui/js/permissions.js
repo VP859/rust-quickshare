@@ -23,7 +23,7 @@ const missing = () => [...['local_network', 'notifications', 'storage'].filter((
 const settingsOnly = () => camera || status?.can_ask === false;
 
 /** Whether Ferry may not reach the local network (Android 17+ without the permission). */
-export const localNetworkDenied = () => status?.local_network === 'denied';
+const localNetworkDenied = () => status?.local_network === 'denied';
 
 function render() {
   const wanted = missing();

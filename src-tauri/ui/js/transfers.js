@@ -53,7 +53,7 @@ function measure(row, ev) {
 }
 
 /** `m:ss` or `h:mm:ss`. */
-export function fmtDuration(seconds) {
+function fmtDuration(seconds) {
   const total = Math.max(1, Math.round(seconds));
   const [h, m, s] = [Math.floor(total / 3600), Math.floor(total / 60) % 60, total % 60];
   const pad = (n) => String(n).padStart(2, '0');
