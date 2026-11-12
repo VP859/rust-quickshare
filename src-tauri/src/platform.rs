@@ -68,8 +68,9 @@ mod imp {
     use super::BackgroundStatus;
     use crate::node::AppState;
     use jni::objects::{JClass, JClassLoader, JObject, JObjectArray, JString, LoaderContext};
+    use jni::signature::MethodSignature;
     use jni::strings::JNIStr;
-    use jni::{Env, JValue, JavaVM, jni_sig, jni_str};
+    use jni::{Env, JValue, JValueOwned, JavaVM, jni_sig, jni_str};
 
     /// Shared files older than a day are deleted at startup.
     const SHARE_RETENTION: Duration = Duration::from_secs(24 * 3600);
@@ -250,21 +251,69 @@ mod imp {
         })
     }
 
+    /// The value after the context in a call of an app method.
+    enum Arg<'a> {
+        /// A `java.lang.String`.
+        Text(&'a str),
+        /// A `boolean`.
+        Bool(bool),
+    }
+
+    /// Calls the static method `method` (signature `sig`) of the app class
+    /// `class` with the application context and `arg`; `read` turns the
+    /// returned value into the result.
+    fn call_app<R>(
+        class: &JNIStr,
+        method: &JNIStr,
+        sig: MethodSignature<'_, '_>,
+        arg: Option<Arg<'_>>,
+        read: impl FnOnce(&mut Env<'_>, JValueOwned<'_>) -> jni::errors::Result<R>,
+    ) -> jni::errors::Result<R> {
+        with_app_class(class, |env, context, class| {
+            let text = match arg {
+                Some(Arg::Text(text)) => Some(env.new_string(text)?),
+                _ => None,
+            };
+            let mut args = vec![JValue::Object(context)];
+            match (&arg, &text) {
+                (Some(Arg::Bool(value)), _) => args.push(JValue::Bool(*value)),
+                (_, Some(text)) => args.push(JValue::Object(text)),
+                _ => {}
+            }
+            let value = env.call_static_method(class, method, &sig, &args)?;
+            read(env, value)
+        })
+    }
+
+    /// [`call_app`] of a method returning nothing.
+    fn call_app_void(
+        class: &JNIStr,
+        method: &JNIStr,
+        sig: MethodSignature<'_, '_>,
+        arg: Option<Arg<'_>>,
+    ) -> jni::errors::Result<()> {
+        call_app(class, method, sig, arg, |_, _| Ok(()))
+    }
+
+    /// [`call_app`] of a method returning a `String`.
+    fn call_app_string(
+        class: &JNIStr,
+        method: &JNIStr,
+        sig: MethodSignature<'_, '_>,
+        arg: Option<Arg<'_>>,
+    ) -> jni::errors::Result<String> {
+        call_app(class, method, sig, arg, |env, value| {
+            env.cast_local::<JString>(value.l()?)?.try_to_string(env)
+        })
+    }
+
     /// Background limits reported by `PowerHelper.status`.
     pub fn background_status() -> Option<BackgroundStatus> {
-        let json = with_app_class(
+        let json = call_app_string(
             jni_str!("io.github.vp859.ferry.PowerHelper"),
-            |env, context, class| {
-                let value = env
-                    .call_static_method(
-                        class,
-                        jni_str!("status"),
-                        jni_sig!("(Landroid/content/Context;)Ljava/lang/String;"),
-                        &[JValue::Object(context)],
-                    )?
-                    .l()?;
-                env.cast_local::<JString>(value)?.try_to_string(env)
-            },
+            jni_str!("status"),
+            jni_sig!("(Landroid/content/Context;)Ljava/lang/String;"),
+            None,
         )
         .inspect_err(|e| warn!("Could not read the background limits: {e}"))
         .ok()?;
@@ -278,20 +327,11 @@ mod imp {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let outcome = with_app_class(
+        let outcome = call_app_string(
             jni_str!("io.github.vp859.ferry.FileOpener"),
-            |env, context, class| {
-                let path = env.new_string(path.to_string_lossy())?;
-                let value = env
-                    .call_static_method(
-                        class,
-                        jni_str!("open"),
-                        jni_sig!("(Landroid/content/Context;Ljava/lang/String;)Ljava/lang/String;"),
-                        &[JValue::Object(context), JValue::Object(&path)],
-                    )?
-                    .l()?;
-                env.cast_local::<JString>(value)?.try_to_string(env)
-            },
+            jni_str!("open"),
+            jni_sig!("(Landroid/content/Context;Ljava/lang/String;)Ljava/lang/String;"),
+            Some(Arg::Text(&path.to_string_lossy())),
         )
         .map_err(|e| {
             // The Kotlin side could not be called at all (not "file missing").
@@ -307,19 +347,11 @@ mod imp {
 
     /// The runtime permissions, from `FerryPermissions.status`.
     pub fn permission_status() -> Option<super::PermissionStatus> {
-        let json = with_app_class(
+        let json = call_app_string(
             jni_str!("io.github.vp859.ferry.FerryPermissions"),
-            |env, context, class| {
-                let value = env
-                    .call_static_method(
-                        class,
-                        jni_str!("status"),
-                        jni_sig!("(Landroid/content/Context;)Ljava/lang/String;"),
-                        &[JValue::Object(context)],
-                    )?
-                    .l()?;
-                env.cast_local::<JString>(value)?.try_to_string(env)
-            },
+            jni_str!("status"),
+            jni_sig!("(Landroid/content/Context;)Ljava/lang/String;"),
+            None,
         )
         .inspect_err(|e| warn!("Could not read the permissions: {e}"))
         .ok()?;
@@ -330,22 +362,16 @@ mod imp {
     /// local network (`FerryPermissions.request`); the answer arrives as the
     /// `ferry-permissions` window event.
     pub fn request_permissions(only_local_network: bool) {
-        let result = with_app_class(
+        let only = if only_local_network {
+            "local_network"
+        } else {
+            ""
+        };
+        let result = call_app_void(
             jni_str!("io.github.vp859.ferry.FerryPermissions"),
-            |env, context, class| {
-                let only = env.new_string(if only_local_network {
-                    "local_network"
-                } else {
-                    ""
-                })?;
-                env.call_static_method(
-                    class,
-                    jni_str!("request"),
-                    jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
-                    &[JValue::Object(context), JValue::Object(&only)],
-                )
-                .map(|_| ())
-            },
+            jni_str!("request"),
+            jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
+            Some(Arg::Text(only)),
         );
         if let Err(e) = result {
             warn!("Could not ask for the permissions: {e}");
@@ -354,17 +380,11 @@ mod imp {
 
     /// Starts Ferry again in a new process (`Restarter.restart`).
     pub fn restart_app() {
-        let result = with_app_class(
+        let result = call_app_void(
             jni_str!("io.github.vp859.ferry.Restarter"),
-            |env, context, class| {
-                env.call_static_method(
-                    class,
-                    jni_str!("restart"),
-                    jni_sig!("(Landroid/content/Context;)V"),
-                    &[JValue::Object(context)],
-                )
-                .map(|_| ())
-            },
+            jni_str!("restart"),
+            jni_sig!("(Landroid/content/Context;)V"),
+            None,
         );
         if let Err(e) = result {
             warn!("Could not restart: {e}");
@@ -373,17 +393,11 @@ mod imp {
 
     /// Opens the system app info screen (battery usage, permissions).
     pub fn open_app_settings() {
-        let result = with_app_class(
+        let result = call_app_void(
             jni_str!("io.github.vp859.ferry.PowerHelper"),
-            |env, context, class| {
-                env.call_static_method(
-                    class,
-                    jni_str!("openAppSettings"),
-                    jni_sig!("(Landroid/content/Context;)V"),
-                    &[JValue::Object(context)],
-                )
-                .map(|_| ())
-            },
+            jni_str!("openAppSettings"),
+            jni_sig!("(Landroid/content/Context;)V"),
+            None,
         );
         if let Err(e) = result {
             warn!("Could not open the app settings: {e}");
@@ -392,17 +406,11 @@ mod imp {
 
     /// Holds or releases the wake and Wi-Fi locks of `FerryService`.
     pub fn set_transfers_active(active: bool) {
-        let result = with_app_class(
+        let result = call_app_void(
             jni_str!("io.github.vp859.ferry.FerryService"),
-            |env, context, class| {
-                env.call_static_method(
-                    class,
-                    jni_str!("setTransfersActive"),
-                    jni_sig!("(Landroid/content/Context;Z)V"),
-                    &[JValue::Object(context), JValue::Bool(active)],
-                )
-                .map(|_| ())
-            },
+            jni_str!("setTransfersActive"),
+            jni_sig!("(Landroid/content/Context;Z)V"),
+            Some(Arg::Bool(active)),
         );
         if let Err(e) = result {
             warn!("Could not update the transfer locks: {e}");
@@ -471,17 +479,11 @@ mod imp {
     /// Shows the system folder picker (`FolderIntake.pick`); the copied folder
     /// is announced by the `ferry-folder` window event.
     pub fn pick_folder() {
-        let result = with_app_class(
+        let result = call_app_void(
             jni_str!("io.github.vp859.ferry.FolderIntake"),
-            |env, context, class| {
-                env.call_static_method(
-                    class,
-                    jni_str!("pick"),
-                    jni_sig!("(Landroid/content/Context;)V"),
-                    &[JValue::Object(context)],
-                )
-                .map(|_| ())
-            },
+            jni_str!("pick"),
+            jni_sig!("(Landroid/content/Context;)V"),
+            None,
         );
         if let Err(e) = result {
             warn!("Could not show the folder picker: {e}");
@@ -533,18 +535,11 @@ mod imp {
             }
             last.clone_from(&json);
         }
-        let result = with_app_class(
+        let result = call_app_void(
             jni_str!("io.github.vp859.ferry.ShareTargets"),
-            |env, context, class| {
-                let json = env.new_string(json.as_str())?;
-                env.call_static_method(
-                    class,
-                    jni_str!("update"),
-                    jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
-                    &[JValue::Object(context), JValue::Object(&json)],
-                )
-                .map(|_| ())
-            },
+            jni_str!("update"),
+            jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
+            Some(Arg::Text(&json)),
         );
         if let Err(e) = result {
             warn!("Could not update the share targets: {e}");
