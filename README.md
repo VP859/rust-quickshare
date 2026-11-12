@@ -334,7 +334,9 @@ Share any file or link from another app to **Ferry** and pick a recipient. A for
 with a notification keeps Ferry reachable in the background. Received files are saved to
 `Download/Ferry`; photos and videos go to `Pictures/Ferry` so they appear in the gallery.
 *Open* next to a received file shows it in the app you choose for its type; that app gets access
-to this one file only.
+to this one file only. *Choose a folder* sends a whole folder with its subfolders: Android's folder
+picker gives Ferry access to it, and Ferry copies it into its cache first (a day later the copy is
+deleted).
 
 Paired devices appear in Android's **Share** menu (Android 10 and newer): share a photo, tap
 "Laptop", and it goes there without opening Ferry first; a text opens ready to send to it. Android

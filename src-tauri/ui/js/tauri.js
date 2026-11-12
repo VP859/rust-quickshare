@@ -17,9 +17,34 @@ export async function copyText(text) {
 }
 // Folders are sent with their structure; the system picker returns a path.
 export async function pickFolder() {
+  if (isMobile) return pickFolderAndroid();
   const opts = { multiple: false, directory: true };
   const res = T?.dialog?.open ? await T.dialog.open(opts) : await invoke('plugin:dialog|open', { options: opts });
   return res ? [typeof res === 'string' ? res : res.path ?? String(res)] : [];
+}
+/**
+ * Android: the system folder picker (the dialog plugin has none on mobile).
+ * MainActivity copies the folder into the app cache and then sends
+ * `ferry-folder`; `ferry-folder-copying` comes first when a folder was picked.
+ */
+function pickFolderAndroid() {
+  return new Promise((resolve, reject) => {
+    const copying = () => toast(t('folder_copying'));
+    const done = async () => {
+      window.removeEventListener('ferry-folder-copying', copying);
+      try {
+        const path = await invoke('take_picked_folder');
+        resolve(path ? [path] : []);
+      } catch (e) { reject(e); }
+    };
+    window.addEventListener('ferry-folder-copying', copying, { once: true });
+    window.addEventListener('ferry-folder', done, { once: true });
+    invoke('pick_folder').catch((e) => {
+      window.removeEventListener('ferry-folder', done);
+      window.removeEventListener('ferry-folder-copying', copying);
+      reject(e);
+    });
+  });
 }
 export async function pickFiles() {
   const opts = { multiple: true, directory: false };

@@ -3,8 +3,10 @@ package io.github.vp859.ferry
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.net.Uri
 import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 
 /**
  * Entry activity hosting the Tauri WebView.
@@ -22,6 +24,8 @@ import androidx.activity.enableEdgeToEdge
  * - `ferry-share` – shared files or a shared text are ready to be fetched with
  *   `take_shared_files` / `take_shared_text`;
  * - `ferry-lan-permission` – local network access was granted (Android 17+);
+ * - `ferry-folder-copying` / `ferry-folder` – a folder picked to send is being
+ *   copied / is ready (or the picker was cancelled), see [FolderIntake];
  * - `ferry-permissions` – Android's permission dialog was answered.
  */
 class MainActivity : TauriActivity() {
@@ -35,6 +39,34 @@ class MainActivity : TauriActivity() {
 
   private var webView: WebView? = null
 
+  /** The system folder picker (registered before the activity starts, as Android requires). */
+  private val folderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) {
+    onFolderPicked(it)
+  }
+
+  /** Shows the folder picker (from [FolderIntake.pick], on the UI thread). */
+  fun pickFolder() {
+    try {
+      folderPicker.launch(null)
+    } catch (e: Exception) {
+      // No document picker on this device: the frontend stops waiting.
+      onFolderPicked(null)
+    }
+  }
+
+  /** Copies the picked folder off the UI thread and tells the frontend. */
+  private fun onFolderPicked(tree: Uri?) {
+    if (tree != null) dispatch("ferry-folder-copying")
+    Thread {
+      FolderIntake.copy(this, tree)
+      runOnUiThread { dispatch("ferry-folder") }
+    }.start()
+  }
+
+  private fun dispatch(event: String) {
+    webView?.evaluateJavascript("window.dispatchEvent(new Event('$event'))", null)
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
@@ -45,6 +77,7 @@ class MainActivity : TauriActivity() {
     started = true
     recreating = false
     FerryPermissions.activity = java.lang.ref.WeakReference(this)
+    FolderIntake.activity = java.lang.ref.WeakReference(this)
     FerryService.start(this)
     if (savedInstanceState == null) {
       handleShareIntent(intent)

@@ -762,6 +762,32 @@ test('a backup is restored with its password, and the new key asks for a restart
   expect(await calls(app)).toContainEqual(['restart_app', {}]);
 });
 
+test('on Android a folder is picked, copied and then goes to the recipient list', async ({ app, isMobile }) => {
+  test.skip(!isMobile, 'Android only: the desktop uses the dialog plugin');
+  const button = app.locator('#btn-select-folder');
+  await expect(button).toBeVisible();
+
+  await button.click();
+  await expect.poll(() => calls(app)).toContainEqual(['pick_folder', {}]);
+  // MainActivity copies the folder, then announces it.
+  await app.evaluate(() => {
+    window.__respond('take_picked_folder', '/data/user/0/io.github.vp859.ferry/cache/share-in/Holiday');
+    window.dispatchEvent(new Event('ferry-folder-copying'));
+  });
+  await expect(app.locator('#toast')).toContainText('Preparing the folder');
+  await app.evaluate(() => window.dispatchEvent(new Event('ferry-folder')));
+  await expect(app.locator('#modal-recipient')).toHaveClass(/active/);
+  await expect(app.locator('#recipient-files')).toContainText('Folder Holiday');
+  await app.locator('#modal-recipient').getByRole('button', { name: /Laptop/ }).click();
+  expect(await calls(app)).toContainEqual(['send_files', { paths: ['/data/user/0/io.github.vp859.ferry/cache/share-in/Holiday'], target: 'b'.repeat(64) }]);
+
+  // Cancelled: nothing happens.
+  await app.evaluate(() => window.__respond('take_picked_folder', null));
+  await button.click();
+  await app.evaluate(() => window.dispatchEvent(new Event('ferry-folder')));
+  await expect(app.locator('#modal-recipient')).not.toHaveClass(/active/);
+});
+
 test('the device key can be moved into the system keyring', async ({ app }) => {
   await app.locator('#btn-settings').click();
   await expect(app.locator('#keyring-toggle')).toBeVisible();

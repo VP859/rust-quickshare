@@ -9,7 +9,7 @@ export default {
   drop_here: 'Drop files to send', send_files: 'Send files',
   drop_hint: 'Drop a file on a device to send it right away, or choose files and pick a recipient.',
   drop_hint_mobile: 'Choose files and pick a recipient, or scan a QR code to receive.',
-  select_file: 'Choose files', select_folder: 'Choose a folder', folder_label: 'Folder {name}', scan_qr: 'Scan QR code', receive_ticket: 'Receive from TICKET',
+  select_file: 'Choose files', select_folder: 'Choose a folder', folder_copying: 'Preparing the folder…', folder_label: 'Folder {name}', scan_qr: 'Scan QR code', receive_ticket: 'Receive from TICKET',
   nearby: 'Nearby', search: 'Search',
   nearby_hint: 'Ferry devices on your network. Pair with one click – no codes to type.',
   trusted: 'Devices', add_device: 'Add device',

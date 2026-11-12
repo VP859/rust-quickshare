@@ -19,6 +19,9 @@ compatibility).
 
 ### Added
 
+- **Android: sending folders** – *Choose a folder* opens the system folder picker; the folder is
+  copied with its subfolders into the app cache and sent like on the desktop (to Ferry devices and
+  LocalSend apps).
 - **"Restart now" on Android too**: after a new network mode, a random port or a restored device
   backup, Ferry restarts itself in a new process (before, it had to be closed from the recent apps).
 - **Device backup in the GUI** (desktop and Android, *Settings → Privacy*): the device key and the

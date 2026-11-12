@@ -122,7 +122,13 @@ mod imp {
                     .and_then(|t| SystemTime::now().duration_since(t).ok())
                     .is_some_and(|age| age > SHARE_RETENTION);
                 if stale {
-                    let _ = std::fs::remove_file(entry.path());
+                    // Shared files, and copies of folders picked to send.
+                    let path = entry.path();
+                    let _ = if path.is_dir() {
+                        std::fs::remove_dir_all(&path)
+                    } else {
+                        std::fs::remove_file(&path)
+                    };
                 }
             }
         }
@@ -462,6 +468,37 @@ mod imp {
         text.filter(|t| !t.trim().is_empty())
     }
 
+    /// Shows the system folder picker (`FolderIntake.pick`); the copied folder
+    /// is announced by the `ferry-folder` window event.
+    pub fn pick_folder() {
+        let result = with_app_class(
+            jni_str!("io.github.vp859.ferry.FolderIntake"),
+            |env, context, class| {
+                env.call_static_method(
+                    class,
+                    jni_str!("pick"),
+                    jni_sig!("(Landroid/content/Context;)V"),
+                    &[JValue::Object(context)],
+                )
+                .map(|_| ())
+            },
+        );
+        if let Err(e) = result {
+            warn!("Could not show the folder picker: {e}");
+        }
+    }
+
+    /// Takes (and forgets) the copy of the folder picked to send: a folder
+    /// inside the share cache, or nothing (cancelled, or the copy failed).
+    pub fn take_picked_folder(app: &AppHandle) -> Option<String> {
+        let dir = share_dir(app)?;
+        let file = dir.join("pending-folder.txt");
+        let path = std::fs::read_to_string(&file).ok();
+        let _ = std::fs::remove_file(&file);
+        let path = PathBuf::from(path?.trim());
+        (path.is_dir() && path.starts_with(&dir)).then(|| path.display().to_string())
+    }
+
     /// Takes (and forgets) the paired device chosen in the "Share" menu
     /// (Direct Share, `ShareTargets.storeTarget`).
     pub fn take_share_target(app: &AppHandle) -> Option<String> {
@@ -552,6 +589,14 @@ mod imp {
         None
     }
 
+    /// Desktop folders are picked by the dialog plugin.
+    pub fn pick_folder() {}
+
+    /// Desktop folders are picked by the dialog plugin.
+    pub fn take_picked_folder(_app: &AppHandle) -> Option<String> {
+        None
+    }
+
     /// There is no "Share" menu on desktop.
     pub fn set_share_targets(_devices: &[(String, String)]) {}
 
@@ -583,6 +628,18 @@ mod imp {
 /// Sets platform-specific directories; called before the configuration is loaded.
 pub fn init(app: &AppHandle) {
     imp::init(app);
+}
+
+/// Shows the Android folder picker; the picked folder is copied into the
+/// app cache and announced by the `ferry-folder` window event (no-op on desktop).
+pub fn pick_folder() {
+    imp::pick_folder();
+}
+
+/// The copy of the folder picked on Android (see [`pick_folder`]); `None` when
+/// the picker was cancelled or on desktop.
+pub fn take_picked_folder(app: &AppHandle) -> Option<String> {
+    imp::take_picked_folder(app)
 }
 
 /// The paired device chosen in the Android "Share" menu for the shared

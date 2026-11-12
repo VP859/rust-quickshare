@@ -94,10 +94,10 @@ object ShareIntake {
     return uri.lastPathSegment ?: FALLBACK_NAME
   }
 
-  private fun sanitize(name: String): String =
+  internal fun sanitize(name: String): String =
     name.replace(Regex("[/\\\\:*?\"<>|\\p{Cntrl}]"), "_").trimStart('.').ifBlank { FALLBACK_NAME }.take(200)
 
-  private fun uniqueFile(dir: File, name: String): File {
+  internal fun uniqueFile(dir: File, name: String): File {
     var file = File(dir, name)
     val stem = name.substringBeforeLast('.', name)
     val ext = name.substringAfterLast('.', "").let { if (it.isEmpty()) "" else ".$it" }

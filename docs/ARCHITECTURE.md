@@ -88,6 +88,9 @@ recipient.
 * `ShareTargets.kt` – paired devices as Direct Share targets of the "Share" menu (long-lived
   dynamic shortcuts, `res/xml/shortcuts.xml`), updated whenever the frontend reads the devices,
 * `Restarter.kt` – "Restart now": starts `MainActivity` in a new task and ends the process,
+* `FolderIntake.kt` – a folder to send: the system folder picker (`ACTION_OPEN_DOCUMENT_TREE`)
+  and a copy of the tree into the app cache through `DocumentsContract`, since Rust reads only
+  regular files,
 * `FileOpener.kt` – opens a received file in another app (`ACTION_VIEW` with a FileProvider
   `content://` URI that grants read access to this file only),
 * `FerryService.kt` – foreground service with a notification and a multicast lock, so the node

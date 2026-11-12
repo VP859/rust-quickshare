@@ -12,7 +12,7 @@ export default {
   drop_here: 'Upuść pliki, aby wysłać', send_files: 'Wyślij pliki',
   drop_hint: 'Upuść plik na urządzenie, aby wysłać go od razu, albo wybierz pliki i odbiorcę.',
   drop_hint_mobile: 'Wybierz pliki i odbiorcę albo zeskanuj kod QR, aby odebrać.',
-  select_file: 'Wybierz pliki', select_folder: 'Wybierz folder', folder_label: 'Folder {name}', scan_qr: 'Skanuj kod QR', receive_ticket: 'Odbierz z TICKETU',
+  select_file: 'Wybierz pliki', select_folder: 'Wybierz folder', folder_copying: 'Przygotowuję folder…', folder_label: 'Folder {name}', scan_qr: 'Skanuj kod QR', receive_ticket: 'Odbierz z TICKETU',
   nearby: 'W pobliżu', search: 'Szukaj',
   nearby_hint: 'Urządzenia z Ferry w Twojej sieci. Sparuj jednym kliknięciem – bez przepisywania kodów.',
   trusted: 'Urządzenia', add_device: 'Dodaj urządzenie',

@@ -178,6 +178,8 @@ pub fn run() {
             take_shared_files,
             take_shared_text,
             take_share_target,
+            pick_folder,
+            take_picked_folder,
             send_text,
             open_link,
             app_info,
