@@ -13,7 +13,7 @@ resolver = "2"
 [workspace.package]
 version = "0.3.4"
 edition = "2024"
-rust-version = "1.100.0"
+rust-version = "1.91"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/VP859/rust-quickshare"
 authors = ["VP859 and the Ferry contributors"]
