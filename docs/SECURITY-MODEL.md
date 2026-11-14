@@ -297,7 +297,7 @@ deliberately runs with **LocalSend's** security model, which is weaker than Ferr
 * **Separate identity:** the LocalSend certificate is not derived from the Ferry key; LocalSend
   devices never see the Node ID and cannot link the device to its Ferry identity (except through
   the announced name and the IP address).
-* **Sending to LocalSend apps** (`src/localsend/client.rs`, without the mode) has the mirror
+* **Sending to LocalSend apps** (`src/localsend/client/`, without the mode) has the mirror
   weakness: the **receiver is not authenticated**. A LocalSend app is known by what it announces
   on multicast (or by the address the user typed); anyone on the local network can announce any
   name. Ferry pins the certificate fingerprint of the announcement, so the connection goes to the

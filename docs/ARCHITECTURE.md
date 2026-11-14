@@ -21,7 +21,8 @@ Both interfaces use only the library's public API.
                risk (dangerous file types, Mark-of-the-Web), share (one-time identity),
                control (pause, speed limit)
    history.rs  local history of finished transfers
-   localsend/  LocalSend compatibility mode: HTTPS server, multicast, offers (receiving)
+   localsend/  LocalSend compatibility mode: HTTPS server, multicast, offers (receiving);
+               client/ for sending (apps nearby, offers and uploads, pinned HTTPS)
    web/        browser sessions: one-time link, page (web/page/), downloads and uploads
    httpd.rs    HTTP/1.1 server and safe uploads shared by localsend/ and web/
    pairing.rs  commit-reveal pairing code
@@ -41,7 +42,7 @@ Both interfaces use only the library's public API.
 | `transfer::sender` / `receiver` | One file over one control stream: offer, decision, chunk streams, verification, resume. |
 | `transfer::security` | Turns names and folders from peers into safe paths inside the download folder. |
 | `transfer::service` | The accept loop shared by all interfaces (`serve`), outgoing `send_files` / `pull_shared` / `send_text`, events, cancellation and rate limits – one file each in `src/transfer/service/`: `events`, `handler`, `gate` (limits on questions), `tracker`, `incoming`, `outgoing`. |
-| `discovery` | Announces this device and keeps the list of nearby devices; hidden mode. |
+| `discovery` | Announces this device and keeps the list of nearby devices; hidden mode – the wire format in `packet`, the running exchange in `exchange`, sockets and networks in `network`. |
 | `pairing` | Both sides of the pairing exchange and the verification code. |
 | `config` | `config.toml` (trusted devices, download folder, name, language, network mode, privacy). |
 
