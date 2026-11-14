@@ -13,7 +13,7 @@ resolver = "2"
 [workspace.package]
 version = "0.3.4"
 edition = "2024"
-rust-version = "1.91"
+rust-version = "1.100.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/VP859/rust-quickshare"
 authors = ["VP859 and the Ferry contributors"]
@@ -104,7 +104,6 @@ iroh = { workspace = true }
 # uses; must stay the version iroh depends on). See node::engine::transport_config.
 noq-proto = "1.4.0"
 socket2 = { version = "0.6.5", features = ["all"] }
-gethostname = "1.1.0"
 rust-i18n = "4.2.4"
 
 # LocalSend compatibility mode (src/localsend): an HTTPS server with a
@@ -131,6 +130,8 @@ webpki-roots = "1.0.11"
 # or raw netlink sockets, so these crates are compiled conditionally)
 # ---------------------------------------------------------------------------
 [target.'cfg(not(target_os = "android"))'.dependencies]
+# The default device name from the host name (config::paths); Android has a fixed one.
+gethostname = "1.1.0"
 # Network interface enumeration via getifaddrs/netlink, desktop only
 network-interface = "2.0.5"
 

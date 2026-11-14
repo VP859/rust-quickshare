@@ -439,7 +439,8 @@ mod imp {
 
         let mut opts = OpenOptions::new();
         opts.read(true);
-        let path = FilePath::from_str(input).map_err(|e| e.to_string())?;
+        // Parsing a FilePath cannot fail (its error type is `Infallible`).
+        let Ok(path) = FilePath::from_str(input);
         let mut src = app.fs().open(path, opts).map_err(|e| e.to_string())?;
         let target = dest.clone();
         tokio::task::spawn_blocking(move || -> std::io::Result<()> {
