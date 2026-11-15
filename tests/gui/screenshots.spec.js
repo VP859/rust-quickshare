@@ -11,9 +11,11 @@ import { expect, test } from './fixtures.js';
 
 const OUT = process.env.FERRY_SCREENSHOTS;
 const VERSION = readFileSync(join(import.meta.dirname, '..', '..', 'Cargo.toml'), 'utf8').match(/^version = "([^"]+)"/m)[1];
-const LAPTOP = '3c7f'.repeat(16);
-const PHONE = '9a41'.repeat(16);
-const KITCHEN = 'e25b'.repeat(16);
+// Node IDs like real ones (a repeated pattern would give every device the same
+// avatar color): green, pink and violet.
+const LAPTOP = '4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce';
+const PHONE = '5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9';
+const KITCHEN = 'e7f6c011776e8db7cd330b54174fd76f7d0216b612387a5ffcfb81e6f0919683';
 
 test.skip(!OUT, 'set FERRY_SCREENSHOTS to make the screenshots');
 

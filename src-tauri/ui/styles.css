@@ -106,6 +106,18 @@ section > header h2 { font-size: 14px; font-weight: 600; }
 .row.clickable:hover, .row.drag-over { background: var(--hover); }
 .row.drag-over { box-shadow: inset 3px 0 0 var(--accent); }
 .avatar { position: relative; width: 36px; height: 36px; border-radius: 10px; background: var(--surface-2); color: var(--muted); display: grid; place-items: center; font-weight: 600; font-size: 13px; flex: none; }
+/* Paired devices: white initials on a color of their own, the same as their
+   icon in the Android share menu (ShareTargets.kt); each has at least 4.5:1
+   contrast with white. */
+.avatar[class*="tone-"] { color: #fff; }
+.avatar.tone-0 { background: #1d4ed8; }
+.avatar.tone-1 { background: #4338ca; }
+.avatar.tone-2 { background: #7c3aed; }
+.avatar.tone-3 { background: #be185d; }
+.avatar.tone-4 { background: #b91c1c; }
+.avatar.tone-5 { background: #c2410c; }
+.avatar.tone-6 { background: #047857; }
+.avatar.tone-7 { background: #0f766e; }
 .avatar .dot { position: absolute; right: -2px; bottom: -2px; border: 2px solid var(--surface); width: 12px; height: 12px; }
 .row .body { flex: 1; min-width: 0; }
 .row .title { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

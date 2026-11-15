@@ -15,7 +15,32 @@ export const fail = (e) => toast(String(e?.message ?? e), true);
 export const fmtSize = (b) => b >= 1 << 30 ? (b / (1 << 30)).toFixed(2) + ' GB' : b >= 1 << 20 ? (b / (1 << 20)).toFixed(1) + ' MB' : b >= 1024 ? (b / 1024).toFixed(0) + ' KB' : b + ' B';
 export const baseName = (p) => decodeURIComponent(String(p).split(/[\\/]/).pop() || p);
 export const shortId = (id) => id.slice(0, 10) + '…';
-export const initials = (name) => (String(name).trim().split(/\s+/).slice(0, 2).map(w => [...w][0]).join('') || '?').toUpperCase();
+/**
+ * Two characters that tell devices apart, as on the Android share menu icons
+ * (ShareTargets.kt): the first letters of two words ("Kate's Phone" → "KP",
+ * "work-pc" → "WP"), or the first two characters of one word ("Laptop" → "La").
+ */
+export function initials(name) {
+  const words = String(name).trim().split(/[\s_.-]+/).filter(Boolean).map((w) => [...w]);
+  if (!words.length) return '?';
+  if (words.length === 1) return words[0][0].toUpperCase() + (words[0][1] ?? '');
+  return words.slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+}
+/** Number of avatar colors (`.avatar.tone-N` in styles.css, COLORS in ShareTargets.kt). */
+const TONES = 8;
+/**
+ * The avatar color of a device: Java's `String.hashCode` of its Node ID modulo
+ * the colors, as ShareTargets.kt computes it, so a device has the same color
+ * here and in the Android share menu.
+ */
+export function avatarTone(nodeId) {
+  let hash = 0;
+  for (let i = 0; i < nodeId.length; i++) hash = (Math.imul(hash, 31) + nodeId.charCodeAt(i)) | 0;
+  return ((hash % TONES) + TONES) % TONES;
+}
+/** The avatar of a paired device: its initials on its own color, plus `extra` (a status dot). */
+export const deviceAvatar = (nodeId, name, ...extra) =>
+  el('div', { class: `avatar tone-${avatarTone(nodeId)}` }, initials(name), ...extra);
 export function el(tag, props = {}, ...children) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {

@@ -1,7 +1,7 @@
 // Trusted devices: the list, the device menu, the safety number and the
 // add/edit dialog.
 import { renderWelcome } from './help.js';
-import { $, close, dotClass, el, emptyState, fail, icon, initials, open, toast } from './dom.js';
+import { $, close, deviceAvatar, dotClass, el, emptyState, fail, icon, open, toast } from './dom.js';
 import { t } from './i18n.js';
 import { sendToPeer } from './send.js';
 import { state } from './state.js';
@@ -44,7 +44,7 @@ export function renderPeers() {
     // keyboard and screen readers use the send button, the row itself is no
     // control (a control holding other controls cannot be announced well).
     const row = el('div', { class: 'row clickable device', 'data-node': p.node_id, onclick: () => sendToPeer(p) },
-      el('div', { class: 'avatar' }, initials(p.alias), el('span', { class: dotClass(reachable) })),
+      deviceAvatar(p.node_id, p.alias, el('span', { class: dotClass(reachable) })),
       el('div', { class: 'body' },
         el('div', { class: 'title' }, p.alias),
         el('div', { class: 'sub', title: p.node_id }, status,

@@ -788,6 +788,36 @@ test('on Android a folder is picked, copied and then goes to the recipient list'
   await expect(app.locator('#modal-recipient')).not.toHaveClass(/active/);
 });
 
+test('paired devices have two initials on the color of their Android share menu icon', async ({ app }) => {
+  // The fixture's paired device: "Laptop", Node ID b…b (Java hashCode -2038265856, color 0).
+  const avatar = app.locator('#peers .avatar').first();
+  await expect(avatar).toContainText('La');
+  await expect(avatar).toHaveClass(/tone-0/);
+  await expect(avatar).toHaveCSS('background-color', 'rgb(29, 78, 216)');
+  await expect(avatar).toHaveCSS('color', 'rgb(255, 255, 255)');
+
+  // The same rules as ShareTargets.kt: Java's String.hashCode modulo 8 (the
+  // expected values were computed in Python, negative hashes included) …
+  const tones = await app.evaluate(async () => {
+    const { avatarTone, initials } = await import('/js/dom.js');
+    const ids = [
+      '6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b',
+      'd4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35',
+      'e7f6c011776e8db7cd330b54174fd76f7d0216b612387a5ffcfb81e6f0919683',
+      '5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9',
+      '19581e27de7ced00ff1ce50b2047e7a567c76b1cbaebabe5ef03f7c3017bb5b7',
+      '4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a',
+      '4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce',
+      'ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d',
+    ];
+    const names = ['Laptop', "Kate's Phone", 'work-pc', 'my_old.tablet', '  ', '😀 Phone', 'éclair', 'x'];
+    return { tones: ids.map(avatarTone), initials: names.map(initials) };
+  });
+  expect(tones.tones).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  // … and the same initials.
+  expect(tones.initials).toEqual(['La', 'KP', 'WP', 'MO', '?', '😀P', 'Éc', 'X']);
+});
+
 test('the device key can be moved into the system keyring', async ({ app }) => {
   await app.locator('#btn-settings').click();
   await expect(app.locator('#keyring-toggle')).toBeVisible();

@@ -19,6 +19,8 @@ compatibility).
 
 ### Added
 
+- **Avatars of paired devices** in the GUI show two initials ("La", "KP") on a color of their own,
+  the same as their icon in the Android share menu, so a device is easy to spot in every list.
 - **Android: sending folders** – *Choose a folder* opens the system folder picker; the folder is
   copied with its subfolders into the app cache and sent like on the desktop (to Ferry devices and
   LocalSend apps).

@@ -1,6 +1,6 @@
 // Sending files: choosing a recipient, sharing by TICKET, receiving from a
 // TICKET or QR code, and dropping files onto the window.
-import { $, baseName, close, dotClass, el, emptyState, fail, icon, initials, open, preview, shortId, toast } from './dom.js';
+import { $, baseName, close, deviceAvatar, dotClass, el, emptyState, fail, icon, open, preview, shortId, toast } from './dom.js';
 import { t } from './i18n.js';
 import { showTicket } from './node.js';
 import { openPeerModal } from './peers.js';
@@ -41,7 +41,7 @@ function recipientRow(avatar, title, sub, nodeId) {
     onchange: (e) => { if (e.target.checked) selected.set(nodeId, title); else selected.delete(nodeId); renderSelected(); } });
   return el('div', { class: 'recipient' }, box,
     el('button', { class: 'row', onclick: () => deliver([[nodeId, title]]) },
-      el('div', { class: 'avatar' }, avatar),
+      avatar,
       el('div', { class: 'body' }, el('div', { class: 'title' }, title), el('div', { class: 'sub' }, sub))));
 }
 /** Sends the pending files or text to every `[nodeId, name]` of `targets` at once. */
@@ -70,12 +70,12 @@ export function chooseRecipient(paths, text = null, isFolder = false) {
   const unpaired = state.nearby.filter(d => !isTrusted(d.node_id));
   if (!peers.length && !unpaired.length) box.append(emptyState('inbox', t('no_devices')));
   for (const p of peers) {
-    box.append(recipientRow([initials(p.alias), el('span', { class: dotClass(online.get(p.node_id)) })], p.alias, el('span', { class: 'mono' }, shortId(p.node_id)),
+    box.append(recipientRow(deviceAvatar(p.node_id, p.alias, el('span', { class: dotClass(online.get(p.node_id)) })), p.alias, el('span', { class: 'mono' }, shortId(p.node_id)),
       p.node_id));
   }
   if (unpaired.length) box.append(el('div', { class: 'label' }, t('nearby_unpaired')));
   for (const d of unpaired) {
-    box.append(recipientRow([icon(platformIcon(d.platform)), el('span', { class: 'dot ok' })], d.name, platformLabel(d.platform),
+    box.append(recipientRow(el('div', { class: 'avatar' }, icon(platformIcon(d.platform)), el('span', { class: 'dot ok' })), d.name, platformLabel(d.platform),
       d.node_id));
   }
   // LocalSend apps take files, folders and texts (shown as a message).
