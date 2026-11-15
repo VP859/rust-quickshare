@@ -23,6 +23,8 @@
 | GUI frontend | `tests/gui/` (Playwright, mocked Tauri API) | `npm ci && npm run test:ui` | every push |
 | Accessibility | `tests/gui/accessibility.spec.js`: [axe-core](https://github.com/dequelabs/axe-core) (the WCAG 2.0–2.2 A and AA rules) and Ferry's own audit in `tests/gui/audit.js`: names of controls, labels, dialogs, unique IDs and WCAG AA contrast (from the rendered colours) of the main screen, every dialog and the browser session page, in the light and the dark theme; keyboard (focus kept in dialogs, Escape, visible focus, tab pattern), reduced motion | `npx playwright test tests/gui/accessibility.spec.js` | every push (with the GUI frontend) |
 | Android app (Kotlin, Gradle, Rust for arm64) | `src-tauri/gen/android/` | `cd src-tauri && cargo tauri android build --debug --apk --target aarch64` | every push; the debug APK is kept for 7 days as an artifact |
+| Static analysis (SAST) | [CodeQL](https://codeql.github.com): Rust, JavaScript, Python and the workflows (`.github/workflows/codeql.yml`) | — | every push and pull request, weekly; results in *Security → Code scanning* |
+| Security practices | [OpenSSF Scorecard](https://scorecard.dev) (`.github/workflows/scorecard.yml`) | — | pushes to `main`, weekly |
 
 ## LocalSend without Apple devices
 

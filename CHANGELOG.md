@@ -19,6 +19,12 @@ compatibility).
 
 ### Added
 
+- **CodeQL** analyses the Rust, JavaScript and Python code and the workflows on every push and pull
+  request. The release installs cargo-dist from crates.io (pinned, `--locked`) instead of running a
+  downloaded script; CI checks that `gradle-wrapper.jar` is an official Gradle release, and the
+  wrapper verifies the Gradle download by its SHA-256. A Python bytecode file that had slipped into
+  `dist/integration/` is gone (and ignored); `postcard` no longer pulls in the unmaintained
+  `atomic-polyfill` (through `heapless`).
 - **Android: accept or decline from the notification** – files, batches and texts offered while
   Ferry is in the background can be answered with the buttons of the notification, without opening
   the app; the dialog in the app closes, and the notification goes when the question is answered in

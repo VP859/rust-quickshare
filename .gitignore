@@ -84,6 +84,10 @@ desktop.ini
 *.iml
 .vscode/*
 
+# ---- Python: bytecode caches (scripts, tests, the Nautilus extension) -------
+__pycache__/
+*.pyc
+
 # ---- Node (Tauri frontend / npm tooling) ------------------------------------
 node_modules/
 npm-debug.log*

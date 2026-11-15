@@ -51,9 +51,11 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: cli-${{ matrix.target }}
+      # Built from crates.io at a fixed version with its own lockfile, rather
+      # than running a downloaded install script.
       - name: Install cargo-dist
         shell: bash
-        run: curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${DIST_VERSION}/cargo-dist-installer.sh" | sh
+        run: cargo install cargo-dist --version "${DIST_VERSION}" --locked
       - name: Install cargo-auditable
         run: cargo install cargo-auditable --version "${CARGO_AUDITABLE_VERSION}" --locked
         shell: bash
@@ -86,7 +88,7 @@ jobs:
         with:
           toolchain: stable
       - name: Install cargo-dist
-        run: curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${DIST_VERSION}/cargo-dist-installer.sh" | sh
+        run: cargo install cargo-dist --version "${DIST_VERSION}" --locked
       - name: Build shell/PowerShell installers
         run: dist build --artifacts=global
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -167,6 +169,8 @@ jobs:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The committed gradle-wrapper.jar must be an official Gradle release.
+      - uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
         with:
           distribution: temurin
