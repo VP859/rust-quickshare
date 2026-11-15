@@ -19,6 +19,10 @@ compatibility).
 
 ### Added
 
+- **Android: accept or decline from the notification** – files, batches and texts offered while
+  Ferry is in the background can be answered with the buttons of the notification, without opening
+  the app; the dialog in the app closes, and the notification goes when the question is answered in
+  the app or expires. Pairing requests keep asking in the app (their code must be compared).
 - **Avatars of paired devices** in the GUI show two initials ("La", "KP") on a color of their own,
   the same as their icon in the Android share menu, so a device is easy to spot in every list.
 - **Android: sending folders** – *Choose a folder* opens the system folder picker; the folder is

@@ -1498,3 +1498,9 @@ backup_cli.keep_apart:
 backup_cli.restored:
   en: "Restored: this device is now Node ID %{id}; %{count} paired device(s) added."
   pl: "Przywrócono: to urządzenie ma teraz Node ID %{id}; dodano sparowanych urządzeń: %{count}."
+gui.notify_accept:
+  en: "Accept"
+  pl: "Przyjmij"
+gui.notify_decline:
+  en: "Decline"
+  pl: "Odrzuć"

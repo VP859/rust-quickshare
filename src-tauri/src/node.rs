@@ -106,6 +106,15 @@ impl AppState {
         }
     }
 
+    /// Answers the waiting question `id` (from the app or from a notification);
+    /// `false` when it is no longer waiting (answered already, or expired).
+    pub async fn answer(&self, id: &str, answer: Answer) -> bool {
+        match self.pending.lock().await.remove(id) {
+            Some(tx) => tx.send(answer).is_ok(),
+            None => false,
+        }
+    }
+
     /// Follows every transfer event: when the first transfer starts or the last
     /// one ends, tells the platform (Android holds a wake lock in between).
     pub fn track_transfer(&self, event: &TransferEvent) {
@@ -316,7 +325,9 @@ impl GuiHandler {
         let (tx, rx) = oneshot::channel();
         state.pending.lock().await.insert(id.to_string(), tx);
         let _ = self.app.emit(event, payload);
-        self.notify(notification.0, notification.1);
+        // On Android a file or a text can be answered from the notification;
+        // a pairing request cannot, as its code has to be compared.
+        self.notify_question(id, event != "pair-request", notification);
         let answer = match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(answer)) => answer,
             _ => Answer::default(),
@@ -324,7 +335,33 @@ impl GuiHandler {
         if state.pending.lock().await.remove(id).is_some() {
             let _ = self.app.emit("request-cancelled", id);
         }
+        crate::platform::dismiss_question(id);
         answer
+    }
+
+    /// Tells about the question `id` when the window is not focused: with
+    /// "Accept" and "Decline" when `buttons` and the platform has them
+    /// (Android), otherwise as a plain notification.
+    fn notify_question(&self, id: &str, buttons: bool, (title, body): (&str, &str)) {
+        let focused = self
+            .app
+            .get_webview_window("main")
+            .and_then(|w| w.is_focused().ok())
+            .unwrap_or(false);
+        if focused {
+            return;
+        }
+        let shown = buttons
+            && crate::platform::show_question(
+                id,
+                title,
+                body,
+                &t!("gui.notify_accept"),
+                &t!("gui.notify_decline"),
+            );
+        if !shown {
+            self.notify(title, body);
+        }
     }
 
     /// Copies an accepted text to the clipboard and shows it among the
@@ -755,6 +792,22 @@ impl TransferHandler for GuiHandler {
     }
 }
 
+/// An answer from the buttons of a question's notification (Android): it
+/// goes where an answer from the app would, and the open dialog closes.
+#[cfg(target_os = "android")]
+pub fn answer_from_notification(app: &AppHandle, id: String, accept: bool) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let answer = Answer {
+            accept,
+            copy: false,
+        };
+        if app.state::<AppState>().answer(&id, answer).await {
+            let _ = app.emit("request-cancelled", &id);
+        }
+    });
+}
+
 /// Unique ID of a pairing request or an incoming text (kind, device and moment).
 fn request_id(kind: &str, peer: &EndpointId) -> String {
     let nanos = std::time::SystemTime::now()
@@ -875,4 +928,30 @@ pub fn start(app: AppHandle) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A question takes one answer, from the app or from a notification,
+    /// whichever comes first; a later one finds nothing waiting.
+    #[tokio::test]
+    async fn a_question_takes_only_its_first_answer() {
+        let state = AppState::new();
+        let (tx, rx) = oneshot::channel();
+        state.pending.lock().await.insert("q1".into(), tx);
+        let first = Answer {
+            accept: true,
+            copy: false,
+        };
+        assert!(state.answer("q1", first).await);
+        assert!(
+            !state.answer("q1", Answer::default()).await,
+            "already answered"
+        );
+        assert!(!state.answer("unknown", Answer::default()).await);
+        let got = rx.await.unwrap();
+        assert!(got.accept && !got.copy);
+    }
 }

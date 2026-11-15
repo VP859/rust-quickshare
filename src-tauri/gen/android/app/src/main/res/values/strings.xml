@@ -5,6 +5,8 @@
 
     <string name="notif_channel_node">Ferry node</string>
     <string name="notif_channel_node_desc">Keeps the P2P node running so transfers continue in the background</string>
+    <string name="notif_channel_questions">Incoming files and texts</string>
+    <string name="notif_channel_questions_desc">Files and texts offered by other devices, to accept or decline</string>
     <string name="notif_node_title">Ferry is running in the background</string>
     <string name="notif_node_text">You can send and receive files</string>
     <string name="notif_action_stop">Stop</string>

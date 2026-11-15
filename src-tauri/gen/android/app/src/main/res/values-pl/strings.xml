@@ -3,6 +3,8 @@
 
     <string name="notif_channel_node">Węzeł Ferry</string>
     <string name="notif_channel_node_desc">Utrzymuje węzeł P2P aktywny, aby transfery trwały w tle</string>
+    <string name="notif_channel_questions">Przychodzące pliki i teksty</string>
+    <string name="notif_channel_questions_desc">Pliki i teksty od innych urządzeń, do przyjęcia lub odrzucenia</string>
     <string name="notif_node_title">Ferry działa w tle</string>
     <string name="notif_node_text">Możesz odbierać i wysyłać pliki</string>
     <string name="notif_action_stop">Zatrzymaj</string>

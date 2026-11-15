@@ -339,6 +339,11 @@ to this one file only. *Choose a folder* sends a whole folder with its subfolder
 picker gives Ferry access to it, and Ferry copies it into its cache first (a day later the copy is
 deleted).
 
+A file, a batch or a text offered while Ferry is in the background comes as a notification with
+**Accept** and **Decline**: it can be answered without opening Ferry (tapping the notification
+opens the question as before). Pairing requests have no buttons: their code has to be compared on
+both screens.
+
 Paired devices appear in Android's **Share** menu (Android 10 and newer): share a photo, tap
 "Laptop", and it goes there without opening Ferry first; a text opens ready to send to it. Android
 keeps the names of these devices for its share menu; unpairing a device removes it. The devices

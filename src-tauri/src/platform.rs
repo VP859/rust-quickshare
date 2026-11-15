@@ -70,7 +70,7 @@ mod imp {
     use jni::objects::{JClass, JClassLoader, JObject, JObjectArray, JString, LoaderContext};
     use jni::signature::MethodSignature;
     use jni::strings::JNIStr;
-    use jni::{Env, JValue, JValueOwned, JavaVM, jni_sig, jni_str};
+    use jni::{Env, EnvUnowned, JValue, JValueOwned, JavaVM, jni_sig, jni_str};
 
     /// Shared files older than a day are deleted at startup.
     const SHARE_RETENTION: Duration = Duration::from_secs(24 * 3600);
@@ -101,6 +101,7 @@ mod imp {
     /// `Download/Ferry`, falling back to the app's private download folder) and
     /// the gallery folder `Pictures/Ferry`, and removes stale shared files.
     pub fn init(app: &AppHandle) {
+        let _ = APP.set(app.clone());
         if let Ok(data) = app.path().app_data_dir() {
             ferry::config::paths::set_config_dir(data.join(ferry::config::paths::APP_DIR));
         }
@@ -260,27 +261,35 @@ mod imp {
     }
 
     /// Calls the static method `method` (signature `sig`) of the app class
-    /// `class` with the application context and `arg`; `read` turns the
+    /// `class` with the application context and `args`; `read` turns the
     /// returned value into the result.
     fn call_app<R>(
         class: &JNIStr,
         method: &JNIStr,
         sig: MethodSignature<'_, '_>,
-        arg: Option<Arg<'_>>,
+        args: &[Arg<'_>],
         read: impl FnOnce(&mut Env<'_>, JValueOwned<'_>) -> jni::errors::Result<R>,
     ) -> jni::errors::Result<R> {
         with_app_class(class, |env, context, class| {
-            let text = match arg {
-                Some(Arg::Text(text)) => Some(env.new_string(text)?),
-                _ => None,
-            };
-            let mut args = vec![JValue::Object(context)];
-            match (&arg, &text) {
-                (Some(Arg::Bool(value)), _) => args.push(JValue::Bool(*value)),
-                (_, Some(text)) => args.push(JValue::Object(text)),
-                _ => {}
+            // Java strings first, so the values below can borrow them.
+            let texts = args
+                .iter()
+                .map(|arg| match arg {
+                    Arg::Text(text) => env.new_string(*text).map(Some),
+                    Arg::Bool(_) => Ok(None),
+                })
+                .collect::<jni::errors::Result<Vec<_>>>()?;
+            // Never used: every text has its Java string.
+            let null = JObject::null();
+            let mut values = vec![JValue::Object(context)];
+            for (arg, text) in args.iter().zip(&texts) {
+                values.push(match (arg, text) {
+                    (Arg::Bool(value), _) => JValue::Bool(*value),
+                    (Arg::Text(_), Some(text)) => JValue::Object(text),
+                    (Arg::Text(_), None) => JValue::Object(&null),
+                });
             }
-            let value = env.call_static_method(class, method, &sig, &args)?;
+            let value = env.call_static_method(class, method, &sig, &values)?;
             read(env, value)
         })
     }
@@ -290,9 +299,9 @@ mod imp {
         class: &JNIStr,
         method: &JNIStr,
         sig: MethodSignature<'_, '_>,
-        arg: Option<Arg<'_>>,
+        args: &[Arg<'_>],
     ) -> jni::errors::Result<()> {
-        call_app(class, method, sig, arg, |_, _| Ok(()))
+        call_app(class, method, sig, args, |_, _| Ok(()))
     }
 
     /// [`call_app`] of a method returning a `String`.
@@ -300,11 +309,21 @@ mod imp {
         class: &JNIStr,
         method: &JNIStr,
         sig: MethodSignature<'_, '_>,
-        arg: Option<Arg<'_>>,
+        args: &[Arg<'_>],
     ) -> jni::errors::Result<String> {
-        call_app(class, method, sig, arg, |env, value| {
+        call_app(class, method, sig, args, |env, value| {
             env.cast_local::<JString>(value.l()?)?.try_to_string(env)
         })
+    }
+
+    /// [`call_app`] of a method returning a `boolean`.
+    fn call_app_bool(
+        class: &JNIStr,
+        method: &JNIStr,
+        sig: MethodSignature<'_, '_>,
+        args: &[Arg<'_>],
+    ) -> jni::errors::Result<bool> {
+        call_app(class, method, sig, args, |_, value| value.z())
     }
 
     /// Background limits reported by `PowerHelper.status`.
@@ -313,7 +332,7 @@ mod imp {
             jni_str!("io.github.vp859.ferry.PowerHelper"),
             jni_str!("status"),
             jni_sig!("(Landroid/content/Context;)Ljava/lang/String;"),
-            None,
+            &[],
         )
         .inspect_err(|e| warn!("Could not read the background limits: {e}"))
         .ok()?;
@@ -331,7 +350,7 @@ mod imp {
             jni_str!("io.github.vp859.ferry.FileOpener"),
             jni_str!("open"),
             jni_sig!("(Landroid/content/Context;Ljava/lang/String;)Ljava/lang/String;"),
-            Some(Arg::Text(&path.to_string_lossy())),
+            &[Arg::Text(&path.to_string_lossy())],
         )
         .map_err(|e| {
             // The Kotlin side could not be called at all (not "file missing").
@@ -351,7 +370,7 @@ mod imp {
             jni_str!("io.github.vp859.ferry.FerryPermissions"),
             jni_str!("status"),
             jni_sig!("(Landroid/content/Context;)Ljava/lang/String;"),
-            None,
+            &[],
         )
         .inspect_err(|e| warn!("Could not read the permissions: {e}"))
         .ok()?;
@@ -371,11 +390,68 @@ mod imp {
             jni_str!("io.github.vp859.ferry.FerryPermissions"),
             jni_str!("request"),
             jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
-            Some(Arg::Text(only)),
+            &[Arg::Text(only)],
         );
         if let Err(e) = result {
             warn!("Could not ask for the permissions: {e}");
         }
+    }
+
+    /// The app, for answers from the buttons of a notification (set in [`init`]).
+    static APP: std::sync::OnceLock<AppHandle> = std::sync::OnceLock::new();
+
+    /// Shows the question `id` as a notification with "Accept" and "Decline"
+    /// (`OfferActions.show`); `false` when it could not be shown.
+    pub fn show_question(id: &str, title: &str, text: &str, accept: &str, decline: &str) -> bool {
+        call_app_bool(
+            jni_str!("io.github.vp859.ferry.OfferActions"),
+            jni_str!("show"),
+            jni_sig!(
+                "(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;\
+                 Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z"
+            ),
+            &[
+                Arg::Text(id),
+                Arg::Text(title),
+                Arg::Text(text),
+                Arg::Text(accept),
+                Arg::Text(decline),
+            ],
+        )
+        .inspect_err(|e| warn!("Could not show the question: {e}"))
+        .unwrap_or(false)
+    }
+
+    /// Removes the notification of the question `id` (`OfferActions.dismiss`).
+    pub fn dismiss_question(id: &str) {
+        if let Err(e) = call_app_void(
+            jni_str!("io.github.vp859.ferry.OfferActions"),
+            jni_str!("dismiss"),
+            jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
+            &[Arg::Text(id)],
+        ) {
+            warn!("Could not remove the question: {e}");
+        }
+    }
+
+    /// `OfferActions.answer`: a button of a question's notification was
+    /// pressed; the answer goes where an answer in the app would.
+    #[allow(unsafe_code)]
+    #[unsafe(no_mangle)]
+    pub extern "system" fn Java_io_github_vp859_ferry_OfferActions_answer<'caller>(
+        mut env: EnvUnowned<'caller>,
+        _class: JClass<'caller>,
+        id: JString<'caller>,
+        accept: jni::sys::jboolean,
+    ) {
+        env.with_env(|env| -> jni::errors::Result<()> {
+            let id = id.try_to_string(env)?;
+            if let Some(app) = APP.get() {
+                crate::node::answer_from_notification(app, id, accept);
+            }
+            Ok(())
+        })
+        .resolve::<jni::errors::ThrowRuntimeExAndDefault>();
     }
 
     /// Starts Ferry again in a new process (`Restarter.restart`).
@@ -384,7 +460,7 @@ mod imp {
             jni_str!("io.github.vp859.ferry.Restarter"),
             jni_str!("restart"),
             jni_sig!("(Landroid/content/Context;)V"),
-            None,
+            &[],
         );
         if let Err(e) = result {
             warn!("Could not restart: {e}");
@@ -397,7 +473,7 @@ mod imp {
             jni_str!("io.github.vp859.ferry.PowerHelper"),
             jni_str!("openAppSettings"),
             jni_sig!("(Landroid/content/Context;)V"),
-            None,
+            &[],
         );
         if let Err(e) = result {
             warn!("Could not open the app settings: {e}");
@@ -410,7 +486,7 @@ mod imp {
             jni_str!("io.github.vp859.ferry.FerryService"),
             jni_str!("setTransfersActive"),
             jni_sig!("(Landroid/content/Context;Z)V"),
-            Some(Arg::Bool(active)),
+            &[Arg::Bool(active)],
         );
         if let Err(e) = result {
             warn!("Could not update the transfer locks: {e}");
@@ -484,7 +560,7 @@ mod imp {
             jni_str!("io.github.vp859.ferry.FolderIntake"),
             jni_str!("pick"),
             jni_sig!("(Landroid/content/Context;)V"),
-            None,
+            &[],
         );
         if let Err(e) = result {
             warn!("Could not show the folder picker: {e}");
@@ -542,7 +618,7 @@ mod imp {
             jni_str!("io.github.vp859.ferry.ShareTargets"),
             jni_str!("update"),
             jni_sig!("(Landroid/content/Context;Ljava/lang/String;)V"),
-            Some(Arg::Text(&json)),
+            &[Arg::Text(&json)],
         );
         if let Err(e) = result {
             warn!("Could not update the share targets: {e}");
@@ -598,6 +674,20 @@ mod imp {
     /// There is no "Share" menu on desktop.
     pub fn set_share_targets(_devices: &[(String, String)]) {}
 
+    /// Desktop notifications have no buttons here: the dialog asks.
+    pub fn show_question(
+        _id: &str,
+        _title: &str,
+        _text: &str,
+        _accept: &str,
+        _decline: &str,
+    ) -> bool {
+        false
+    }
+
+    /// See [`show_question`].
+    pub fn dismiss_question(_id: &str) {}
+
     /// Desktop systems do not limit the app in the background.
     pub fn background_status() -> Option<super::BackgroundStatus> {
         None
@@ -644,6 +734,18 @@ pub fn take_picked_folder(app: &AppHandle) -> Option<String> {
 /// files or text (Direct Share); `None` when Ferry itself was chosen.
 pub fn take_share_target(app: &AppHandle) -> Option<String> {
     imp::take_share_target(app)
+}
+
+/// Shows the question `id` (an offered file or text) as a notification with
+/// "Accept" and "Decline" that answer it without opening Ferry (Android);
+/// `false` when there is none (desktop, or notifications not allowed).
+pub fn show_question(id: &str, title: &str, text: &str, accept: &str, decline: &str) -> bool {
+    imp::show_question(id, title, text, accept, decline)
+}
+
+/// Removes the notification of the question `id` once it is answered or expired.
+pub fn dismiss_question(id: &str) {
+    imp::dismiss_question(id);
 }
 
 /// Makes the paired devices (`(Node ID, alias)`) the Direct Share targets of

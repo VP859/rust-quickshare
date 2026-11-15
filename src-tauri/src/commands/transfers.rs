@@ -239,12 +239,11 @@ pub async fn respond_to_offer(
     copy: Option<bool>,
     state: State<'_, AppState>,
 ) -> CmdResult<()> {
-    if let Some(tx) = state.pending.lock().await.remove(&transfer_id) {
-        let _ = tx.send(crate::node::Answer {
-            accept,
-            copy: copy.unwrap_or(false),
-        });
-    }
+    let answer = crate::node::Answer {
+        accept,
+        copy: copy.unwrap_or(false),
+    };
+    state.answer(&transfer_id, answer).await;
     Ok(())
 }
 

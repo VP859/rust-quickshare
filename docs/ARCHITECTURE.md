@@ -90,6 +90,9 @@ recipient.
 * `ShareIntake.kt` – copies shared `content://` files into the app cache,
 * `ShareTargets.kt` – paired devices as Direct Share targets of the "Share" menu (long-lived
   dynamic shortcuts, `res/xml/shortcuts.xml`), updated whenever the frontend reads the devices,
+* `OfferActions.kt` – a question (file, batch, text) as a notification with "Accept" and
+  "Decline"; the buttons answer through the native `OfferActions.answer` into the same queue as
+  the dialog in the app,
 * `Restarter.kt` – "Restart now": starts `MainActivity` in a new task and ends the process,
 * `FolderIntake.kt` – a folder to send: the system folder picker (`ACTION_OPEN_DOCUMENT_TREE`)
   and a copy of the tree into the app cache through `DocumentsContract`, since Rust reads only

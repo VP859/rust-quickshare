@@ -77,6 +77,11 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
+        <!-- "Accept" / "Decline" on the notification of an incoming offer -->
+        <receiver
+            android:name=".OfferActionReceiver"
+            android:exported="false" />
+
         <service
             android:name=".FerryService"
             android:exported="false"
