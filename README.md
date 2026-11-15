@@ -340,7 +340,8 @@ deleted).
 
 Paired devices appear in Android's **Share** menu (Android 10 and newer): share a photo, tap
 "Laptop", and it goes there without opening Ferry first; a text opens ready to send to it. Android
-keeps the names of these devices for its share menu; unpairing a device removes it.
+keeps the names of these devices for its share menu; unpairing a device removes it. The devices
+used most recently come first (from the transfer history; with the history turned off, by name).
 Ferry's data is excluded from Android backups. To move to a new phone, make a **device backup**
 (*Settings → Privacy → Device backup*: the key and the paired devices, encrypted with a password,
 saved in `Download/Ferry`) and restore it there – the paired devices recognise the new phone

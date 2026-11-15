@@ -728,6 +728,24 @@ impl TransferHandler for GuiHandler {
         crate::platform::finalize_download(&self.app, &mut event);
         self.state().record_download(&event);
         self.state().track_transfer(&event);
+        // The share menu lists the most recently used devices first (the
+        // history already has this transfer).
+        #[cfg(target_os = "android")]
+        if event.status.is_final() {
+            let app = self.app.clone();
+            tauri::async_runtime::spawn(async move {
+                let devices: Vec<_> = app
+                    .state::<AppState>()
+                    .config
+                    .lock()
+                    .await
+                    .peers
+                    .iter()
+                    .map(|(id, p)| (id.clone(), p.alias.clone()))
+                    .collect();
+                crate::platform::set_share_targets(&devices);
+            });
+        }
         if event.direction == Direction::Download
             && let TransferStatus::Completed { .. } = event.status
         {

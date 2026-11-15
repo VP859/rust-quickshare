@@ -517,9 +517,11 @@ mod imp {
     /// sent again (the frontend reads the devices often).
     static SHARE_TARGETS: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
 
-    /// Makes the paired devices (`(Node ID, alias)`, most important first)
-    /// the Direct Share targets of the "Share" menu (`ShareTargets.update`).
+    /// Makes the paired devices (`(Node ID, alias)`) the Direct Share targets
+    /// of the "Share" menu (`ShareTargets.update`), the most recently used
+    /// first (Android shows only the first few).
     pub fn set_share_targets(devices: &[(String, String)]) {
+        let devices = super::share_target_order(devices, &ferry::history::last_used());
         let json = serde_json::Value::Array(
             devices
                 .iter()
@@ -645,9 +647,27 @@ pub fn take_share_target(app: &AppHandle) -> Option<String> {
 }
 
 /// Makes the paired devices (`(Node ID, alias)`) the Direct Share targets of
-/// the Android "Share" menu (no-op on desktop).
+/// the Android "Share" menu, the most recently used first (no-op on desktop).
 pub fn set_share_targets(devices: &[(String, String)]) {
     imp::set_share_targets(devices);
+}
+
+/// `devices` (`(Node ID, alias)`) for the share menu: those used most recently
+/// first (`last_used`, from the history), the others after them by name.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+fn share_target_order(
+    devices: &[(String, String)],
+    last_used: &std::collections::HashMap<String, chrono::DateTime<chrono::Utc>>,
+) -> Vec<(String, String)> {
+    let mut ordered = devices.to_vec();
+    ordered.sort_by(|(a_id, a_name), (b_id, b_name)| {
+        // Newer first; never used (None) after every used one.
+        last_used
+            .get(b_id)
+            .cmp(&last_used.get(a_id))
+            .then_with(|| a_name.to_lowercase().cmp(&b_name.to_lowercase()))
+    });
+    ordered
 }
 
 /// Opens a received file in the app for its type (on Android through a
@@ -712,4 +732,39 @@ pub fn set_transfers_active(active: bool) {
 /// Turns a path or a `content://` URI from the frontend into a local file path.
 pub async fn local_path(app: &AppHandle, input: &str) -> Result<std::path::PathBuf, String> {
     imp::local_path(app, input).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{TimeZone, Utc};
+    use std::collections::HashMap;
+
+    fn device(id: &str, name: &str) -> (String, String) {
+        (id.to_string(), name.to_string())
+    }
+
+    #[test]
+    fn the_share_menu_lists_the_most_recently_used_devices_first() {
+        let devices = [
+            device("a", "Laptop"),
+            device("b", "tablet"),
+            device("c", "Phone"),
+            device("d", "Desktop"),
+        ];
+        let at = |hour| Utc.with_ymd_and_hms(2026, 11, 15, hour, 0, 0).unwrap();
+        let used = HashMap::from([("c".to_string(), at(9)), ("b".to_string(), at(12))]);
+        let names: Vec<_> = share_target_order(&devices, &used)
+            .into_iter()
+            .map(|(_, name)| name)
+            .collect();
+        // Used: the tablet (12:00), then the phone (9:00); the rest by name.
+        assert_eq!(names, ["tablet", "Phone", "Desktop", "Laptop"]);
+        // Without a history (turned off) the order is by name.
+        let names: Vec<_> = share_target_order(&devices, &HashMap::new())
+            .into_iter()
+            .map(|(_, name)| name)
+            .collect();
+        assert_eq!(names, ["Desktop", "Laptop", "Phone", "tablet"]);
+    }
 }

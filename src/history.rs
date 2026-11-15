@@ -277,6 +277,26 @@ pub fn append(path: &Path, entry: &HistoryEntry) -> Result<()> {
     Ok(())
 }
 
+/// When each device was last used – a file or text sent to it or received
+/// from it – keyed by the peer as recorded (the Node ID for Ferry devices).
+/// Empty while the history is turned off: then nothing is kept to look at.
+pub fn last_used() -> std::collections::HashMap<String, DateTime<Utc>> {
+    target()
+        .clone()
+        .map(|path| last_used_in(&path))
+        .unwrap_or_default()
+}
+
+/// [`last_used`] from the history file `path`.
+fn last_used_in(path: &Path) -> std::collections::HashMap<String, DateTime<Utc>> {
+    let mut last = std::collections::HashMap::new();
+    // Newest first: the first entry of a device is its latest use.
+    for entry in load(path).unwrap_or_default() {
+        last.entry(entry.peer).or_insert(entry.time);
+    }
+    last
+}
+
 /// The transfers in `path`, newest first; a missing file is an empty history
 /// and damaged lines are skipped.
 ///
@@ -323,6 +343,25 @@ pub fn clear(path: &Path) -> Result<()> {
 mod tests {
     use super::*;
     use crate::transfer::service::TransferEvent;
+
+    #[test]
+    fn the_last_use_of_each_device_is_its_newest_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(FILE_NAME);
+        let at = |minute: i64| DateTime::from_timestamp(1_800_000_000 + minute * 60, 0).unwrap();
+        for (peer, minute) in [("laptop", 1), ("phone", 2), ("laptop", 3)] {
+            let mut entry =
+                HistoryEntry::from_event(&event("a.jpg", TransferStatus::Cancelled)).unwrap();
+            entry.peer = peer.into();
+            entry.time = at(minute);
+            append(&path, &entry).unwrap();
+        }
+        let last = last_used_in(&path);
+        assert_eq!(last.len(), 2);
+        assert_eq!(last["laptop"], at(3));
+        assert_eq!(last["phone"], at(2));
+        assert!(last_used_in(&dir.path().join("missing")).is_empty());
+    }
 
     fn event(name: &str, status: TransferStatus) -> TransferEvent {
         TransferEvent {
