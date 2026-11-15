@@ -137,9 +137,15 @@ function onTextReceived(x) {
   toast(x.copied ? t('text_received_toast', { name: label }) : t('text_not_copied'), !x.copied);
 }
 
+/** Shows a text received this session again in a window loaded anew (without a toast). */
+export function restoreText(x) {
+  addTextRow({ dir: 'download', text: x.text, label: x.alias ?? shortId(x.peer), state: 'done', copied: x.copied });
+}
+
 /** Subscribes to incoming texts. */
 export async function listenTexts() {
   await listen('incoming-text', ({ payload }) => {
+    if (textRequests.some(r => r.id === payload.id)) return;
     textRequests.push(payload);
     if (textRequests.length === 1) showNextTextRequest();
     else $('text-in-queue').textContent = t('queued', { n: textRequests.length - 1 });

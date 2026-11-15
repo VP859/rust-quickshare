@@ -709,8 +709,13 @@ mod imp {
     /// Only Android has the app info screen with battery settings.
     pub fn open_app_settings() {}
 
-    /// Desktop systems do not suspend a running transfer.
-    pub fn set_transfers_active(_active: bool) {}
+    /// Desktop systems do not suspend a running transfer; after the last one
+    /// the memory of its buffers is given back (see [`super::release_memory_later`]).
+    pub fn set_transfers_active(active: bool) {
+        if !active {
+            super::release_memory_later();
+        }
+    }
 }
 
 /// Sets platform-specific directories; called before the configuration is loaded.
@@ -829,6 +834,34 @@ pub fn open_app_settings() {
 /// while they do (no-op on desktop).
 pub fn set_transfers_active(active: bool) {
     imp::set_transfers_active(active);
+}
+
+/// Gives memory freed by Ferry back to the system a few seconds from now
+/// (after the window was unloaded or the last transfer ended, once their
+/// memory is actually freed). glibc keeps freed memory in its arenas for
+/// reuse, so without this the process would not shrink; other platforms and
+/// C libraries return it themselves.
+#[cfg(desktop)]
+pub fn release_memory_later() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    tauri::async_runtime::spawn(async {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        trim::malloc_trim();
+    });
+}
+
+/// `malloc_trim` of glibc.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod trim {
+    /// Returns the free memory of all glibc arenas to the system.
+    #[allow(unsafe_code)]
+    pub fn malloc_trim() {
+        // SAFETY: malloc_trim only releases free pages of the allocator's own
+        // arenas; it takes no pointers and is thread-safe.
+        unsafe {
+            libc::malloc_trim(0);
+        }
+    }
 }
 
 /// Turns a path or a `content://` URI from the frontend into a local file path.

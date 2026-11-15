@@ -140,6 +140,7 @@ ferry completions zsh > ~/.zfunc/_ferry # Tab completion (packages install it al
 | Auto-accept programs and scripts from Auto-Accept devices | `auto-accept-executables true` | `false` (they ask) |
 | Copy texts from Auto-Accept devices without asking | `auto-accept-texts true` | `false` |
 | Desktop app quits when its window is closed | `quit-on-close true` | `false` (keeps running in the tray) |
+| Desktop app keeps its hidden window loaded (opens faster, uses more memory) | `keep-window-loaded true` | `false` (the window is unloaded in the tray) |
 | Receive from LocalSend apps (iPhone, Mac) | `localsend true` | `false` |
 | Speed limit (per second, sending and receiving separately) | `speed-limit 2M` | `off` |
 | Keep a history of transfers | `history false` | `true` |
@@ -182,7 +183,10 @@ A daemon without a terminal accepts files **only** from devices with Auto-Accept
 has its own *Start at login* switch; its tray menu can also send the clipboard (*Send the
 clipboard…* opens the text, ready for a device). Closing its window keeps it running in the system tray, or
 quits it if you choose so in *Settings → Receiving*; starting Ferry again always brings back the
-running window instead of opening a second one.
+running window instead of opening a second one. In the tray the window is unloaded – its web view is
+most of the memory the app uses, and receiving does not need it – and loaded again, with the transfers
+and the waiting questions, when you open it; *Keep running in the background, window ready* keeps it
+loaded instead.
 
 ## Network modes
 

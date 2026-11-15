@@ -158,6 +158,7 @@ export async function listenNearbyAndPairing() {
     renderNearby();
   });
   await listen('pair-request', ({ payload }) => {
+    if (pairRequests.some(r => r.id === payload.id)) return;
     pairRequests.push(payload);
     if (pairRequests.length === 1) showNextPairRequest();
     else $('pair-req-queue').textContent = t('queued', { n: pairRequests.length - 1 });

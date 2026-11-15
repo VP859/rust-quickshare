@@ -223,7 +223,7 @@ $('btn-settings').onclick = async () => {
   await loadSpeedLimit();
   await loadKeyStorage();
   if (!isMobile) { try { $('autostart').checked = await invoke('plugin:autostart|is_enabled'); } catch {} }
-  if (!isMobile) { try { $('close-action').value = (await invoke('get_quit_on_close')) ? 'quit' : 'tray'; } catch {} }
+  if (!isMobile) { try { $('close-action').value = closeAction = await invoke('get_close_action'); } catch {} }
   open('modal-settings');
 };
 // Android only: what may pause Ferry in the background, with a way to the
@@ -243,9 +243,11 @@ async function loadBackgroundStatus() {
 }
 $('btn-app-settings').onclick = () => invoke('open_app_settings').catch(fail);
 $('mode-pill').onclick = () => $('btn-settings').click();
+/** The saved close action, restored in the list when saving a new one fails. */
+let closeAction = 'tray';
 $('close-action').onchange = async (e) => {
-  try { await invoke('set_quit_on_close', { quit: e.target.value === 'quit' }); }
-  catch (err) { fail(err); e.target.value = e.target.value === 'quit' ? 'tray' : 'quit'; }
+  try { await invoke('set_close_action', { action: e.target.value }); closeAction = e.target.value; }
+  catch (err) { fail(err); e.target.value = closeAction; }
 };
 $('btn-device-name-save').onclick = async () => {
   try { $('device-name').value = await invoke('set_device_name', { name: $('device-name').value }); toast(t('name_saved')); }

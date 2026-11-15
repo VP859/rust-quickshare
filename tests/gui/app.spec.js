@@ -162,7 +162,9 @@ test('the close action is saved on the desktop', async ({ app }, info) => {
   test.skip(info.project.name !== 'desktop', 'the window close setting exists only on the desktop');
   await app.locator('#btn-settings').click();
   await app.locator('#close-action').selectOption('quit');
-  expect(await calls(app)).toContainEqual(['set_quit_on_close', { quit: true }]);
+  expect(await calls(app)).toContainEqual(['set_close_action', { action: 'quit' }]);
+  await app.locator('#close-action').selectOption('tray_loaded');
+  expect(await calls(app)).toContainEqual(['set_close_action', { action: 'tray_loaded' }]);
 });
 
 test('dialogs keep the keyboard focus and give it back when closed', async ({ app }, info) => {
@@ -218,6 +220,25 @@ test('an offer for a program carries a warning, a photo does not', async ({ app 
   await emit(app, 'incoming-offer', offer('holiday.jpg', null));
   await expect(app.locator('#offer-file')).toHaveText('holiday.jpg');
   await expect(app.locator('#offer-risk')).toBeHidden();
+});
+
+test.describe('a window loaded again', () => {
+  test.use({ responses: { resume_ui: {
+    transfers: [transfer({ kind: 'completed', path: '/home/me/Downloads/photo.jpg' }, { direction: 'download', done: 2_000_000 })],
+    texts: [{ peer: PEER, alias: 'Laptop', text: 'see you at 5', copied: true }],
+  } } });
+
+  test('shows the transfers and texts of the session, and a question only once', async ({ app }) => {
+    const list = app.locator('#transfers');
+    await expect(list).toContainText('photo.jpg');
+    await expect(list).toContainText('see you at 5');
+    // The backend emits a waiting question again for the new window.
+    const offer = { id: 'o1', peer: PEER, alias: 'Laptop', file_name: 'a.pdf', size: 1000, count: 1, names: [], risk: null };
+    await emit(app, 'incoming-offer', offer);
+    await emit(app, 'incoming-offer', offer);
+    await expect(app.locator('#modal-offer')).toHaveClass(/active/);
+    await expect(app.locator('#offer-queue')).toHaveText('');
+  });
 });
 
 test('the safety number of a trusted device can be compared and confirmed', async ({ app }) => {

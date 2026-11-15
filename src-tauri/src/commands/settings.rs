@@ -31,30 +31,46 @@ pub async fn set_speed_limit(value: String, state: State<'_, AppState>) -> CmdRe
     Ok(limit)
 }
 
-/// What closing the main window does (desktop): `true` quits Ferry, `false`
-/// keeps it running in the system tray.
+/// What closing the main window does (desktop): `quit` quits Ferry, `tray`
+/// keeps it receiving in the system tray with the window unloaded (less
+/// memory), `tray_loaded` keeps the hidden window loaded (opens faster).
 ///
 /// # Errors
 ///
 /// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
 #[tauri::command]
-pub async fn get_quit_on_close(state: State<'_, AppState>) -> CmdResult<bool> {
-    Ok(state.config.lock().await.quit_on_close)
+pub async fn get_close_action(state: State<'_, AppState>) -> CmdResult<&'static str> {
+    let config = state.config.lock().await;
+    Ok(if config.quit_on_close {
+        "quit"
+    } else if config.keep_window_loaded {
+        "tray_loaded"
+    } else {
+        "tray"
+    })
 }
 
-/// Saves what closing the main window does; applies immediately.
+/// Saves what closing the main window does (see [`get_close_action`]);
+/// applies immediately.
 ///
 /// # Errors
 ///
-/// When the configuration cannot be saved.
+/// When `action` is unknown or the configuration cannot be saved.
 #[tauri::command]
-pub async fn set_quit_on_close(quit: bool, state: State<'_, AppState>) -> CmdResult<()> {
+pub async fn set_close_action(action: String, state: State<'_, AppState>) -> CmdResult<()> {
+    use std::sync::atomic::Ordering;
+    let (quit, keep) = match action.as_str() {
+        "quit" => (true, false),
+        "tray" => (false, false),
+        "tray_loaded" => (false, true),
+        _ => return Err(format!("unknown close action: {action}")),
+    };
     let mut config = state.config.lock().await;
     config.quit_on_close = quit;
+    config.keep_window_loaded = keep;
     config.save().map_err(err)?;
-    state
-        .quit_on_close
-        .store(quit, std::sync::atomic::Ordering::Relaxed);
+    state.quit_on_close.store(quit, Ordering::Relaxed);
+    state.keep_window_loaded.store(keep, Ordering::Relaxed);
     Ok(())
 }
 

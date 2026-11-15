@@ -195,11 +195,19 @@ export function rerenderTransfers() {
   if (offers.length) showNextOffer();
 }
 
+/** Shows a transfer of this session again in a window loaded anew (no speed, no announcement). */
+export function restoreTransfer(ev) {
+  renderTransfer(ev);
+  renderNoTransfers();
+}
+
 /** Subscribes to transfer events and incoming offers. */
 export async function listenTransfers() {
   await listen('transfer', ({ payload }) => renderTransfer(payload, true));
   await listen('transfer-error', ({ payload }) => fail(payload.message));
   await listen('incoming-offer', ({ payload }) => {
+    // A window loaded again gets the waiting questions once more (resume_ui).
+    if (offers.some(o => o.id === payload.id)) return;
     offers.push(payload);
     if (offers.length === 1) showNextOffer();
     else $('offer-queue').textContent = t('queued', { n: offers.length - 1 });

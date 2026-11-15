@@ -50,6 +50,15 @@ pub struct LanguageInfo {
     pub available: Vec<LanguageOption>,
 }
 
+/// Called by a window once it has loaded and subscribed to the events: the
+/// transfers and texts of this session, while the questions still waiting
+/// (and events held back for it) are emitted again. On desktop the window is
+/// unloaded while hidden in the tray, so it starts empty when opened again.
+#[tauri::command]
+pub fn resume_ui(app: AppHandle, state: State<'_, AppState>) -> crate::node::UiSnapshot {
+    state.snapshot(&app)
+}
+
 /// Node ID, TICKET (with QR code) and download folder of this device.
 ///
 /// # Errors
@@ -228,6 +237,10 @@ pub fn load_config(app: &AppHandle) {
     state
         .quit_on_close
         .store(config.quit_on_close, std::sync::atomic::Ordering::Relaxed);
+    state.keep_window_loaded.store(
+        config.keep_window_loaded,
+        std::sync::atomic::Ordering::Relaxed,
+    );
     tauri::async_runtime::block_on(async {
         *state.config.lock().await = config;
     });

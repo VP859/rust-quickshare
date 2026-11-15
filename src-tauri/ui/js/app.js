@@ -27,8 +27,8 @@ import { chooseRecipient, sendFiles, setupDragDrop } from './send.js';
 import { loadAppInfo, loadLanguage, loadNetwork, loadPrivacy, onLanguageChange, renderNetwork } from './settings.js';
 import { state } from './state.js';
 import { invoke, isMobile, listen } from './tauri.js';
-import { composeText, listenTexts, showNextTextRequest, textRequests } from './texts.js';
-import { listenTransfers, offers, renderNoTransfers, rerenderTransfers, showNextOffer } from './transfers.js';
+import { composeText, listenTexts, restoreText, showNextTextRequest, textRequests } from './texts.js';
+import { listenTransfers, offers, renderNoTransfers, rerenderTransfers, restoreTransfer, showNextOffer } from './transfers.js';
 
 if (isMobile) document.body.classList.add('mobile');
 
@@ -119,4 +119,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     else toast(t('clipboard_empty'), true);
   });
   checkSharedFiles();
+  // On the desktop the window is unloaded while hidden in the tray: what
+  // happened meanwhile, and the questions still waiting, come back now.
+  try {
+    const session = await invoke('resume_ui');
+    for (const ev of session.transfers) restoreTransfer(ev);
+    for (const x of session.texts) restoreText(x);
+  } catch (e) { console.warn('Session:', e); }
 });

@@ -234,6 +234,8 @@ pub enum SettingKey {
     AutoAcceptExecutables,
     /// Desktop app: quit when the window is closed instead of staying in the tray (`true`/`false`).
     QuitOnClose,
+    /// Desktop app: keep the window loaded while it is hidden in the tray – it opens faster, but uses more memory (`true`/`false`).
+    KeepWindowLoaded,
     /// Relays of the `relay` and `relay-only` network modes, separated by commas (`https://relay.example.org`).
     RelayUrls,
     /// Keep a history of transfers (`true`/`false`).

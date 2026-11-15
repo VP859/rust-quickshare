@@ -124,6 +124,12 @@ pub struct Config {
     /// running in the system tray.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub quit_on_close: bool,
+    /// Desktop app: a window hidden in the tray stays loaded, so it opens
+    /// instantly. Off by default: the window is unloaded, which frees the
+    /// memory of its web view (most of what Ferry uses) and keeps only the
+    /// node receiving in the background.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub keep_window_loaded: bool,
     /// LocalSend compatibility mode ([`crate::localsend`]): receive files from
     /// LocalSend apps (iPhone, Mac, …). Off by default: senders are not
     /// authenticated.
