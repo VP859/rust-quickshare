@@ -168,6 +168,14 @@ pub enum Commands {
         #[command(subcommand)]
         command: Option<ConfigCommands>,
     },
+    /// Back up this device (its key and paired devices, encrypted with a
+    /// password) or restore such a backup – the same file as in the desktop
+    /// and Android app.
+    Backup {
+        /// Backup subcommand.
+        #[command(subcommand)]
+        command: BackupCommands,
+    },
     /// Show, back up or restore this device's identity (its Node ID key).
     Identity {
         /// Identity subcommand (default: `show`).
@@ -285,6 +293,24 @@ pub enum IdentityCommands {
         /// Replace an existing, different key (it is kept as a `.bak` file).
         #[arg(long)]
         force: bool,
+    },
+}
+
+/// Subcommands of `ferry backup`.
+#[derive(Subcommand, Debug)]
+pub enum BackupCommands {
+    /// Write a backup of the key, the name and the paired devices, encrypted
+    /// with a password (asked for; from standard input when it is not a terminal).
+    Create {
+        /// File to create; an existing file is never overwritten.
+        file: PathBuf,
+    },
+    /// Restore a backup made here, in the desktop app or on Android: its key
+    /// replaces this device's key (kept as a `.bak` file) and its paired
+    /// devices are added.
+    Restore {
+        /// Backup file (`.ferry-backup`).
+        file: PathBuf,
     },
 }
 

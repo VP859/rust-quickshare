@@ -1,0 +1,19 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-backup-create 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-backup\-create \- Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)
+.SH SYNOPSIS
+\fBferry backup create\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIFILE\fR> 
+.SH DESCRIPTION
+Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.TP
+<\fIFILE\fR>
+File to create; an existing file is never overwritten

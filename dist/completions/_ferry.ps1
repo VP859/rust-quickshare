@@ -43,6 +43,7 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             [CompletionResult]::new('network', 'network', [CompletionResultType]::ParameterValue, 'Show or change the network mode: `local` (no external servers, default), `internet` (also through the free public iroh relays, for devices in different networks), `relay` (also through your own relays) or `relay-only` (only through your own relays, never directly)')
             [CompletionResult]::new('peer', 'peer', [CompletionResultType]::ParameterValue, 'Manage trusted devices')
             [CompletionResult]::new('config', 'config', [CompletionResultType]::ParameterValue, 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)')
+            [CompletionResult]::new('backup', 'backup', [CompletionResultType]::ParameterValue, 'Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app')
             [CompletionResult]::new('identity', 'identity', [CompletionResultType]::ParameterValue, 'Show, back up or restore this device''s identity (its Node ID key)')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Network and configuration diagnostics')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Print the shell completion script, e.g. `ferry completions bash > ~/.local/share/bash-completion/completions/ferry` (packages install it already)')
@@ -368,6 +369,42 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
         'ferry;config;help;help' {
             break
         }
+        'ferry;backup' {
+            [CompletionResult]::new('--lang', '--lang', [CompletionResultType]::ParameterName, 'Interface language for this run (`en`, `pl`); overrides the saved setting')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('create', 'create', [CompletionResultType]::ParameterValue, 'Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)')
+            [CompletionResult]::new('restore', 'restore', [CompletionResultType]::ParameterValue, 'Restore a backup made here, in the desktop app or on Android: its key replaces this device''s key (kept as a `.bak` file) and its paired devices are added')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'ferry;backup;create' {
+            [CompletionResult]::new('--lang', '--lang', [CompletionResultType]::ParameterName, 'Interface language for this run (`en`, `pl`); overrides the saved setting')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'ferry;backup;restore' {
+            [CompletionResult]::new('--lang', '--lang', [CompletionResultType]::ParameterName, 'Interface language for this run (`en`, `pl`); overrides the saved setting')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'ferry;backup;help' {
+            [CompletionResult]::new('create', 'create', [CompletionResultType]::ParameterValue, 'Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)')
+            [CompletionResult]::new('restore', 'restore', [CompletionResultType]::ParameterValue, 'Restore a backup made here, in the desktop app or on Android: its key replaces this device''s key (kept as a `.bak` file) and its paired devices are added')
+            [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
+            break
+        }
+        'ferry;backup;help;create' {
+            break
+        }
+        'ferry;backup;help;restore' {
+            break
+        }
+        'ferry;backup;help;help' {
+            break
+        }
         'ferry;identity' {
             [CompletionResult]::new('--lang', '--lang', [CompletionResultType]::ParameterName, 'Interface language for this run (`en`, `pl`); overrides the saved setting')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -465,6 +502,7 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             [CompletionResult]::new('network', 'network', [CompletionResultType]::ParameterValue, 'Show or change the network mode: `local` (no external servers, default), `internet` (also through the free public iroh relays, for devices in different networks), `relay` (also through your own relays) or `relay-only` (only through your own relays, never directly)')
             [CompletionResult]::new('peer', 'peer', [CompletionResultType]::ParameterValue, 'Manage trusted devices')
             [CompletionResult]::new('config', 'config', [CompletionResultType]::ParameterValue, 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)')
+            [CompletionResult]::new('backup', 'backup', [CompletionResultType]::ParameterValue, 'Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app')
             [CompletionResult]::new('identity', 'identity', [CompletionResultType]::ParameterValue, 'Show, back up or restore this device''s identity (its Node ID key)')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Network and configuration diagnostics')
             [CompletionResult]::new('completions', 'completions', [CompletionResultType]::ParameterValue, 'Print the shell completion script, e.g. `ferry completions bash > ~/.local/share/bash-completion/completions/ferry` (packages install it already)')
@@ -579,6 +617,17 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             break
         }
         'ferry;help;config;path' {
+            break
+        }
+        'ferry;help;backup' {
+            [CompletionResult]::new('create', 'create', [CompletionResultType]::ParameterValue, 'Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)')
+            [CompletionResult]::new('restore', 'restore', [CompletionResultType]::ParameterValue, 'Restore a backup made here, in the desktop app or on Android: its key replaces this device''s key (kept as a `.bak` file) and its paired devices are added')
+            break
+        }
+        'ferry;help;backup;create' {
+            break
+        }
+        'ferry;help;backup;restore' {
             break
         }
         'ferry;help;identity' {

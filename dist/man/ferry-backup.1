@@ -1,0 +1,23 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-backup 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-backup \- Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app
+.SH SYNOPSIS
+\fBferry backup\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fIsubcommands\fR>
+.SH DESCRIPTION
+Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help
+.SH SUBCOMMANDS
+.TP
+ferry\-backup\-create(1)
+Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)
+.TP
+ferry\-backup\-restore(1)
+Restore a backup made here, in the desktop app or on Android: its key replaces this device\*(Aqs key (kept as a `.bak` file) and its paired devices are added

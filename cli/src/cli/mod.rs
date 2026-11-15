@@ -1,6 +1,7 @@
 //! The `ferry` command line interface.
 
 pub mod args;
+pub mod backup_cmd;
 pub mod display;
 pub mod docs_cmd;
 pub mod guide_cmd;

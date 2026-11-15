@@ -84,6 +84,7 @@ async fn main() -> Result<()> {
         Commands::Network { mode, relays } => run_network(mode.as_deref(), &relays)?,
         Commands::Peer { command } => handle_peer_cmd(command).await?,
         Commands::Config { command } => run_config(command)?,
+        Commands::Backup { command } => cli::backup_cmd::run(command)?,
         Commands::Identity { command } => run_identity(command)?,
         Commands::Completions { shell } => cli::docs_cmd::print_completions(shell)?,
         Commands::GenerateDocs { dir } => cli::docs_cmd::generate_docs(&dir)?,

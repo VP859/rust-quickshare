@@ -118,7 +118,8 @@ ferry web photo.jpg                     # link + QR code for a browser: download
 ferry receive <TICKET> ~/Downloads      # download a shared file
 ferry config                            # all settings (also: get, set, unset, path)
 ferry config set hidden true            # hide this device from unpaired devices
-ferry identity export ~/ferry-key.txt   # back up the device key (keep it secret)
+ferry backup create phone.ferry-backup  # key and paired devices, encrypted with a password
+ferry backup restore phone.ferry-backup # also a backup made in the desktop app or on Android
 ferry doctor                            # network and discovery diagnostics
 ferry completions zsh > ~/.zfunc/_ferry # Tab completion (packages install it already); man ferry-send
 ```
@@ -410,8 +411,11 @@ file again continues where it stopped. A broken connection is retried automatica
 everyone else needs your confirmation, and programs and scripts always ask, even from Auto-Accept
 devices.
 
-**How do I move Ferry to a new computer and keep my pairings?** `ferry identity export FILE` on the
-old one, `ferry identity import FILE` on the new one. Keep the file secret.
+**How do I move Ferry to a new computer or phone and keep my pairings?** Make a device backup on
+the old one (*Settings → Privacy → Device backup*, or `ferry backup create FILE`) and restore it on
+the new one (*Restore…* or `ferry backup restore FILE`): the key and the paired devices, encrypted
+with your password; the format is the same in the app and the CLI. (`ferry identity export` saves
+only the key, unencrypted.)
 
 **Where is my data stored?** In `~/.config/ferry` (Linux), `%APPDATA%\ferry` (Windows) or the app's
 private storage (Android): the device key (optionally in the system keyring), the configuration and,

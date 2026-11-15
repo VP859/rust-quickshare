@@ -1471,3 +1471,30 @@ backup.damaged:
 backup.wrong_password:
   en: "Wrong password, or the backup is damaged"
   pl: "Złe hasło albo uszkodzona kopia zapasowa"
+backup_cli.password_new:
+  en: "Password for the backup (at least 8 characters): "
+  pl: "Hasło do kopii (co najmniej 8 znaków): "
+backup_cli.password_again:
+  en: "The same password again: "
+  pl: "Powtórz hasło: "
+backup_cli.password:
+  en: "Password of the backup: "
+  pl: "Hasło kopii: "
+backup_cli.password_mismatch:
+  en: "The passwords are not the same"
+  pl: "Hasła się różnią"
+backup_cli.cancelled:
+  en: "Cancelled"
+  pl: "Anulowano"
+backup_cli.working:
+  en: "Deriving the key from the password…"
+  pl: "Wyprowadzanie klucza z hasła…"
+backup_cli.created:
+  en: "Backup of Node ID %{id} with %{count} paired device(s) saved to %{path}."
+  pl: "Kopia Node ID %{id} z %{count} sparowanymi urządzeniami zapisana w %{path}."
+backup_cli.keep_apart:
+  en: "With the file and the password anyone can act as this device: keep the password apart from the file."
+  pl: "Z plikiem i hasłem każdy może podszyć się pod to urządzenie: trzymaj hasło osobno od pliku."
+backup_cli.restored:
+  en: "Restored: this device is now Node ID %{id}; %{count} paired device(s) added."
+  pl: "Przywrócono: to urządzenie ma teraz Node ID %{id}; dodano sparowanych urządzeń: %{count}."

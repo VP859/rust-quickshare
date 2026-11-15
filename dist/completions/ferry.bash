@@ -16,6 +16,9 @@ _ferry() {
             ",$1")
                 cmd="ferry"
                 ;;
+            ferry,backup)
+                cmd="ferry__subcmd__backup"
+                ;;
             ferry,completions)
                 cmd="ferry__subcmd__completions"
                 ;;
@@ -88,6 +91,24 @@ _ferry() {
             ferry,web)
                 cmd="ferry__subcmd__web"
                 ;;
+            ferry__subcmd__backup,create)
+                cmd="ferry__subcmd__backup__subcmd__create"
+                ;;
+            ferry__subcmd__backup,help)
+                cmd="ferry__subcmd__backup__subcmd__help"
+                ;;
+            ferry__subcmd__backup,restore)
+                cmd="ferry__subcmd__backup__subcmd__restore"
+                ;;
+            ferry__subcmd__backup__subcmd__help,create)
+                cmd="ferry__subcmd__backup__subcmd__help__subcmd__create"
+                ;;
+            ferry__subcmd__backup__subcmd__help,help)
+                cmd="ferry__subcmd__backup__subcmd__help__subcmd__help"
+                ;;
+            ferry__subcmd__backup__subcmd__help,restore)
+                cmd="ferry__subcmd__backup__subcmd__help__subcmd__restore"
+                ;;
             ferry__subcmd__config,get)
                 cmd="ferry__subcmd__config__subcmd__get"
                 ;;
@@ -123,6 +144,9 @@ _ferry() {
                 ;;
             ferry__subcmd__config__subcmd__help,unset)
                 cmd="ferry__subcmd__config__subcmd__help__subcmd__unset"
+                ;;
+            ferry__subcmd__help,backup)
+                cmd="ferry__subcmd__help__subcmd__backup"
                 ;;
             ferry__subcmd__help,completions)
                 cmd="ferry__subcmd__help__subcmd__completions"
@@ -195,6 +219,12 @@ _ferry() {
                 ;;
             ferry__subcmd__help,web)
                 cmd="ferry__subcmd__help__subcmd__web"
+                ;;
+            ferry__subcmd__help__subcmd__backup,create)
+                cmd="ferry__subcmd__help__subcmd__backup__subcmd__create"
+                ;;
+            ferry__subcmd__help__subcmd__backup,restore)
+                cmd="ferry__subcmd__help__subcmd__backup__subcmd__restore"
                 ;;
             ferry__subcmd__help__subcmd__config,get)
                 cmd="ferry__subcmd__help__subcmd__config__subcmd__get"
@@ -344,8 +374,118 @@ _ferry() {
 
     case "${cmd}" in
         ferry)
-            opts="-h --lang --help send localsend integrate history web text receive daemon tui ticket discover pair pairing guide name language network peer config identity doctor completions generate-docs help"
+            opts="-h --lang --help send localsend integrate history web text receive daemon tui ticket discover pair pairing guide name language network peer config backup identity doctor completions generate-docs help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --lang)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__backup)
+            opts="-h --lang --help create restore help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --lang)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__backup__subcmd__create)
+            opts="-h --lang --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --lang)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__backup__subcmd__help)
+            opts="create restore help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__backup__subcmd__help__subcmd__create)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__backup__subcmd__help__subcmd__help)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__backup__subcmd__help__subcmd__restore)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__backup__subcmd__restore)
+            opts="-h --lang --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
@@ -692,8 +832,50 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__help)
-            opts="send localsend integrate history web text receive daemon tui ticket discover pair pairing guide name language network peer config identity doctor completions generate-docs help"
+            opts="send localsend integrate history web text receive daemon tui ticket discover pair pairing guide name language network peer config backup identity doctor completions generate-docs help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__help__subcmd__backup)
+            opts="create restore"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__help__subcmd__backup__subcmd__create)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__help__subcmd__backup__subcmd__restore)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi

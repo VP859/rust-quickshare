@@ -40,6 +40,7 @@ set edit:completion:arg-completer[ferry] = {|@words|
             cand network 'Show or change the network mode: `local` (no external servers, default), `internet` (also through the free public iroh relays, for devices in different networks), `relay` (also through your own relays) or `relay-only` (only through your own relays, never directly)'
             cand peer 'Manage trusted devices'
             cand config 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)'
+            cand backup 'Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app'
             cand identity 'Show, back up or restore this device''s identity (its Node ID key)'
             cand doctor 'Network and configuration diagnostics'
             cand completions 'Print the shell completion script, e.g. `ferry completions bash > ~/.local/share/bash-completion/completions/ferry` (packages install it already)'
@@ -313,6 +314,35 @@ set edit:completion:arg-completer[ferry] = {|@words|
         }
         &'ferry;config;help;help'= {
         }
+        &'ferry;backup'= {
+            cand --lang 'Interface language for this run (`en`, `pl`); overrides the saved setting'
+            cand -h 'Print help'
+            cand --help 'Print help'
+            cand create 'Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)'
+            cand restore 'Restore a backup made here, in the desktop app or on Android: its key replaces this device''s key (kept as a `.bak` file) and its paired devices are added'
+            cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'ferry;backup;create'= {
+            cand --lang 'Interface language for this run (`en`, `pl`); overrides the saved setting'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'ferry;backup;restore'= {
+            cand --lang 'Interface language for this run (`en`, `pl`); overrides the saved setting'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'ferry;backup;help'= {
+            cand create 'Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)'
+            cand restore 'Restore a backup made here, in the desktop app or on Android: its key replaces this device''s key (kept as a `.bak` file) and its paired devices are added'
+            cand help 'Print this message or the help of the given subcommand(s)'
+        }
+        &'ferry;backup;help;create'= {
+        }
+        &'ferry;backup;help;restore'= {
+        }
+        &'ferry;backup;help;help'= {
+        }
         &'ferry;identity'= {
             cand --lang 'Interface language for this run (`en`, `pl`); overrides the saved setting'
             cand -h 'Print help'
@@ -396,6 +426,7 @@ set edit:completion:arg-completer[ferry] = {|@words|
             cand network 'Show or change the network mode: `local` (no external servers, default), `internet` (also through the free public iroh relays, for devices in different networks), `relay` (also through your own relays) or `relay-only` (only through your own relays, never directly)'
             cand peer 'Manage trusted devices'
             cand config 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)'
+            cand backup 'Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app'
             cand identity 'Show, back up or restore this device''s identity (its Node ID key)'
             cand doctor 'Network and configuration diagnostics'
             cand completions 'Print the shell completion script, e.g. `ferry completions bash > ~/.local/share/bash-completion/completions/ferry` (packages install it already)'
@@ -478,6 +509,14 @@ set edit:completion:arg-completer[ferry] = {|@words|
         &'ferry;help;config;unset'= {
         }
         &'ferry;help;config;path'= {
+        }
+        &'ferry;help;backup'= {
+            cand create 'Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)'
+            cand restore 'Restore a backup made here, in the desktop app or on Android: its key replaces this device''s key (kept as a `.bak` file) and its paired devices are added'
+        }
+        &'ferry;help;backup;create'= {
+        }
+        &'ferry;help;backup;restore'= {
         }
         &'ferry;help;identity'= {
             cand show 'Show the Node ID and where the key is stored'

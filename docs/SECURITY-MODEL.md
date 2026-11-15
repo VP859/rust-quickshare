@@ -221,7 +221,8 @@ Node IDs (earlier versions of Ferry) could be matched offline in seconds by gene
 * On Android the app data is excluded from cloud backups and device-to-device transfers
   (`allowBackup="false"` and `data_extraction_rules.xml`), so the key never ends up in a backup
   the user did not make.
-* **Device backup** (*Settings → Privacy → Device backup*, desktop and Android): the key, the
+* **Device backup** (*Settings → Privacy → Device backup*, desktop and Android, or
+  `ferry backup create|restore`; one format everywhere): the key, the
   device name and the paired devices (aliases, Auto-Accept, verified marks, discovery secrets) in
   one file, encrypted with the user's password: PBKDF2-HMAC-SHA256 with 600 000 rounds and a random
   salt, then ChaCha20-Poly1305 (`src/node/backup.rs`). Without the password the file shows only

@@ -26,7 +26,10 @@ compatibility).
   LocalSend apps).
 - **"Restart now" on Android too**: after a new network mode, a random port or a restored device
   backup, Ferry restarts itself in a new process (before, it had to be closed from the recent apps).
-- **Device backup in the GUI** (desktop and Android, *Settings → Privacy*): the device key and the
+- **Device backup in the GUI and the CLI** (desktop and Android, *Settings → Privacy*;
+  `ferry backup create|restore`, the password typed without echo or read from standard input): the
+  same file everywhere, so a phone's backup can be restored on a computer or a server running the
+  daemon. The device key and the
   paired devices in one file encrypted with a password (PBKDF2-HMAC-SHA256, 600 000 rounds, and
   ChaCha20-Poly1305 from `ring`, no new dependency). Restored on a new phone or computer, the paired
   devices recognise it without pairing again.

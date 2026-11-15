@@ -504,6 +504,69 @@ esac
     ;;
 esac
 ;;
+(backup)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_ferry__subcmd__backup_commands" \
+"*::: :->backup" \
+&& ret=0
+
+    case $state in
+    (backup)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-backup-command-$line[1]:"
+        case $line[1] in
+            (create)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+':file -- File to create; an existing file is never overwritten:_files' \
+&& ret=0
+;;
+(restore)
+_arguments "${_arguments_options[@]}" : \
+'--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
+'-h[Print help]' \
+'--help[Print help]' \
+':file -- Backup file (`.ferry-backup`):_files' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_ferry__subcmd__backup__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-backup-help-command-$line[1]:"
+        case $line[1] in
+            (create)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(restore)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
 (identity)
 _arguments "${_arguments_options[@]}" : \
 '--lang=[Interface language for this run (\`en\`, \`pl\`); overrides the saved setting]:CODE:_default' \
@@ -790,6 +853,30 @@ _arguments "${_arguments_options[@]}" : \
     ;;
 esac
 ;;
+(backup)
+_arguments "${_arguments_options[@]}" : \
+":: :_ferry__subcmd__help__subcmd__backup_commands" \
+"*::: :->backup" \
+&& ret=0
+
+    case $state in
+    (backup)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:ferry-help-backup-command-$line[1]:"
+        case $line[1] in
+            (create)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(restore)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (identity)
 _arguments "${_arguments_options[@]}" : \
 ":: :_ferry__subcmd__help__subcmd__identity_commands" \
@@ -869,6 +956,7 @@ _ferry_commands() {
 'network:Show or change the network mode\: \`local\` (no external servers, default), \`internet\` (also through the free public iroh relays, for devices in different networks), \`relay\` (also through your own relays) or \`relay-only\` (only through your own relays, never directly)' \
 'peer:Manage trusted devices' \
 'config:Show or change settings (\`ferry config list\`, \`get\`, \`set\`, \`unset\`, \`path\`)' \
+'backup:Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app' \
 'identity:Show, back up or restore this device'\''s identity (its Node ID key)' \
 'doctor:Network and configuration diagnostics' \
 'completions:Print the shell completion script, e.g. \`ferry completions bash > ~/.local/share/bash-completion/completions/ferry\` (packages install it already)' \
@@ -876,6 +964,49 @@ _ferry_commands() {
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'ferry commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__backup_commands] )) ||
+_ferry__subcmd__backup_commands() {
+    local commands; commands=(
+'create:Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)' \
+'restore:Restore a backup made here, in the desktop app or on Android\: its key replaces this device'\''s key (kept as a \`.bak\` file) and its paired devices are added' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry backup commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__backup__subcmd__create_commands] )) ||
+_ferry__subcmd__backup__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry backup create commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__backup__subcmd__help_commands] )) ||
+_ferry__subcmd__backup__subcmd__help_commands() {
+    local commands; commands=(
+'create:Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)' \
+'restore:Restore a backup made here, in the desktop app or on Android\: its key replaces this device'\''s key (kept as a \`.bak\` file) and its paired devices are added' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'ferry backup help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__backup__subcmd__help__subcmd__create_commands] )) ||
+_ferry__subcmd__backup__subcmd__help__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry backup help create commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__backup__subcmd__help__subcmd__help_commands] )) ||
+_ferry__subcmd__backup__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry backup help help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__backup__subcmd__help__subcmd__restore_commands] )) ||
+_ferry__subcmd__backup__subcmd__help__subcmd__restore_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry backup help restore commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__backup__subcmd__restore_commands] )) ||
+_ferry__subcmd__backup__subcmd__restore_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry backup restore commands' commands "$@"
 }
 (( $+functions[_ferry__subcmd__completions_commands] )) ||
 _ferry__subcmd__completions_commands() {
@@ -1008,6 +1139,7 @@ _ferry__subcmd__help_commands() {
 'network:Show or change the network mode\: \`local\` (no external servers, default), \`internet\` (also through the free public iroh relays, for devices in different networks), \`relay\` (also through your own relays) or \`relay-only\` (only through your own relays, never directly)' \
 'peer:Manage trusted devices' \
 'config:Show or change settings (\`ferry config list\`, \`get\`, \`set\`, \`unset\`, \`path\`)' \
+'backup:Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app' \
 'identity:Show, back up or restore this device'\''s identity (its Node ID key)' \
 'doctor:Network and configuration diagnostics' \
 'completions:Print the shell completion script, e.g. \`ferry completions bash > ~/.local/share/bash-completion/completions/ferry\` (packages install it already)' \
@@ -1015,6 +1147,24 @@ _ferry__subcmd__help_commands() {
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'ferry help commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__backup_commands] )) ||
+_ferry__subcmd__help__subcmd__backup_commands() {
+    local commands; commands=(
+'create:Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)' \
+'restore:Restore a backup made here, in the desktop app or on Android\: its key replaces this device'\''s key (kept as a \`.bak\` file) and its paired devices are added' \
+    )
+    _describe -t commands 'ferry help backup commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__backup__subcmd__create_commands] )) ||
+_ferry__subcmd__help__subcmd__backup__subcmd__create_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help backup create commands' commands "$@"
+}
+(( $+functions[_ferry__subcmd__help__subcmd__backup__subcmd__restore_commands] )) ||
+_ferry__subcmd__help__subcmd__backup__subcmd__restore_commands() {
+    local commands; commands=()
+    _describe -t commands 'ferry help backup restore commands' commands "$@"
 }
 (( $+functions[_ferry__subcmd__help__subcmd__completions_commands] )) ||
 _ferry__subcmd__help__subcmd__completions_commands() {
