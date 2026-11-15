@@ -207,9 +207,9 @@ mod android {
             return networks;
         }
         let mut current = head;
-        while !current.is_null() {
-            // SAFETY: `current` points to an element of the list returned by getifaddrs.
-            let ifa = unsafe { &*current };
+        while let Some(entry) = std::ptr::NonNull::new(current) {
+            // SAFETY: `entry` is a non-null element of the list returned by getifaddrs.
+            let ifa = unsafe { entry.as_ref() };
             current = ifa.ifa_next;
             if ifa.ifa_addr.is_null() || ifa.ifa_netmask.is_null() {
                 continue;

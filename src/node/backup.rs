@@ -30,7 +30,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 use iroh::SecretKey;
 use ring::aead::{Aad, CHACHA20_POLY1305, LessSafeKey, Nonce, UnboundKey};
-use ring::rand::{SecureRandom, SystemRandom};
+use ring::rand::SystemRandom;
 use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 
@@ -129,12 +129,13 @@ pub fn create(key: &SecretKey, config: &Config, password: &str) -> Result<String
     let mut plain = serde_json::to_vec(&contents)?;
 
     let random = SystemRandom::new();
-    let mut salt = [0u8; SALT_LEN];
-    let mut nonce = [0u8; NONCE_LEN];
-    random
-        .fill(&mut salt)
-        .and_then(|()| random.fill(&mut nonce))
-        .map_err(|_| anyhow::anyhow!("no randomness"))?;
+    let no_randomness = || anyhow::anyhow!("no randomness");
+    let salt: [u8; SALT_LEN] = ring::rand::generate(&random)
+        .map_err(|_| no_randomness())?
+        .expose();
+    let nonce: [u8; NONCE_LEN] = ring::rand::generate(&random)
+        .map_err(|_| no_randomness())?
+        .expose();
     let iterations = NonZeroU32::new(ITERATIONS).context("iterations")?;
     derive(password, &salt, iterations)?
         .seal_in_place_append_tag(
