@@ -130,6 +130,12 @@ pub struct Config {
     /// node receiving in the background.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub keep_window_loaded: bool,
+    /// Desktop app on Linux: with the window closed, Ferry runs as a small
+    /// background process – the node, a tray icon and questions in
+    /// notifications – instead of the whole app; opening the window starts
+    /// the app again. Off by default.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub minimal_background: bool,
     /// LocalSend compatibility mode ([`crate::localsend`]): receive files from
     /// LocalSend apps (iPhone, Mac, …). Off by default: senders are not
     /// authenticated.

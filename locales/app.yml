@@ -1175,6 +1175,9 @@ gui.notify_pair_title:
 gui.notify_pair:
   en: "%{name} – code %{code}"
   pl: "%{name} – kod %{code}"
+gui.background_pair:
+  en: "%{name} wants to pair. Open Ferry and pair again – the code has to be compared in the window."
+  pl: "%{name} chce się sparować. Otwórz Ferry i sparuj ponownie – kod trzeba porównać w oknie."
 gui.notify_received:
   en: "File received"
   pl: "Plik odebrany"

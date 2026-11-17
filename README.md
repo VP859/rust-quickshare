@@ -141,6 +141,7 @@ ferry completions zsh > ~/.zfunc/_ferry # Tab completion (packages install it al
 | Copy texts from Auto-Accept devices without asking | `auto-accept-texts true` | `false` |
 | Desktop app quits when its window is closed | `quit-on-close true` | `false` (keeps running in the tray) |
 | Desktop app keeps its hidden window loaded (opens faster, uses more memory) | `keep-window-loaded true` | `false` (the window is unloaded in the tray) |
+| Desktop app on Linux runs only a small receiving process with the window closed | `minimal-background true` | `false` |
 | Receive from LocalSend apps (iPhone, Mac) | `localsend true` | `false` |
 | Speed limit (per second, sending and receiving separately) | `speed-limit 2M` | `off` |
 | Keep a history of transfers | `history false` | `true` |
@@ -186,7 +187,11 @@ quits it if you choose so in *Settings → Receiving*; starting Ferry again alwa
 running window instead of opening a second one. In the tray the window is unloaded – its web view is
 most of the memory the app uses, and receiving does not need it – and loaded again, with the transfers
 and the waiting questions, when you open it; *Keep running in the background, window ready* keeps it
-loaded instead.
+loaded instead. On Linux, *Keep only receiving in the background* goes further: with the window
+closed the app is replaced by a small process (about a sixth of the memory) with its own tray icon,
+which asks about incoming files and texts in notifications with *Accept* and *Decline*; opening the
+window starts the app again, which takes over. Pairing needs the window, so a pairing request in
+the background is declined with a notification saying so.
 
 ## Network modes
 

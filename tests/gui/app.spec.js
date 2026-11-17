@@ -165,6 +165,19 @@ test('the close action is saved on the desktop', async ({ app }, info) => {
   expect(await calls(app)).toContainEqual(['set_close_action', { action: 'quit' }]);
   await app.locator('#close-action').selectOption('tray_loaded');
   expect(await calls(app)).toContainEqual(['set_close_action', { action: 'tray_loaded' }]);
+  await app.locator('#close-action').selectOption('tray_minimal');
+  expect(await calls(app)).toContainEqual(['set_close_action', { action: 'tray_minimal' }]);
+});
+
+test.describe('without the minimal background process (not Linux)', () => {
+  test.use({ responses: { get_close_action: { action: 'tray', minimal_supported: false } } });
+
+  test('the choice is not offered', async ({ app }, info) => {
+    test.skip(info.project.name !== 'desktop', 'the window close setting exists only on the desktop');
+    await app.locator('#btn-settings').click();
+    await expect(app.locator('#close-action option[value="tray_minimal"]')).toBeHidden();
+    await expect(app.locator('#close-action option[value="tray_minimal"]')).toBeDisabled();
+  });
 });
 
 test('dialogs keep the keyboard focus and give it back when closed', async ({ app }, info) => {

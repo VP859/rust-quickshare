@@ -223,7 +223,14 @@ $('btn-settings').onclick = async () => {
   await loadSpeedLimit();
   await loadKeyStorage();
   if (!isMobile) { try { $('autostart').checked = await invoke('plugin:autostart|is_enabled'); } catch {} }
-  if (!isMobile) { try { $('close-action').value = closeAction = await invoke('get_close_action'); } catch {} }
+  if (!isMobile) {
+    try {
+      const close = await invoke('get_close_action');
+      // The minimal background process exists only on Linux.
+      $('close-minimal').hidden = $('close-minimal').disabled = !close.minimal_supported;
+      $('close-action').value = closeAction = close.action;
+    } catch {}
+  }
   open('modal-settings');
 };
 // Android only: what may pause Ferry in the background, with a way to the

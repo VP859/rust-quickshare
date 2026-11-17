@@ -63,6 +63,13 @@ libc = "0.2"
 # WebKitGTK keeps it running after its web view is gone. The version wry uses.
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { version = "2.0.2", features = ["v2_34"] }
+# The minimal background process (src/background): the tray icon and the
+# questions in notifications over D-Bus, the clipboard without GTK. All three
+# are already used (zbus by the notification plugin and the key store,
+# arboard by the clipboard plugin).
+zbus = "5.19.0"
+futures-util = { version = "0.3.34", default-features = false, features = ["alloc"] }
+arboard = "3.7.0"
 
 [target.'cfg(target_os = "android")'.dependencies]
 tauri-plugin-barcode-scanner = "2"

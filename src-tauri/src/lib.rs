@@ -9,6 +9,8 @@
 
 rust_i18n::i18n!("../locales", fallback = "en");
 
+#[cfg(target_os = "linux")]
+mod background;
 pub mod commands;
 mod node;
 #[cfg(desktop)]
@@ -50,6 +52,25 @@ fn init_logging() {
 /// Builds and runs the application; also the mobile entry point.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // The minimal background process never starts GTK or Tauri.
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::args().any(|a| a == background::BACKGROUND_ARG) {
+            background::run();
+            return;
+        }
+        // Started by autostart with the window closed: straight to the background.
+        if std::env::args().any(|a| a == MINIMIZED_ARG)
+            && ferry::config::Config::load().is_ok_and(|c| c.minimal_background && !c.quit_on_close)
+            && background::available()
+        {
+            background::run();
+            return;
+        }
+        init_logging();
+        // The app takes the node over from a running background process.
+        background::stop_running();
+    }
     init_logging();
 
     let mut builder = tauri::Builder::default();
@@ -100,6 +121,8 @@ pub fn run() {
         .manage(AppState::new())
         .setup(|app| {
             platform::init(app.handle());
+            #[cfg(target_os = "linux")]
+            background::init(app.handle());
             #[cfg(desktop)]
             {
                 // Files from the file manager that started Ferry.
@@ -251,6 +274,9 @@ pub(crate) mod tray {
     /// was unloaded; `true` when it was loaded now (it has not subscribed to
     /// any events yet, see [`AppState::defer_event`]).
     pub fn show_main(app: &AppHandle) -> bool {
+        app.state::<AppState>()
+            .hand_over_when_idle
+            .store(false, Ordering::Relaxed);
         if let Some(window) = app.get_webview_window(MAIN) {
             let _ = window.show();
             let _ = window.unminimize();
@@ -281,6 +307,20 @@ pub(crate) mod tray {
         let Some(window) = app.get_webview_window(MAIN) else {
             return;
         };
+        // The minimal background process takes over now, or once the running
+        // transfers and waiting questions end (they live in this process).
+        #[cfg(target_os = "linux")]
+        if crate::background::wanted(app) {
+            let state = app.state::<AppState>();
+            if !state.is_busy() {
+                match crate::background::hand_over(app) {
+                    Ok(()) => return,
+                    Err(e) => tracing::warn!("Could not start the background process: {e}"),
+                }
+            } else {
+                state.hand_over_when_idle.store(true, Ordering::Relaxed);
+            }
+        }
         if app
             .state::<AppState>()
             .keep_window_loaded

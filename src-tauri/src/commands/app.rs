@@ -241,6 +241,10 @@ pub fn load_config(app: &AppHandle) {
         config.keep_window_loaded,
         std::sync::atomic::Ordering::Relaxed,
     );
+    state.minimal_background.store(
+        config.minimal_background,
+        std::sync::atomic::Ordering::Relaxed,
+    );
     tauri::async_runtime::block_on(async {
         *state.config.lock().await = config;
     });

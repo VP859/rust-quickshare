@@ -74,6 +74,11 @@ pub struct AppState {
     /// Copy of [`Config::keep_window_loaded`]: a hidden window stays loaded
     /// instead of being unloaded to free memory (desktop).
     pub keep_window_loaded: std::sync::atomic::AtomicBool,
+    /// Copy of [`Config::minimal_background`] (Linux).
+    pub minimal_background: std::sync::atomic::AtomicBool,
+    /// The window was closed while busy: the background process takes over
+    /// once the app is idle (Linux, see `background::hand_over_when_idle`).
+    pub hand_over_when_idle: std::sync::atomic::AtomicBool,
     /// The user was already told this session that Ferry keeps running in the tray.
     pub tray_hint_shown: std::sync::atomic::AtomicBool,
     /// What a window opened again needs to show the state of this session:
@@ -102,6 +107,8 @@ impl AppState {
             received: std::sync::Mutex::new(HashSet::new()),
             quit_on_close: std::sync::atomic::AtomicBool::new(false),
             keep_window_loaded: std::sync::atomic::AtomicBool::new(false),
+            minimal_background: std::sync::atomic::AtomicBool::new(false),
+            hand_over_when_idle: std::sync::atomic::AtomicBool::new(false),
             tray_hint_shown: std::sync::atomic::AtomicBool::new(false),
             session: std::sync::Mutex::new(Session::default()),
             active_transfers: std::sync::Mutex::new(HashSet::new()),
@@ -124,6 +131,28 @@ impl AppState {
         match self.pending.lock().await.remove(id) {
             Some(tx) => tx.send(answer).is_ok(),
             None => false,
+        }
+    }
+
+    /// Whether a transfer is running or a question waits for an answer: the
+    /// app cannot give way to the background process then.
+    pub fn is_busy(&self) -> bool {
+        self.active_transfers.lock().map_or(true, |a| !a.is_empty())
+            || self
+                .session
+                .lock()
+                .map_or(true, |s| !s.questions.is_empty())
+    }
+
+    /// After a transfer or a question ended: the background process takes
+    /// over if the window was closed while the app was busy.
+    fn idle_check(&self) {
+        #[cfg(target_os = "linux")]
+        if self
+            .hand_over_when_idle
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            crate::background::hand_over_when_idle();
         }
     }
 
@@ -173,6 +202,11 @@ impl AppState {
         }
         if was_idle != active.is_empty() {
             crate::platform::set_transfers_active(!active.is_empty());
+        }
+        let idle = active.is_empty();
+        drop(active);
+        if idle && event.status.is_final() {
+            self.idle_check();
         }
     }
 
@@ -437,6 +471,7 @@ impl GuiHandler {
         if state.pending.lock().await.remove(id).is_some() {
             let _ = self.app.emit("request-cancelled", id);
         }
+        state.idle_check();
         crate::platform::dismiss_question(id);
         answer
     }
