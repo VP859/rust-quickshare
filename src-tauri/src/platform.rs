@@ -764,7 +764,7 @@ pub fn set_share_targets(devices: &[(String, String)]) {
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 fn share_target_order(
     devices: &[(String, String)],
-    last_used: &std::collections::HashMap<String, chrono::DateTime<chrono::Utc>>,
+    last_used: &std::collections::HashMap<String, jiff::Timestamp>,
 ) -> Vec<(String, String)> {
     let mut ordered = devices.to_vec();
     ordered.sort_by(|(a_id, a_name), (b_id, b_name)| {
@@ -872,7 +872,6 @@ pub async fn local_path(app: &AppHandle, input: &str) -> Result<std::path::PathB
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{TimeZone, Utc};
     use std::collections::HashMap;
 
     fn device(id: &str, name: &str) -> (String, String) {
@@ -887,7 +886,7 @@ mod tests {
             device("c", "Phone"),
             device("d", "Desktop"),
         ];
-        let at = |hour| Utc.with_ymd_and_hms(2026, 11, 15, hour, 0, 0).unwrap();
+        let at = |hour: i64| jiff::Timestamp::from_second(1_800_000_000 + hour * 3600).unwrap();
         let used = HashMap::from([("c".to_string(), at(9)), ("b".to_string(), at(12))]);
         let names: Vec<_> = share_target_order(&devices, &used)
             .into_iter()

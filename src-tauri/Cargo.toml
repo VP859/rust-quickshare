@@ -41,7 +41,7 @@ serde = { workspace = true }
 serde_json = "1"
 tokio = { workspace = true }
 # Date in the name of a device backup.
-chrono = { workspace = true }
+jiff = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 iroh = { workspace = true }

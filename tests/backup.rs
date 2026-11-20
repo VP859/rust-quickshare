@@ -14,7 +14,7 @@ fn peer(alias: &str) -> PeerInfo {
     PeerInfo {
         alias: alias.into(),
         auto_accept: false,
-        added_at: chrono::Utc::now(),
+        added_at: jiff::Timestamp::now(),
         verified: true,
         ticket: None,
         discovery_key: Some("cd".repeat(32)),

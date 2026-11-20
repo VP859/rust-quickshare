@@ -29,7 +29,7 @@ pub async fn create_backup(
         None => {
             let name = format!(
                 "ferry-backup-{}.{}",
-                chrono::Local::now().format("%Y-%m-%d"),
+                jiff::Zoned::now().strftime("%Y-%m-%d"),
                 ferry::node::backup::EXTENSION
             );
             ferry::transfer::security::unique_destination(&state.download_dir().await.join(name))

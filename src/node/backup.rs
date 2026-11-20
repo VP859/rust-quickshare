@@ -68,7 +68,7 @@ pub struct Contents {
     #[serde(default)]
     pub peers: HashMap<String, PeerInfo>,
     /// When the backup was made.
-    pub created: chrono::DateTime<chrono::Utc>,
+    pub created: jiff::Timestamp,
 }
 
 impl Contents {
@@ -124,7 +124,7 @@ pub fn create(key: &SecretKey, config: &Config, password: &str) -> Result<String
         key: STANDARD.encode(key.to_bytes()),
         device_name: config.device_name.clone(),
         peers: config.peers.clone(),
-        created: chrono::Utc::now(),
+        created: jiff::Timestamp::now(),
     };
     let mut plain = serde_json::to_vec(&contents)?;
 
@@ -158,7 +158,7 @@ pub fn create(key: &SecretKey, config: &Config, password: &str) -> Result<String
         config.device_name(),
         contents.node_id,
         contents.peers.len(),
-        contents.created.format("%Y-%m-%d"),
+        contents.created.strftime("%Y-%m-%d"),
         STANDARD.encode(blob)
     ))
 }
@@ -232,7 +232,7 @@ pub fn restore(contents: &Contents, config: &mut Config) -> Result<Restored> {
             KeyStorage::File => previous_key = super::identity::replace_secret_key(&path, &key)?,
             KeyStorage::System => {
                 if let Some(old) = &current {
-                    let stamp = chrono::Utc::now().timestamp();
+                    let stamp = jiff::Timestamp::now().as_second();
                     let backup = path.with_file_name(format!("secret.key.{stamp}.bak"));
                     write_private(&backup, &old.to_bytes())
                         .with_context(|| t!("identity.write", path = backup.display()))?;
@@ -277,7 +277,7 @@ mod tests {
             PeerInfo {
                 alias: "Laptop".into(),
                 auto_accept: true,
-                added_at: chrono::Utc::now(),
+                added_at: jiff::Timestamp::now(),
                 verified: true,
                 ticket: None,
                 discovery_key: Some("ab".repeat(32)),

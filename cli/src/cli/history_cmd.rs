@@ -37,8 +37,8 @@ fn line(entry: &HistoryEntry) -> String {
         "{} {arrow} {what} ({}) · {device} · {status}{detail}",
         entry
             .time
-            .with_timezone(&chrono::Local)
-            .format("%Y-%m-%d %H:%M"),
+            .to_zoned(jiff::tz::TimeZone::system())
+            .strftime("%Y-%m-%d %H:%M"),
         human_size(entry.size)
     )
 }

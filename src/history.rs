@@ -9,7 +9,7 @@
 //! file keeps the newest [`MAX_ENTRIES`] transfers.
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -48,7 +48,7 @@ pub struct HistoryEntry {
     #[serde(default, skip_serializing_if = "HistoryKind::is_file")]
     pub kind: HistoryKind,
     /// When it ended.
-    pub time: DateTime<Utc>,
+    pub time: Timestamp,
     /// Sent or received.
     pub direction: Direction,
     /// The other device (Node ID, `localsend:…`, `browser:…`).
@@ -83,7 +83,7 @@ impl HistoryEntry {
         };
         Some(Self {
             kind: HistoryKind::File,
-            time: Utc::now(),
+            time: Timestamp::now(),
             direction: event.direction,
             peer: event.peer.clone(),
             peer_name: event.peer_name.clone(),
@@ -110,7 +110,7 @@ impl HistoryEntry {
         };
         Self {
             kind: HistoryKind::Text,
-            time: Utc::now(),
+            time: Timestamp::now(),
             direction,
             peer: peer.to_string(),
             peer_name: None,
@@ -280,7 +280,7 @@ pub fn append(path: &Path, entry: &HistoryEntry) -> Result<()> {
 /// When each device was last used – a file or text sent to it or received
 /// from it – keyed by the peer as recorded (the Node ID for Ferry devices).
 /// Empty while the history is turned off: then nothing is kept to look at.
-pub fn last_used() -> std::collections::HashMap<String, DateTime<Utc>> {
+pub fn last_used() -> std::collections::HashMap<String, Timestamp> {
     target()
         .clone()
         .map(|path| last_used_in(&path))
@@ -288,7 +288,7 @@ pub fn last_used() -> std::collections::HashMap<String, DateTime<Utc>> {
 }
 
 /// [`last_used`] from the history file `path`.
-fn last_used_in(path: &Path) -> std::collections::HashMap<String, DateTime<Utc>> {
+fn last_used_in(path: &Path) -> std::collections::HashMap<String, Timestamp> {
     let mut last = std::collections::HashMap::new();
     // Newest first: the first entry of a device is its latest use.
     for entry in load(path).unwrap_or_default() {
@@ -348,7 +348,7 @@ mod tests {
     fn the_last_use_of_each_device_is_its_newest_entry() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(FILE_NAME);
-        let at = |minute: i64| DateTime::from_timestamp(1_800_000_000 + minute * 60, 0).unwrap();
+        let at = |minute: i64| Timestamp::from_second(1_800_000_000 + minute * 60).unwrap();
         for (peer, minute) in [("laptop", 1), ("phone", 2), ("laptop", 3)] {
             let mut entry =
                 HistoryEntry::from_event(&event("a.jpg", TransferStatus::Cancelled)).unwrap();

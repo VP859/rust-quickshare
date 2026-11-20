@@ -154,9 +154,9 @@ pub fn run_pairing(minutes: u32, close: bool) -> Result<()> {
     }
     config.open_pairing(i64::from(minutes));
     config.save()?;
-    let minutes = config
-        .pairing_until
-        .map_or(0, |until| (until - chrono::Utc::now()).num_minutes() + 1);
+    let minutes = config.pairing_until.map_or(0, |until| {
+        until.duration_since(jiff::Timestamp::now()).as_mins() + 1
+    });
     println!("{}", t!("pair.opened", minutes = minutes));
     if !config.paired_only {
         println!("{}", t!("pair.not_needed"));
