@@ -31,6 +31,15 @@ expect_used = "warn"
 dbg_macro = "warn"
 todo = "warn"
 
+# Debug builds (tests, clippy, `cargo run`) keep only line numbers, which
+# backtraces and panics need; full debug info for every dependency made
+# target/debug grow by gigabytes per build. CI uses the same setting.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 codegen-units = 1
 lto = "thin"

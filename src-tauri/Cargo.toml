@@ -15,7 +15,9 @@ workspace = true
 [lib]
 name = "ferry_gui_lib"
 path = "src/lib.rs"
-crate-type = ["lib", "cdylib", "staticlib"]
+# `lib` for the desktop binary, `cdylib` for Android. No `staticlib`: it is
+# only for iOS, which Ferry does not build, and took 1.8 GB per debug build.
+crate-type = ["lib", "cdylib"]
 
 [[bin]]
 name = "ferry-gui"
