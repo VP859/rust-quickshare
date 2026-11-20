@@ -67,7 +67,10 @@ fn list() -> Result<()> {
                 ),
                 id = node_id,
                 auto = info.auto_accept,
-                added = info.added_at.format("%Y-%m-%d %H:%M")
+                added = info
+                    .added_at
+                    .to_zoned(jiff::tz::TimeZone::system())
+                    .strftime("%Y-%m-%d %H:%M")
             )
         );
     }

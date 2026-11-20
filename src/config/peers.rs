@@ -1,8 +1,8 @@
 //! Persistent settings: trusted devices, download folder, device name and language.
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
 use iroh::{EndpointAddr, EndpointId};
+use jiff::{SignedDuration, Timestamp};
 use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ pub struct PeerInfo {
     /// Accept files from this device without asking.
     pub auto_accept: bool,
     /// When the device was first added.
-    pub added_at: DateTime<Utc>,
+    pub added_at: Timestamp,
     /// The user compared the [safety number](crate::pairing::safety_number) with
     /// the other device and found it equal.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -95,7 +95,7 @@ pub struct Config {
     /// the time of removal. They are told when they appear on the local
     /// network, and forgotten after [`Config::UNPAIR_KEPT_DAYS`] days.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub pending_unpair: std::collections::BTreeMap<String, DateTime<Utc>>,
+    pub pending_unpair: std::collections::BTreeMap<String, Timestamp>,
     /// Accept offers, texts and batches only from paired devices, and
     /// pairing requests only while pairing is open ([`Config::open_pairing`]).
     /// Others are declined without the user being asked. Off by default.
@@ -105,7 +105,7 @@ pub struct Config {
     /// although [`Config::paired_only`] is on; kept in the file so that the
     /// command line can open it for a running daemon.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pairing_until: Option<DateTime<Utc>>,
+    pub pairing_until: Option<Timestamp>,
     /// Copy texts from Auto-Accept devices to the clipboard without asking.
     /// Off by default: a text silently replacing the clipboard is easy to miss
     /// and could be pasted unknowingly (e.g. a changed account number).
@@ -124,6 +124,18 @@ pub struct Config {
     /// running in the system tray.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub quit_on_close: bool,
+    /// Desktop app: a window hidden in the tray stays loaded, so it opens
+    /// instantly. Off by default: the window is unloaded, which frees the
+    /// memory of its web view (most of what Ferry uses) and keeps only the
+    /// node receiving in the background.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub keep_window_loaded: bool,
+    /// Desktop app on Linux: with the window closed, Ferry runs as a small
+    /// background process – the node, a tray icon and questions in
+    /// notifications – instead of the whole app; opening the window starts
+    /// the app again. Off by default.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub minimal_background: bool,
     /// LocalSend compatibility mode ([`crate::localsend`]): receive files from
     /// LocalSend apps (iPhone, Mac, …). Off by default: senders are not
     /// authenticated.
@@ -272,7 +284,7 @@ impl Config {
         ticket: Option<String>,
     ) {
         let existing = self.peers.get(&node_id);
-        let added_at = existing.map(|p| p.added_at).unwrap_or_else(Utc::now);
+        let added_at = existing.map(|p| p.added_at).unwrap_or_else(Timestamp::now);
         // Re-adding a device keeps what the user already verified.
         let verified = existing.is_some_and(|p| p.verified);
         let discovery_key = existing.and_then(|p| p.discovery_key.clone());
@@ -351,16 +363,17 @@ impl Config {
     /// Remembers that the removed device `node_id` still has to be told.
     /// Entries older than [`Config::UNPAIR_KEPT_DAYS`] are dropped.
     pub fn queue_unpair(&mut self, node_id: &str) {
-        let oldest = Utc::now() - chrono::Duration::days(Self::UNPAIR_KEPT_DAYS);
+        let oldest = Timestamp::now() - SignedDuration::from_hours(24 * Self::UNPAIR_KEPT_DAYS);
         self.pending_unpair.retain(|_, at| *at > oldest);
         if self.pending_unpair.len() < Self::MAX_PENDING_UNPAIR {
-            self.pending_unpair.insert(node_id.to_string(), Utc::now());
+            self.pending_unpair
+                .insert(node_id.to_string(), Timestamp::now());
         }
     }
 
     /// The removed devices that still have to be told.
     pub fn pending_unpair_ids(&self) -> Vec<String> {
-        let oldest = Utc::now() - chrono::Duration::days(Self::UNPAIR_KEPT_DAYS);
+        let oldest = Timestamp::now() - SignedDuration::from_hours(24 * Self::UNPAIR_KEPT_DAYS);
         self.pending_unpair
             .iter()
             .filter(|(_, at)| **at > oldest)
@@ -376,7 +389,7 @@ impl Config {
     /// The caller saves the configuration.
     pub fn open_pairing(&mut self, minutes: i64) {
         let minutes = minutes.clamp(1, Self::MAX_PAIRING_MINUTES);
-        self.pairing_until = Some(Utc::now() + chrono::Duration::minutes(minutes));
+        self.pairing_until = Some(Timestamp::now() + SignedDuration::from_mins(minutes));
     }
 
     /// Closes pairing again before its time is up.
@@ -386,7 +399,8 @@ impl Config {
 
     /// Whether pairing is open at the moment.
     pub fn pairing_open(&self) -> bool {
-        self.pairing_until.is_some_and(|until| until > Utc::now())
+        self.pairing_until
+            .is_some_and(|until| until > Timestamp::now())
     }
 
     /// Whether a request from `node_id` is let through to the user. Always,
@@ -484,6 +498,31 @@ fn fallback_alias(node_id: &str) -> String {
 mod tests {
     use super::*;
 
+    /// Dates written by earlier versions (chrono: nanoseconds and `Z`, or an
+    /// offset) still load, and are written back in the same form.
+    #[test]
+    fn dates_of_earlier_versions_still_load() {
+        let saved = r#"
+            pairing_until = "2026-11-20T10:00:00+00:00"
+            [peers.abc]
+            alias = "Laptop"
+            auto_accept = false
+            added_at = "2026-10-01T12:34:56.123456789Z"
+            [pending_unpair]
+            def = "2026-11-01T08:00:00Z"
+        "#;
+        let config: Config = toml::from_str(saved).expect("an earlier config.toml");
+        let added = config.peers["abc"].added_at;
+        assert_eq!(added.as_second(), 1_790_858_096);
+        assert_eq!(added.subsec_nanosecond(), 123_456_789);
+        assert_eq!(
+            config.pairing_until.map(|t| t.as_second()),
+            Some(1_795_168_800)
+        );
+        let written = toml::to_string(&config).expect("serialized");
+        assert!(written.contains(r#"added_at = "2026-10-01T12:34:56.123456789Z""#));
+    }
+
     /// The configuration holds secrets shared with paired devices.
     #[cfg(unix)]
     #[test]
@@ -535,11 +574,11 @@ mod tests {
         c.close_pairing();
         assert!(!c.admits(&stranger, true));
 
-        c.pairing_until = Some(Utc::now() - chrono::Duration::seconds(1));
+        c.pairing_until = Some(Timestamp::now() - SignedDuration::from_secs(1));
         assert!(!c.pairing_open(), "expired");
         c.open_pairing(1000);
-        let left = c.pairing_until.unwrap() - Utc::now();
-        assert!(left <= chrono::Duration::minutes(Config::MAX_PAIRING_MINUTES));
+        let left = c.pairing_until.unwrap().duration_since(Timestamp::now());
+        assert!(left <= SignedDuration::from_mins(Config::MAX_PAIRING_MINUTES));
     }
 
     #[test]
@@ -557,7 +596,7 @@ mod tests {
         c.queue_unpair(&key);
         c.pending_unpair.insert(
             key.clone(),
-            Utc::now() - chrono::Duration::days(Config::UNPAIR_KEPT_DAYS + 1),
+            Timestamp::now() - SignedDuration::from_hours(24 * (Config::UNPAIR_KEPT_DAYS + 1)),
         );
         assert!(c.pending_unpair_ids().is_empty(), "too old");
         c.queue_unpair("other");

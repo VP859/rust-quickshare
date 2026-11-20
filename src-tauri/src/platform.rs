@@ -709,8 +709,13 @@ mod imp {
     /// Only Android has the app info screen with battery settings.
     pub fn open_app_settings() {}
 
-    /// Desktop systems do not suspend a running transfer.
-    pub fn set_transfers_active(_active: bool) {}
+    /// Desktop systems do not suspend a running transfer; after the last one
+    /// the memory of its buffers is given back (see [`super::release_memory_later`]).
+    pub fn set_transfers_active(active: bool) {
+        if !active {
+            super::release_memory_later();
+        }
+    }
 }
 
 /// Sets platform-specific directories; called before the configuration is loaded.
@@ -759,7 +764,7 @@ pub fn set_share_targets(devices: &[(String, String)]) {
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 fn share_target_order(
     devices: &[(String, String)],
-    last_used: &std::collections::HashMap<String, chrono::DateTime<chrono::Utc>>,
+    last_used: &std::collections::HashMap<String, jiff::Timestamp>,
 ) -> Vec<(String, String)> {
     let mut ordered = devices.to_vec();
     ordered.sort_by(|(a_id, a_name), (b_id, b_name)| {
@@ -831,6 +836,34 @@ pub fn set_transfers_active(active: bool) {
     imp::set_transfers_active(active);
 }
 
+/// Gives memory freed by Ferry back to the system a few seconds from now
+/// (after the window was unloaded or the last transfer ended, once their
+/// memory is actually freed). glibc keeps freed memory in its arenas for
+/// reuse, so without this the process would not shrink; other platforms and
+/// C libraries return it themselves.
+#[cfg(desktop)]
+pub fn release_memory_later() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    tauri::async_runtime::spawn(async {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        trim::malloc_trim();
+    });
+}
+
+/// `malloc_trim` of glibc.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod trim {
+    /// Returns the free memory of all glibc arenas to the system.
+    #[allow(unsafe_code)]
+    pub fn malloc_trim() {
+        // SAFETY: malloc_trim only releases free pages of the allocator's own
+        // arenas; it takes no pointers and is thread-safe.
+        unsafe {
+            libc::malloc_trim(0);
+        }
+    }
+}
+
 /// Turns a path or a `content://` URI from the frontend into a local file path.
 pub async fn local_path(app: &AppHandle, input: &str) -> Result<std::path::PathBuf, String> {
     imp::local_path(app, input).await
@@ -839,7 +872,6 @@ pub async fn local_path(app: &AppHandle, input: &str) -> Result<std::path::PathB
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{TimeZone, Utc};
     use std::collections::HashMap;
 
     fn device(id: &str, name: &str) -> (String, String) {
@@ -854,7 +886,7 @@ mod tests {
             device("c", "Phone"),
             device("d", "Desktop"),
         ];
-        let at = |hour| Utc.with_ymd_and_hms(2026, 11, 15, hour, 0, 0).unwrap();
+        let at = |hour: i64| jiff::Timestamp::from_second(1_800_000_000 + hour * 3600).unwrap();
         let used = HashMap::from([("c".to_string(), at(9)), ("b".to_string(), at(12))]);
         let names: Vec<_> = share_target_order(&devices, &used)
             .into_iter()

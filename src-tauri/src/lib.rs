@@ -3,10 +3,14 @@
 //! The Rust side runs the P2P node ([`ferry`]) and exposes [`commands`] to the
 //! web frontend in `ui/index.html`. On desktop only one instance runs: starting
 //! Ferry again shows the existing window. Closing the window keeps Ferry running
-//! in the system tray, or quits it when `quit_on_close` is set.
+//! in the system tray, or quits it when `quit_on_close` is set. A window hidden
+//! in the tray is unloaded (unless `keep_window_loaded` is set): its web view
+//! is most of the memory Ferry uses, and only the node is needed to receive.
 
 rust_i18n::i18n!("../locales", fallback = "en");
 
+#[cfg(target_os = "linux")]
+mod background;
 pub mod commands;
 mod node;
 #[cfg(desktop)]
@@ -48,6 +52,25 @@ fn init_logging() {
 /// Builds and runs the application; also the mobile entry point.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // The minimal background process never starts GTK or Tauri.
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::args().any(|a| a == background::BACKGROUND_ARG) {
+            background::run();
+            return;
+        }
+        // Started by autostart with the window closed: straight to the background.
+        if std::env::args().any(|a| a == MINIMIZED_ARG)
+            && ferry::config::Config::load().is_ok_and(|c| c.minimal_background && !c.quit_on_close)
+            && background::available()
+        {
+            background::run();
+            return;
+        }
+        init_logging();
+        // The app takes the node over from a running background process.
+        background::stop_running();
+    }
     init_logging();
 
     let mut builder = tauri::Builder::default();
@@ -98,6 +121,8 @@ pub fn run() {
         .manage(AppState::new())
         .setup(|app| {
             platform::init(app.handle());
+            #[cfg(target_os = "linux")]
+            background::init(app.handle());
             #[cfg(desktop)]
             {
                 // Files from the file manager that started Ferry.
@@ -111,10 +136,8 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 tray::build(app)?;
-                if std::env::args().any(|a| a == MINIMIZED_ARG)
-                    && let Some(window) = app.get_webview_window("main")
-                {
-                    window.hide()?;
+                if std::env::args().any(|a| a == MINIMIZED_ARG) {
+                    tray::hide_main(app.handle());
                 }
             }
             Ok(())
@@ -150,8 +173,9 @@ pub fn run() {
             open_app_settings,
             permission_status,
             request_permissions,
-            get_quit_on_close,
-            set_quit_on_close,
+            get_close_action,
+            set_close_action,
+            resume_ui,
             get_privacy,
             set_privacy,
             set_pairing_open,
@@ -185,10 +209,21 @@ pub fn run() {
             app_info,
             open_repository,
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .unwrap_or_else(|e| {
             eprintln!("Failed to start the application: {e}");
             std::process::exit(1);
+        })
+        .run(|_app, _event| {
+            // Unloading the window closes the last one, which would end Ferry:
+            // only an explicit exit (`app.exit`, with a code) does.
+            #[cfg(desktop)]
+            if let tauri::RunEvent::ExitRequested {
+                code: None, api, ..
+            } = _event
+            {
+                api.prevent_exit();
+            }
         });
 }
 
@@ -208,7 +243,7 @@ fn on_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) {
         return;
     }
     api.prevent_close();
-    let _ = window.hide();
+    tray::hide_main(app);
     if !state.tray_hint_shown.swap(true, Ordering::Relaxed) {
         let _ = app
             .notification()
@@ -222,21 +257,87 @@ fn on_close_requested(window: &tauri::Window, api: &tauri::CloseRequestApi) {
 /// System tray icon and its menu (desktop only).
 #[cfg(desktop)]
 pub(crate) mod tray {
+    use crate::node::AppState;
     use rust_i18n::t;
+    use std::sync::atomic::Ordering;
     use tauri::menu::{Menu, MenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-    use tauri::{App, AppHandle, Manager, Runtime};
+    use tauri::{App, AppHandle, Manager, Runtime, WebviewWindowBuilder};
 
     /// ID of the tray icon, used to find it again in [`refresh`].
     const TRAY_ID: &str = "ferry-tray";
 
-    /// Shows, restores and focuses the main window.
-    pub fn show_main(app: &AppHandle) {
-        if let Some(window) = app.get_webview_window("main") {
+    /// Label of the main window (the first one of `tauri.conf.json`).
+    const MAIN: &str = "main";
+
+    /// Shows, restores and focuses the main window, loading it again when it
+    /// was unloaded; `true` when it was loaded now (it has not subscribed to
+    /// any events yet, see [`AppState::defer_event`]).
+    pub fn show_main(app: &AppHandle) -> bool {
+        app.state::<AppState>()
+            .hand_over_when_idle
+            .store(false, Ordering::Relaxed);
+        if let Some(window) = app.get_webview_window(MAIN) {
             let _ = window.show();
             let _ = window.unminimize();
             let _ = window.set_focus();
+            return false;
         }
+        let Some(config) = app.config().app.windows.iter().find(|w| w.label == MAIN) else {
+            return false;
+        };
+        match WebviewWindowBuilder::from_config(app, config).and_then(|b| b.build()) {
+            Ok(window) => {
+                let _ = window.set_focus();
+                true
+            }
+            Err(e) => {
+                tracing::warn!("Could not open the window: {e}");
+                false
+            }
+        }
+    }
+
+    /// Hides the main window to the tray. Unless the user keeps it loaded, the
+    /// window is closed instead: its web view (WebKitGTK or WebView2, with
+    /// their own processes) is most of the memory Ferry uses, and the node
+    /// receiving in the background does not need it. The state the window
+    /// shows lives in [`AppState`] and is restored by `resume_ui`.
+    pub fn hide_main(app: &AppHandle) {
+        let Some(window) = app.get_webview_window(MAIN) else {
+            return;
+        };
+        // The minimal background process takes over now, or once the running
+        // transfers and waiting questions end (they live in this process).
+        #[cfg(target_os = "linux")]
+        if crate::background::wanted(app) {
+            let state = app.state::<AppState>();
+            if !state.is_busy() {
+                match crate::background::hand_over(app) {
+                    Ok(()) => return,
+                    Err(e) => tracing::warn!("Could not start the background process: {e}"),
+                }
+            } else {
+                state.hand_over_when_idle.store(true, Ordering::Relaxed);
+            }
+        }
+        if app
+            .state::<AppState>()
+            .keep_window_loaded
+            .load(Ordering::Relaxed)
+        {
+            let _ = window.hide();
+            return;
+        }
+        // WebKitGTK keeps the web process of a closed web view running (with
+        // most of the window's memory): it is ended first.
+        #[cfg(target_os = "linux")]
+        let _ = window.with_webview(|webview| {
+            use webkit2gtk::WebViewExt;
+            webview.inner().terminate_web_process();
+        });
+        let _ = window.destroy();
+        crate::platform::release_memory_later();
     }
 
     /// Tray menu (show, send the clipboard, hide, quit) in the current language.
@@ -264,8 +365,11 @@ pub(crate) mod tray {
             .read_text()
             .ok()
             .filter(|t| !t.trim().is_empty());
-        show_main(app);
-        let _ = app.emit("send-clipboard", text);
+        if show_main(app) {
+            app.state::<AppState>().defer_event("send-clipboard", text);
+        } else {
+            let _ = app.emit("send-clipboard", text);
+        }
     }
 
     /// Creates the tray icon.
@@ -275,13 +379,11 @@ pub(crate) mod tray {
             .menu(&menu(app)?)
             .show_menu_on_left_click(false)
             .on_menu_event(|app, event| match event.id.as_ref() {
-                "show" => show_main(app),
-                "send_clipboard" => send_clipboard(app),
-                "hide" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.hide();
-                    }
+                "show" => {
+                    show_main(app);
                 }
+                "send_clipboard" => send_clipboard(app),
+                "hide" => hide_main(app),
                 "quit" => app.exit(0),
                 _ => {}
             })

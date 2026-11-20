@@ -44,6 +44,10 @@ const PAIR_UI_TIMEOUT: Duration = Duration::from_secs(55);
 pub const CLIPBOARD_TEXT_MAX: usize = ferry::protocol::messages::MAX_TEXT_LEN;
 /// Of a longer text, the dialog shows the beginning (bytes).
 const LONG_TEXT_PREVIEW: usize = 4096;
+/// Transfers of this session a window opened again shows (the newest).
+const RECENT_TRANSFERS: usize = 100;
+/// Received texts of this session a window opened again shows (the newest).
+const RECENT_TEXTS: usize = 20;
 
 /// State shared by all Tauri commands.
 pub struct AppState {
@@ -67,8 +71,19 @@ pub struct AppState {
     /// Copy of [`Config::quit_on_close`], read synchronously when the window
     /// is closed.
     pub quit_on_close: std::sync::atomic::AtomicBool,
+    /// Copy of [`Config::keep_window_loaded`]: a hidden window stays loaded
+    /// instead of being unloaded to free memory (desktop).
+    pub keep_window_loaded: std::sync::atomic::AtomicBool,
+    /// Copy of [`Config::minimal_background`] (Linux).
+    pub minimal_background: std::sync::atomic::AtomicBool,
+    /// The window was closed while busy: the background process takes over
+    /// once the app is idle (Linux, see `background::hand_over_when_idle`).
+    pub hand_over_when_idle: std::sync::atomic::AtomicBool,
     /// The user was already told this session that Ferry keeps running in the tray.
     pub tray_hint_shown: std::sync::atomic::AtomicBool,
+    /// What a window opened again needs to show the state of this session:
+    /// waiting questions, transfers, texts; see [`AppState::snapshot`].
+    session: std::sync::Mutex<Session>,
     /// IDs of transfers that have not ended; while there are any, Android keeps
     /// the phone awake.
     active_transfers: std::sync::Mutex<HashSet<String>>,
@@ -91,7 +106,11 @@ impl AppState {
             discovery: OnceLock::new(),
             received: std::sync::Mutex::new(HashSet::new()),
             quit_on_close: std::sync::atomic::AtomicBool::new(false),
+            keep_window_loaded: std::sync::atomic::AtomicBool::new(false),
+            minimal_background: std::sync::atomic::AtomicBool::new(false),
+            hand_over_when_idle: std::sync::atomic::AtomicBool::new(false),
             tray_hint_shown: std::sync::atomic::AtomicBool::new(false),
+            session: std::sync::Mutex::new(Session::default()),
             active_transfers: std::sync::Mutex::new(HashSet::new()),
             localsend: Mutex::new(None),
             web: Mutex::new(None),
@@ -115,9 +134,63 @@ impl AppState {
         }
     }
 
+    /// Whether a transfer is running or a question waits for an answer: the
+    /// app cannot give way to the background process then.
+    pub fn is_busy(&self) -> bool {
+        self.active_transfers.lock().map_or(true, |a| !a.is_empty())
+            || self
+                .session
+                .lock()
+                .map_or(true, |s| !s.questions.is_empty())
+    }
+
+    /// After a transfer or a question ended: the background process takes
+    /// over if the window was closed while the app was busy.
+    fn idle_check(&self) {
+        #[cfg(target_os = "linux")]
+        if self
+            .hand_over_when_idle
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            crate::background::hand_over_when_idle();
+        }
+    }
+
+    /// The session's state for a window that was just loaded: its transfers
+    /// and texts (oldest first) are returned, while the waiting questions and
+    /// the events held back for it are emitted again (the window has
+    /// subscribed to them by now; it ignores a question it already shows).
+    pub fn snapshot(&self, app: &AppHandle) -> UiSnapshot {
+        let Ok(mut session) = self.session.lock() else {
+            return UiSnapshot::default();
+        };
+        for (_, event, payload) in &session.questions {
+            let _ = app.emit(event, payload);
+        }
+        for (event, payload) in session.deferred.drain(..) {
+            let _ = app.emit(&event, payload);
+        }
+        UiSnapshot {
+            transfers: session.transfers.clone(),
+            texts: session.texts.clone(),
+        }
+    }
+
+    /// Holds `event` back for the window being loaded, which gets it from
+    /// [`AppState::snapshot`] (an event emitted now would reach no one).
+    pub fn defer_event<P: Serialize>(&self, event: &str, payload: P) {
+        if let (Ok(mut session), Ok(payload)) = (self.session.lock(), serde_json::to_value(payload))
+        {
+            session.deferred.push((event.to_string(), payload));
+        }
+    }
+
     /// Follows every transfer event: when the first transfer starts or the last
     /// one ends, tells the platform (Android holds a wake lock in between).
     pub fn track_transfer(&self, event: &TransferEvent) {
+        if let Ok(mut session) = self.session.lock() {
+            session.record_transfer(event);
+        }
         let Ok(mut active) = self.active_transfers.lock() else {
             return;
         };
@@ -129,6 +202,11 @@ impl AppState {
         }
         if was_idle != active.is_empty() {
             crate::platform::set_transfers_active(!active.is_empty());
+        }
+        let idle = active.is_empty();
+        drop(active);
+        if idle && event.status.is_final() {
+            self.idle_check();
         }
     }
 
@@ -167,6 +245,54 @@ impl AppState {
             (None, None) => config.download_dir(),
         }
     }
+}
+
+/// What [`AppState::snapshot`] restores of the session.
+#[derive(Default)]
+struct Session {
+    /// Waiting questions: their ID, event and payload.
+    questions: Vec<(String, String, serde_json::Value)>,
+    /// Events for a window being loaded (`send-clipboard` from the tray).
+    deferred: Vec<(String, serde_json::Value)>,
+    /// The latest event of each transfer, oldest transfer first.
+    transfers: Vec<TransferEvent>,
+    /// Received texts, oldest first.
+    texts: Vec<ReceivedText>,
+}
+
+impl Session {
+    /// Keeps the latest state of the transfer of `event`; of the
+    /// [`RECENT_TRANSFERS`] kept, the oldest finished one gives way.
+    fn record_transfer(&mut self, event: &TransferEvent) {
+        if let Some(known) = self.transfers.iter_mut().find(|t| t.id == event.id) {
+            *known = event.clone();
+            return;
+        }
+        if self.transfers.len() >= RECENT_TRANSFERS
+            && let Some(i) = self.transfers.iter().position(|t| t.status.is_final())
+        {
+            self.transfers.remove(i);
+        }
+        self.transfers.push(event.clone());
+    }
+
+    /// Keeps a received text; the oldest of [`RECENT_TEXTS`] gives way.
+    fn record_text(&mut self, text: &ReceivedText) {
+        if self.texts.len() >= RECENT_TEXTS {
+            self.texts.remove(0);
+        }
+        self.texts.push(text.clone());
+    }
+}
+
+/// The session's transfers and texts for a window that was just loaded
+/// (`resume_ui`).
+#[derive(Default, Serialize)]
+pub struct UiSnapshot {
+    /// The latest event of each transfer, oldest transfer first.
+    transfers: Vec<TransferEvent>,
+    /// Received texts, oldest first.
+    texts: Vec<ReceivedText>,
 }
 
 /// Payload of the `pair-request` event.
@@ -324,6 +450,13 @@ impl GuiHandler {
         let state = self.state();
         let (tx, rx) = oneshot::channel();
         state.pending.lock().await.insert(id.to_string(), tx);
+        // Kept for a window loaded while the question waits (see `snapshot`).
+        if let (Ok(mut session), Ok(value)) = (state.session.lock(), serde_json::to_value(&payload))
+        {
+            session
+                .questions
+                .push((id.to_string(), event.to_string(), value));
+        }
         let _ = self.app.emit(event, payload);
         // On Android a file or a text can be answered from the notification;
         // a pairing request cannot, as its code has to be compared.
@@ -332,9 +465,13 @@ impl GuiHandler {
             Ok(Ok(answer)) => answer,
             _ => Answer::default(),
         };
+        if let Ok(mut session) = state.session.lock() {
+            session.questions.retain(|(q, _, _)| q != id);
+        }
         if state.pending.lock().await.remove(id).is_some() {
             let _ = self.app.emit("request-cancelled", id);
         }
+        state.idle_check();
         crate::platform::dismiss_question(id);
         answer
     }
@@ -376,15 +513,16 @@ impl GuiHandler {
         let sender = alias
             .clone()
             .unwrap_or_else(|| t!("daemon.unknown_device").into_owned());
-        let _ = self.app.emit(
-            "text-received",
-            ReceivedText {
-                peer,
-                alias,
-                text,
-                copied,
-            },
-        );
+        let received = ReceivedText {
+            peer,
+            alias,
+            text,
+            copied,
+        };
+        if let Ok(mut session) = self.state().session.lock() {
+            session.record_text(&received);
+        }
+        let _ = self.app.emit("text-received", received);
         self.notify(
             &t!("gui.notify_text_title"),
             &t!("gui.notify_text_copied", sender = &sender),
@@ -953,5 +1091,46 @@ mod tests {
         assert!(!state.answer("unknown", Answer::default()).await);
         let got = rx.await.unwrap();
         assert!(got.accept && !got.copy);
+    }
+
+    /// A transfer event for [`Session`] tests.
+    fn event(id: &str, status: TransferStatus) -> TransferEvent {
+        TransferEvent {
+            id: id.into(),
+            peer: String::new(),
+            peer_name: None,
+            file_name: "f".into(),
+            direction: Direction::Download,
+            total: 10,
+            done: 0,
+            status,
+            route: None,
+        }
+    }
+
+    /// The session keeps the latest state of each transfer in the order they
+    /// started; when full, the oldest finished transfer gives way, never a
+    /// running one.
+    #[test]
+    fn the_session_keeps_the_latest_state_of_recent_transfers() {
+        let mut session = Session::default();
+        session.record_transfer(&event("running", TransferStatus::Running));
+        for i in 1..RECENT_TRANSFERS {
+            session.record_transfer(&event(&i.to_string(), TransferStatus::Running));
+            let done = TransferStatus::Completed { path: None };
+            session.record_transfer(&event(&i.to_string(), done));
+        }
+        assert_eq!(session.transfers.len(), RECENT_TRANSFERS);
+        assert!(
+            session.transfers[1].status.is_final(),
+            "replaced, not added"
+        );
+
+        session.record_transfer(&event("new", TransferStatus::Running));
+        let ids: Vec<_> = session.transfers.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(ids.len(), RECENT_TRANSFERS);
+        assert_eq!(ids[0], "running", "a running transfer stays");
+        assert_eq!(ids[1], "2", "the oldest finished one went");
+        assert_eq!(ids.last(), Some(&"new"));
     }
 }

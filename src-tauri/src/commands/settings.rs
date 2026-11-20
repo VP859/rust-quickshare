@@ -31,30 +31,66 @@ pub async fn set_speed_limit(value: String, state: State<'_, AppState>) -> CmdRe
     Ok(limit)
 }
 
-/// What closing the main window does (desktop): `true` quits Ferry, `false`
-/// keeps it running in the system tray.
+/// What closing the main window does (desktop), for the settings dialog.
+#[derive(Serialize)]
+pub struct CloseAction {
+    /// `quit` quits Ferry; `tray` keeps it receiving in the system tray with
+    /// the window unloaded; `tray_loaded` keeps the hidden window loaded
+    /// (opens faster); `tray_minimal` replaces the app with the minimal
+    /// background process (Linux).
+    action: &'static str,
+    /// Whether `tray_minimal` is available (Linux).
+    minimal_supported: bool,
+}
+
+/// What closing the main window does (see [`CloseAction`]).
 ///
 /// # Errors
 ///
 /// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
 #[tauri::command]
-pub async fn get_quit_on_close(state: State<'_, AppState>) -> CmdResult<bool> {
-    Ok(state.config.lock().await.quit_on_close)
+pub async fn get_close_action(state: State<'_, AppState>) -> CmdResult<CloseAction> {
+    let config = state.config.lock().await;
+    let minimal_supported = cfg!(target_os = "linux");
+    let action = if config.quit_on_close {
+        "quit"
+    } else if config.minimal_background && minimal_supported {
+        "tray_minimal"
+    } else if config.keep_window_loaded {
+        "tray_loaded"
+    } else {
+        "tray"
+    };
+    Ok(CloseAction {
+        action,
+        minimal_supported,
+    })
 }
 
-/// Saves what closing the main window does; applies immediately.
+/// Saves what closing the main window does (see [`CloseAction`]); applies
+/// immediately.
 ///
 /// # Errors
 ///
-/// When the configuration cannot be saved.
+/// When `action` is unknown or the configuration cannot be saved.
 #[tauri::command]
-pub async fn set_quit_on_close(quit: bool, state: State<'_, AppState>) -> CmdResult<()> {
+pub async fn set_close_action(action: String, state: State<'_, AppState>) -> CmdResult<()> {
+    use std::sync::atomic::Ordering;
+    let (quit, keep, minimal) = match action.as_str() {
+        "quit" => (true, false, false),
+        "tray" => (false, false, false),
+        "tray_loaded" => (false, true, false),
+        "tray_minimal" if cfg!(target_os = "linux") => (false, false, true),
+        _ => return Err(format!("unknown close action: {action}")),
+    };
     let mut config = state.config.lock().await;
     config.quit_on_close = quit;
+    config.keep_window_loaded = keep;
+    config.minimal_background = minimal;
     config.save().map_err(err)?;
-    state
-        .quit_on_close
-        .store(quit, std::sync::atomic::Ordering::Relaxed);
+    state.quit_on_close.store(quit, Ordering::Relaxed);
+    state.keep_window_loaded.store(keep, Ordering::Relaxed);
+    state.minimal_background.store(minimal, Ordering::Relaxed);
     Ok(())
 }
 

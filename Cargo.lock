@@ -929,10 +929,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
- "js-sys",
  "num-traits",
  "serde",
- "wasm-bindgen",
  "windows-link",
 ]
 
@@ -2040,13 +2038,12 @@ dependencies = [
 
 [[package]]
 name = "ferry"
-version = "0.3.5"
+version = "0.3.7"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
  "blake3",
  "bytes",
- "chrono",
  "criterion",
  "dirs 7.0.0",
  "fs4",
@@ -2058,6 +2055,7 @@ dependencies = [
  "hyper-util",
  "iroh",
  "iroh-relay",
+ "jiff",
  "keyring-core",
  "libc",
  "network-interface",
@@ -2086,11 +2084,10 @@ dependencies = [
 
 [[package]]
 name = "ferry-cli"
-version = "0.3.5"
+version = "0.3.7"
 dependencies = [
  "anyhow",
  "arboard",
- "chrono",
  "clap",
  "clap_complete",
  "clap_mangen",
@@ -2099,6 +2096,7 @@ dependencies = [
  "ferry",
  "indicatif",
  "iroh",
+ "jiff",
  "network-interface",
  "qrcode",
  "ratatui",
@@ -2111,13 +2109,16 @@ dependencies = [
 
 [[package]]
 name = "ferry-gui"
-version = "0.3.5"
+version = "0.3.7"
 dependencies = [
  "anyhow",
- "chrono",
+ "arboard",
  "ferry",
+ "futures-util",
  "iroh",
+ "jiff",
  "jni 0.22.4",
+ "libc",
  "ndk-context",
  "qrcode",
  "rust-i18n",
@@ -2137,6 +2138,8 @@ dependencies = [
  "tracing",
  "tracing-android",
  "tracing-subscriber",
+ "webkit2gtk",
+ "zbus",
 ]
 
 [[package]]

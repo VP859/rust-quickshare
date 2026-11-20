@@ -538,7 +538,7 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__config__subcmd__get)
-            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close relay-urls history speed-limit localsend"
+            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close keep-window-loaded minimal-background relay-urls history speed-limit localsend"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -690,7 +690,7 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__config__subcmd__set)
-            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close relay-urls history speed-limit localsend"
+            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close keep-window-loaded minimal-background relay-urls history speed-limit localsend"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -708,7 +708,7 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__config__subcmd__unset)
-            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close relay-urls history speed-limit localsend"
+            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close keep-window-loaded minimal-background relay-urls history speed-limit localsend"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
