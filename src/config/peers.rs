@@ -411,6 +411,24 @@ impl Config {
         !self.paired_only || self.peers.contains_key(node_id) || (pairing && self.pairing_open())
     }
 
+    /// [`Config::admits`] with the configuration read from disk now, for
+    /// interfaces that read it for every connection (so `ferry config` applies
+    /// without a restart). When it cannot be read (e.g. a mistake made while
+    /// editing the file by hand) nobody is let through: the defaults would let
+    /// anyone in although the user may have turned on [`Config::paired_only`].
+    pub fn admits_now(node_id: &str, pairing: bool) -> bool {
+        Self::admits_loaded(Self::load(), node_id, pairing)
+    }
+
+    /// [`Config::admits_now`] with the configuration as loaded.
+    fn admits_loaded(loaded: Result<Self>, node_id: &str, pairing: bool) -> bool {
+        loaded
+            .inspect_err(|e| {
+                tracing::warn!("Refused {node_id}: the configuration cannot be read: {e:#}");
+            })
+            .is_ok_and(|config| config.admits(node_id, pairing))
+    }
+
     /// Like [`Config::auto_accepts_file`] for a batch announced with these (at
     /// most the first 20) `names`. Files of an accepted batch that are risky
     /// are asked about one by one anyway.
@@ -553,6 +571,27 @@ mod tests {
         again.add_paired(id, "Friend", None, false, Some([0xCD; 32]))?;
         assert_eq!(again.discovery_keys().get(&id), Some(&[0xCD; 32]));
         Ok(())
+    }
+
+    /// A configuration that cannot be read (here: a typo made by hand) lets
+    /// nobody in, not even with the defaults' "everyone may ask".
+    #[test]
+    fn an_unreadable_configuration_lets_nobody_in() {
+        let stranger = iroh::SecretKey::generate().public().to_string();
+        let broken = toml::from_str::<Config>("paired_only = tru").map_err(anyhow::Error::from);
+        assert!(broken.is_err(), "the typo must not parse");
+        assert!(!Config::admits_loaded(broken, &stranger, false));
+        assert!(!Config::admits_loaded(
+            Err(anyhow::anyhow!("permission denied")),
+            &stranger,
+            true
+        ));
+        // A readable one decides as before.
+        assert!(Config::admits_loaded(
+            Ok(Config::default()),
+            &stranger,
+            false
+        ));
     }
 
     #[test]

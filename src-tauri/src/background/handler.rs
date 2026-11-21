@@ -125,7 +125,7 @@ impl BackgroundHandler {
 
 impl TransferHandler for BackgroundHandler {
     async fn admits(&self, peer: EndpointId, pairing: bool) -> bool {
-        Self::config().admits(&peer.to_string(), pairing)
+        Config::admits_now(&peer.to_string(), pairing)
     }
 
     /// The other device removed this one: removed here too, as in the app.

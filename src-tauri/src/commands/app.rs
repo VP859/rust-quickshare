@@ -228,12 +228,15 @@ pub fn open_repository() -> CmdResult<()> {
 ///
 /// Called after the platform directories are set.
 pub fn load_config(app: &AppHandle) {
+    let state = app.state::<AppState>();
     let config = Config::load().unwrap_or_else(|e| {
         tracing::warn!("Could not load the configuration: {e:#}");
+        state
+            .config_unreadable
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         Config::default()
     });
     i18n::init(None, config.language.as_deref());
-    let state = app.state::<AppState>();
     state
         .quit_on_close
         .store(config.quit_on_close, std::sync::atomic::Ordering::Relaxed);
