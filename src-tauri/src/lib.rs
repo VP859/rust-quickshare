@@ -177,6 +177,8 @@ pub fn run() {
             set_close_action,
             resume_ui,
             config_problem,
+            check_config,
+            repair_config,
             get_privacy,
             set_privacy,
             set_pairing_open,

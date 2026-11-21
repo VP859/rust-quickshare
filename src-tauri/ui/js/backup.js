@@ -3,6 +3,7 @@
 // itself is made and read by the backend (ferry::node::backup); this asks for
 // the password, where to save it (desktop) and which file to restore.
 import { $, close, fail, open, toast } from './dom.js';
+import { hideConfigProblem } from './config.js';
 import { t } from './i18n.js';
 import { askRestart } from './settings.js';
 import { invoke, isMobile, pickFile, pickSavePath } from './tauri.js';
@@ -63,7 +64,7 @@ async function restore(password) {
   const result = await invoke('restore_backup', { path: mode.path, password });
   close('modal-backup');
   // Settings that could not be read at start are complete again.
-  $('config-problem').hidden = true;
+  hideConfigProblem();
   toast(t('backup_restored', { n: result.peers_added }));
   if (result.key_changed) askRestart('backup');
 }

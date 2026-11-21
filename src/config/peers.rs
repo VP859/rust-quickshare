@@ -560,7 +560,7 @@ impl Config {
 }
 
 /// Alias for a device without a name: `Device <first 8 characters of the Node ID>`.
-fn fallback_alias(node_id: &str) -> String {
+pub(super) fn fallback_alias(node_id: &str) -> String {
     t!(
         "config.fallback_alias",
         id = &node_id[..8.min(node_id.len())]

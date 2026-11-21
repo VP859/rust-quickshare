@@ -57,6 +57,69 @@ config.write:
 config.save_blocked:
   en: "Not saved: %{path} could not be read when Ferry started, and saving would replace your settings and trusted devices with the defaults. Fix the file and start Ferry again, or restore a backup."
   pl: "Nie zapisano: przy starcie Ferry nie udało się odczytać pliku %{path}, a zapis zastąpiłby Twoje ustawienia i zaufane urządzenia domyślnymi. Popraw plik i uruchom Ferry ponownie albo przywróć kopię zapasową."
+check.too_large:
+  en: "The file is too large to be a configuration (%{size} bytes); it is not repaired"
+  pl: "Plik jest za duży na konfigurację (%{size} bajtów); nie zostanie naprawiony"
+check.not_text:
+  en: "The file contains bytes that are not text (damaged or overwritten by another program); they are left out"
+  pl: "Plik zawiera bajty, które nie są tekstem (uszkodzenie albo nadpisanie przez inny program); zostaną pominięte"
+check.line:
+  en: "Line %{line} cannot be read (%{error}); it is left out"
+  pl: "Nie da się odczytać linii %{line} (%{error}); zostanie pominięta"
+check.section:
+  en: "Line %{line}: the section %{section} cannot be read (%{error}); it is left out with its settings"
+  pl: "Linia %{line}: nie da się odczytać sekcji %{section} (%{error}); zostanie pominięta razem z jej ustawieniami"
+check.unknown_key:
+  en: "%{key}: unknown setting (a typo, or added by another program); it is removed"
+  pl: "%{key}: nieznane ustawienie (literówka albo dopisane przez inny program); zostanie usunięte"
+check.bad_value:
+  en: "%{key}: invalid value (%{error}); the default is used"
+  pl: "%{key}: nieprawidłowa wartość (%{error}); zostanie użyta domyślna"
+check.paired_only:
+  en: "“Only trusted devices” could not be read: it is turned on, the safer choice; you can change it in the privacy settings"
+  pl: "Nie da się odczytać ustawienia „Tylko zaufane urządzenia”: zostanie włączone, bo to bezpieczniejszy wybór; możesz to zmienić w ustawieniach prywatności"
+check.key_storage:
+  en: "Where the device key is kept could not be read: set to “%{value}”, where the key is found, so the Node ID stays the same"
+  pl: "Nie da się odczytać, gdzie jest przechowywany klucz urządzenia: ustawiono „%{value}”, gdzie klucz się znajduje, więc Node ID się nie zmieni"
+check.peers_not_table:
+  en: "The list of trusted devices cannot be read; it is left out (pair the devices again)"
+  pl: "Nie da się odczytać listy zaufanych urządzeń; zostanie pominięta (sparuj urządzenia ponownie)"
+check.peer_bad_id:
+  en: "Trusted device %{id}: invalid Node ID; it is left out"
+  pl: "Zaufane urządzenie %{id}: nieprawidłowy Node ID; zostanie pominięte"
+check.peer_unreadable:
+  en: "Trusted device %{name} cannot be read; it is left out"
+  pl: "Nie da się odczytać zaufanego urządzenia %{name}; zostanie pominięte"
+check.peer_alias:
+  en: "Trusted device %{id}: the name is missing or invalid; it is named %{alias}"
+  pl: "Zaufane urządzenie %{id}: brak nazwy albo jest nieprawidłowa; otrzyma nazwę %{alias}"
+check.peer_auto_accept:
+  en: "Trusted device %{name}: Auto-Accept is missing or invalid; it is turned off"
+  pl: "Zaufane urządzenie %{name}: brak ustawienia Auto-Accept albo jest nieprawidłowe; zostanie wyłączone"
+check.peer_added_at:
+  en: "Trusted device %{name}: the pairing date is invalid; it is set to now"
+  pl: "Zaufane urządzenie %{name}: nieprawidłowa data sparowania; zostanie ustawiona na teraz"
+check.peer_field:
+  en: "Trusted device %{name}: %{field} is invalid; it is removed"
+  pl: "Zaufane urządzenie %{name}: nieprawidłowe pole %{field}; zostanie usunięte"
+check.unrepairable:
+  en: "What could be read does not form a configuration (%{error})"
+  pl: "To, co da się odczytać, nie tworzy poprawnej konfiguracji (%{error})"
+check.executables:
+  en: "Programs and scripts from Auto-Accept devices are received without asking; check that you turned this on"
+  pl: "Programy i skrypty od urządzeń z Auto-Accept są odbierane bez pytania; sprawdź, czy to Ty to włączyłeś"
+check.download_dir:
+  en: "Received files are saved in %{path}, a folder from which programs start or a system folder; check that you chose it"
+  pl: "Odebrane pliki trafiają do %{path}, folderu, z którego uruchamiają się programy, albo folderu systemowego; sprawdź, czy to Ty go wybrałeś"
+check.auto_accept:
+  en: "Devices that send files without asking: %{names}; check that you know all of them"
+  pl: "Urządzenia wysyłające pliki bez pytania: %{names}; sprawdź, czy znasz wszystkie"
+check.permissions:
+  en: "Other users of this computer can read the file (permissions %{mode}); a repair limits it to you"
+  pl: "Inni użytkownicy tego komputera mogą odczytać plik (uprawnienia %{mode}); naprawa ograniczy dostęp tylko do Ciebie"
+check.nothing_to_repair:
+  en: "There is nothing to repair in the configuration file"
+  pl: "W pliku konfiguracji nie ma czego naprawiać"
 config.bad_node_id:
   en: "Invalid Node ID (expected 64 hexadecimal characters) or TICKET"
   pl: "Nieprawidłowy Node ID (oczekiwano 64 znaków szesnastkowych) ani TICKET"

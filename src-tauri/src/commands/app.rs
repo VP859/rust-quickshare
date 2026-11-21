@@ -231,6 +231,54 @@ pub fn config_problem(state: State<'_, AppState>) -> Option<String> {
     state.config_problem.lock().ok().and_then(|p| p.clone())
 }
 
+/// Result of checking `config.toml` ([`check_config`]).
+#[derive(Serialize)]
+pub struct ConfigCheck {
+    /// What was found, in the user's language.
+    problems: Vec<ferry::config::check::Problem>,
+    /// Whether a repair ([`repair_config`]) would change something.
+    repairable: bool,
+}
+
+/// Checks `config.toml` for damage and for settings worth a look.
+///
+/// # Errors
+///
+/// When the file cannot be read at all.
+#[tauri::command]
+pub async fn check_config() -> CmdResult<ConfigCheck> {
+    let report = tauri::async_runtime::spawn_blocking(ferry::config::check::inspect_file)
+        .await
+        .map_err(err)?
+        .map_err(|e| format!("{e:#}"))?;
+    Ok(ConfigCheck {
+        repairable: report.repairable(),
+        problems: report.problems,
+    })
+}
+
+/// Repairs `config.toml` (a copy of the old file is kept next to it) and
+/// takes the repaired configuration into use; settings that apply when the
+/// node starts need a restart, which the window offers.
+///
+/// # Errors
+///
+/// When there is nothing to repair or saving fails.
+#[tauri::command]
+pub async fn repair_config(state: State<'_, AppState>) -> CmdResult<()> {
+    let mut config = state.config.lock().await;
+    let repaired = tauri::async_runtime::spawn_blocking(ferry::config::check::repair)
+        .await
+        .map_err(err)?
+        .map_err(|e| format!("{e:#}"))?;
+    *config = repaired;
+    drop(config);
+    if let Ok(mut problem) = state.config_problem.lock() {
+        *problem = None;
+    }
+    Ok(())
+}
+
 /// Loads the configuration into the state and activates the saved language.
 ///
 /// Called after the platform directories are set.
