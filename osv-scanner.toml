@@ -1,0 +1,43 @@
+# Advisories that OSV-Scanner (and the OpenSSF Scorecard "Vulnerabilities"
+# check, which uses it) reports for Cargo.lock, but which do not affect Ferry.
+# None of them is a vulnerability: one is an unsound function nobody calls,
+# the others say a crate is no longer maintained. All come in through other
+# crates and cannot be updated from here.
+#
+# Each entry expires, so it is looked at again; `cargo deny check` (CI) still
+# fails on real vulnerabilities and on unmaintained direct dependencies.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0429"
+ignoreUntil = 2027-05-20
+reason = "glib 0.18 (unsound VariantStrIter) comes from Tauri/wry/tao, which still require gtk 0.18; nothing in Ferry or its dependencies calls Variant::array_iter_str."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0370"
+ignoreUntil = 2027-05-20
+reason = "proc-macro-error (unmaintained) is a build-time macro dependency of glib-macros and gtk3-macros 0.18, pulled in by Tauri; it is not in the built app."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0436"
+ignoreUntil = 2027-05-20
+reason = "paste (unmaintained) is a build-time macro of netlink-packet-core, pulled in by iroh (netwatch); it is not in the built app."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0543"
+ignoreUntil = 2027-05-20
+reason = "chrono (unmaintained) is no longer used by Ferry; it is only pulled in on Windows by wmi through iroh (netwatch)."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0370"
+ignoreUntil = 2027-05-20
+reason = "zvariant was merged into zbus 6; it is still required by zbus 5, which secret-service (OS keyring) depends on."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0371"
+ignoreUntil = 2027-05-20
+reason = "zbus_names was merged into zbus 6; it is still required by zbus 5, which secret-service (OS keyring) depends on."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0372"
+ignoreUntil = 2027-05-20
+reason = "zvariant_derive was merged into zbus 6; it is still required by zbus 5, which secret-service (OS keyring) depends on."
