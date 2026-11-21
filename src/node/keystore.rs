@@ -80,7 +80,6 @@ const SERVICE: &str = "io.github.vp859.ferry";
 /// The entry of the device key of the configuration in `config_dir`; the
 /// folder is part of the name, so separate profiles (`FERRY_CONFIG_DIR`)
 /// keep separate keys.
-#[cfg(any(all(target_os = "linux", not(target_os = "android")), windows, test))]
 fn account(config_dir: &Path) -> String {
     format!("device key ({})", config_dir.display())
 }
@@ -124,6 +123,24 @@ fn unavailable(e: keyring_core::Error) -> anyhow::Error {
 /// Fails when the platform has no secret store or it cannot be reached (no
 /// Secret Service on the session bus, no session at all).
 pub(crate) fn system_slot(config_dir: &Path) -> Result<Box<dyn SecretSlot>> {
+    slot_named(&account(config_dir))
+}
+
+/// The slot of the key that signs `config.toml` in `config_dir`
+/// ([`crate::config::signature`]); its own entry, next to the device key's.
+///
+/// # Errors
+///
+/// As [`system_slot`].
+pub(crate) fn config_signing_slot(config_dir: &Path) -> Result<Box<dyn SecretSlot>> {
+    slot_named(&format!(
+        "config.toml signing key ({})",
+        config_dir.display()
+    ))
+}
+
+/// The entry `account` of Ferry in the system's secret store.
+fn slot_named(account: &str) -> Result<Box<dyn SecretSlot>> {
     #[cfg(any(all(target_os = "linux", not(target_os = "android")), windows))]
     {
         use keyring_core::api::CredentialStoreApi;
@@ -131,14 +148,12 @@ pub(crate) fn system_slot(config_dir: &Path) -> Result<Box<dyn SecretSlot>> {
         let store = zbus_secret_service_keyring_store::Store::new().map_err(unavailable)?;
         #[cfg(windows)]
         let store = windows_native_keyring_store::Store::new().map_err(unavailable)?;
-        let entry = store
-            .build(SERVICE, &account(config_dir), None)
-            .map_err(unavailable)?;
+        let entry = store.build(SERVICE, account, None).map_err(unavailable)?;
         Ok(Box::new(SystemSlot(entry)))
     }
     #[cfg(not(any(all(target_os = "linux", not(target_os = "android")), windows)))]
     {
-        let _ = (config_dir, SERVICE);
+        let _ = (account, SERVICE);
         anyhow::bail!(t!("keystore.unsupported"))
     }
 }

@@ -25,6 +25,7 @@ const RESPONSES = {
   get_privacy: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: true, paired_only: false, pairing_open: false, announce_platform: false, random_port: false, strip_metadata: false },
   get_speed_limit: null,
   get_key_storage: { system: false, supported: true },
+  get_config_signing: { on: false, supported: true },
   set_key_storage: null,
   set_speed_limit: 2097152,
   get_history: [

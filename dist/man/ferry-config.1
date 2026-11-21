@@ -2,11 +2,11 @@
 .el .ds Aq '
 .TH ferry-config 1  Ferry "Ferry Manual"
 .SH NAME
-ferry\-config \- Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)
+ferry\-config \- Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`), or check and repair the configuration file (`check`, `repair`)
 .SH SYNOPSIS
 \fBferry config\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIsubcommands\fR]
 .SH DESCRIPTION
-Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)
+Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`), or check and repair the configuration file (`check`, `repair`)
 .SH OPTIONS
 .TP
 \fB\-\-lang\fR \fI<CODE>\fR
@@ -30,3 +30,9 @@ Reset one setting to its default
 .TP
 ferry\-config\-path(1)
 Print the path of the configuration file
+.TP
+ferry\-config\-check(1)
+Check the configuration file for damage and for settings someone else may have changed; exits with an error when it is damaged
+.TP
+ferry\-config\-repair(1)
+Repair a damaged configuration file: what can be read is kept, a copy of the old file is saved next to it

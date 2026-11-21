@@ -109,6 +109,9 @@ _ferry() {
             ferry__subcmd__backup__subcmd__help,restore)
                 cmd="ferry__subcmd__backup__subcmd__help__subcmd__restore"
                 ;;
+            ferry__subcmd__config,check)
+                cmd="ferry__subcmd__config__subcmd__check"
+                ;;
             ferry__subcmd__config,get)
                 cmd="ferry__subcmd__config__subcmd__get"
                 ;;
@@ -121,11 +124,17 @@ _ferry() {
             ferry__subcmd__config,path)
                 cmd="ferry__subcmd__config__subcmd__path"
                 ;;
+            ferry__subcmd__config,repair)
+                cmd="ferry__subcmd__config__subcmd__repair"
+                ;;
             ferry__subcmd__config,set)
                 cmd="ferry__subcmd__config__subcmd__set"
                 ;;
             ferry__subcmd__config,unset)
                 cmd="ferry__subcmd__config__subcmd__unset"
+                ;;
+            ferry__subcmd__config__subcmd__help,check)
+                cmd="ferry__subcmd__config__subcmd__help__subcmd__check"
                 ;;
             ferry__subcmd__config__subcmd__help,get)
                 cmd="ferry__subcmd__config__subcmd__help__subcmd__get"
@@ -138,6 +147,9 @@ _ferry() {
                 ;;
             ferry__subcmd__config__subcmd__help,path)
                 cmd="ferry__subcmd__config__subcmd__help__subcmd__path"
+                ;;
+            ferry__subcmd__config__subcmd__help,repair)
+                cmd="ferry__subcmd__config__subcmd__help__subcmd__repair"
                 ;;
             ferry__subcmd__config__subcmd__help,set)
                 cmd="ferry__subcmd__config__subcmd__help__subcmd__set"
@@ -226,6 +238,9 @@ _ferry() {
             ferry__subcmd__help__subcmd__backup,restore)
                 cmd="ferry__subcmd__help__subcmd__backup__subcmd__restore"
                 ;;
+            ferry__subcmd__help__subcmd__config,check)
+                cmd="ferry__subcmd__help__subcmd__config__subcmd__check"
+                ;;
             ferry__subcmd__help__subcmd__config,get)
                 cmd="ferry__subcmd__help__subcmd__config__subcmd__get"
                 ;;
@@ -234,6 +249,9 @@ _ferry() {
                 ;;
             ferry__subcmd__help__subcmd__config,path)
                 cmd="ferry__subcmd__help__subcmd__config__subcmd__path"
+                ;;
+            ferry__subcmd__help__subcmd__config,repair)
+                cmd="ferry__subcmd__help__subcmd__config__subcmd__repair"
                 ;;
             ferry__subcmd__help__subcmd__config,set)
                 cmd="ferry__subcmd__help__subcmd__config__subcmd__set"
@@ -520,7 +538,7 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__config)
-            opts="-h --lang --help list get set unset path help"
+            opts="-h --lang --help list get set unset path check repair help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -537,8 +555,26 @@ _ferry() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        ferry__subcmd__config__subcmd__check)
+            opts="-h --lang --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --lang)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         ferry__subcmd__config__subcmd__get)
-            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close keep-window-loaded minimal-background relay-urls history speed-limit localsend"
+            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close keep-window-loaded minimal-background sign-config relay-urls history speed-limit localsend"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -556,8 +592,22 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__config__subcmd__help)
-            opts="list get set unset path help"
+            opts="list get set unset path check repair help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__config__subcmd__help__subcmd__check)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
@@ -612,6 +662,20 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__config__subcmd__help__subcmd__path)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__config__subcmd__help__subcmd__repair)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -689,8 +753,26 @@ _ferry() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        ferry__subcmd__config__subcmd__repair)
+            opts="-y -h --yes --lang --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --lang)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         ferry__subcmd__config__subcmd__set)
-            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close keep-window-loaded minimal-background relay-urls history speed-limit localsend"
+            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close keep-window-loaded minimal-background sign-config relay-urls history speed-limit localsend"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -708,7 +790,7 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__config__subcmd__unset)
-            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close keep-window-loaded minimal-background relay-urls history speed-limit localsend"
+            opts="-h --lang --help device-name language network-mode download-dir hidden paired-only strip-metadata announce-platform random-port auto-accept-texts auto-accept-executables quit-on-close keep-window-loaded minimal-background sign-config relay-urls history speed-limit localsend"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -902,8 +984,22 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__help__subcmd__config)
-            opts="list get set unset path"
+            opts="list get set unset path check repair"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__help__subcmd__config__subcmd__check)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
@@ -944,6 +1040,20 @@ _ferry() {
             return 0
             ;;
         ferry__subcmd__help__subcmd__config__subcmd__path)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        ferry__subcmd__help__subcmd__config__subcmd__repair)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )

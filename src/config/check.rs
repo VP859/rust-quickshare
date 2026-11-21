@@ -35,7 +35,7 @@ pub const BEFORE_REPAIR: &str = "toml.before-repair";
 
 /// The settings of `config.toml` (the fields of [`Config`]); others are
 /// reported as unknown. Kept equal to the fields by a test.
-const KNOWN_KEYS: [&str; 23] = [
+const KNOWN_KEYS: [&str; 24] = [
     "peers",
     "default_download_dir",
     "device_name",
@@ -59,6 +59,7 @@ const KNOWN_KEYS: [&str; 23] = [
     "keep_window_loaded",
     "minimal_background",
     "localsend",
+    "sign_config",
 ];
 
 /// How serious a [`Problem`] is.
@@ -163,7 +164,35 @@ pub fn inspect_file() -> Result<Report> {
         );
     }
     permissions(&path, &mut report);
+    if report.fixed.as_ref().is_some_and(|c| c.sign_config) {
+        signed(&path, &bytes, &mut report);
+    }
     Ok(report)
+}
+
+/// Reports whether the file is as Ferry last saved it ([`super::signature`]).
+/// A repair does not change it; saving any setting in Ferry signs the file again.
+fn signed(path: &Path, content: &[u8], report: &mut Report) {
+    use super::signature::Status;
+    let (severity, message) = match super::signature::status(path, content) {
+        Status::Unchanged => (Severity::Info, t!("check.signature_ok")),
+        Status::Changed => (Severity::Warning, t!("check.signature_changed")),
+        Status::Unsigned => (Severity::Warning, t!("check.signature_missing")),
+        Status::NoKey => (Severity::Warning, t!("check.signature_no_key")),
+        Status::Unavailable(error) => (
+            Severity::Info,
+            t!("check.signature_unavailable", error = error),
+        ),
+    };
+    report.problems.insert(
+        0,
+        Problem {
+            severity,
+            line: None,
+            message: message.into_owned(),
+            repaired: false,
+        },
+    );
 }
 
 /// Repairs the `config.toml` in use: keeps a copy of it next to it
@@ -185,7 +214,7 @@ pub fn repair() -> Result<Config> {
     let copy = path.with_extension(BEFORE_REPAIR);
     std::fs::copy(&path, &copy).with_context(|| t!("config.write"))?;
     config.save_over_unreadable()?;
-    tracing::info!(
+    tracing::debug!(
         "Repaired {}; the previous file is in {}",
         path.display(),
         copy.display()
@@ -705,6 +734,7 @@ mod tests {
         c.keep_window_loaded = true;
         c.minimal_background = true;
         c.localsend = true;
+        c.sign_config = true;
         let table: Table = toml::from_str(&toml::to_string(&c).unwrap()).unwrap();
         let mut keys: Vec<_> = table.keys().map(String::as_str).collect();
         let mut known = KNOWN_KEYS.to_vec();

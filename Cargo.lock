@@ -2029,7 +2029,7 @@ dependencies = [
 
 [[package]]
 name = "ferry"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -2075,7 +2075,7 @@ dependencies = [
 
 [[package]]
 name = "ferry-cli"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
  "arboard",
@@ -2100,7 +2100,7 @@ dependencies = [
 
 [[package]]
 name = "ferry-gui"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
  "arboard",

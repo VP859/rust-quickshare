@@ -42,7 +42,7 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             [CompletionResult]::new('language', 'language', [CompletionResultType]::ParameterValue, 'Show or change the interface language (`en`, `pl`)')
             [CompletionResult]::new('network', 'network', [CompletionResultType]::ParameterValue, 'Show or change the network mode: `local` (no external servers, default), `internet` (also through the free public iroh relays, for devices in different networks), `relay` (also through your own relays) or `relay-only` (only through your own relays, never directly)')
             [CompletionResult]::new('peer', 'peer', [CompletionResultType]::ParameterValue, 'Manage trusted devices')
-            [CompletionResult]::new('config', 'config', [CompletionResultType]::ParameterValue, 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)')
+            [CompletionResult]::new('config', 'config', [CompletionResultType]::ParameterValue, 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`), or check and repair the configuration file (`check`, `repair`)')
             [CompletionResult]::new('backup', 'backup', [CompletionResultType]::ParameterValue, 'Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app')
             [CompletionResult]::new('identity', 'identity', [CompletionResultType]::ParameterValue, 'Show, back up or restore this device''s identity (its Node ID key)')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Network and configuration diagnostics')
@@ -309,6 +309,8 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             [CompletionResult]::new('set', 'set', [CompletionResultType]::ParameterValue, 'Change one setting')
             [CompletionResult]::new('unset', 'unset', [CompletionResultType]::ParameterValue, 'Reset one setting to its default')
             [CompletionResult]::new('path', 'path', [CompletionResultType]::ParameterValue, 'Print the path of the configuration file')
+            [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check the configuration file for damage and for settings someone else may have changed; exits with an error when it is damaged')
+            [CompletionResult]::new('repair', 'repair', [CompletionResultType]::ParameterValue, 'Repair a damaged configuration file: what can be read is kept, a copy of the old file is saved next to it')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -342,12 +344,28 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'ferry;config;check' {
+            [CompletionResult]::new('--lang', '--lang', [CompletionResultType]::ParameterName, 'Interface language for this run (`en`, `pl`); overrides the saved setting')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'ferry;config;repair' {
+            [CompletionResult]::new('--lang', '--lang', [CompletionResultType]::ParameterName, 'Interface language for this run (`en`, `pl`); overrides the saved setting')
+            [CompletionResult]::new('-y', '-y', [CompletionResultType]::ParameterName, 'Repair without asking')
+            [CompletionResult]::new('--yes', '--yes', [CompletionResultType]::ParameterName, 'Repair without asking')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'ferry;config;help' {
             [CompletionResult]::new('list', 'list', [CompletionResultType]::ParameterValue, 'Show every setting')
             [CompletionResult]::new('get', 'get', [CompletionResultType]::ParameterValue, 'Show one setting')
             [CompletionResult]::new('set', 'set', [CompletionResultType]::ParameterValue, 'Change one setting')
             [CompletionResult]::new('unset', 'unset', [CompletionResultType]::ParameterValue, 'Reset one setting to its default')
             [CompletionResult]::new('path', 'path', [CompletionResultType]::ParameterValue, 'Print the path of the configuration file')
+            [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check the configuration file for damage and for settings someone else may have changed; exits with an error when it is damaged')
+            [CompletionResult]::new('repair', 'repair', [CompletionResultType]::ParameterValue, 'Repair a damaged configuration file: what can be read is kept, a copy of the old file is saved next to it')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -364,6 +382,12 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             break
         }
         'ferry;config;help;path' {
+            break
+        }
+        'ferry;config;help;check' {
+            break
+        }
+        'ferry;config;help;repair' {
             break
         }
         'ferry;config;help;help' {
@@ -501,7 +525,7 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             [CompletionResult]::new('language', 'language', [CompletionResultType]::ParameterValue, 'Show or change the interface language (`en`, `pl`)')
             [CompletionResult]::new('network', 'network', [CompletionResultType]::ParameterValue, 'Show or change the network mode: `local` (no external servers, default), `internet` (also through the free public iroh relays, for devices in different networks), `relay` (also through your own relays) or `relay-only` (only through your own relays, never directly)')
             [CompletionResult]::new('peer', 'peer', [CompletionResultType]::ParameterValue, 'Manage trusted devices')
-            [CompletionResult]::new('config', 'config', [CompletionResultType]::ParameterValue, 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)')
+            [CompletionResult]::new('config', 'config', [CompletionResultType]::ParameterValue, 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`), or check and repair the configuration file (`check`, `repair`)')
             [CompletionResult]::new('backup', 'backup', [CompletionResultType]::ParameterValue, 'Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app')
             [CompletionResult]::new('identity', 'identity', [CompletionResultType]::ParameterValue, 'Show, back up or restore this device''s identity (its Node ID key)')
             [CompletionResult]::new('doctor', 'doctor', [CompletionResultType]::ParameterValue, 'Network and configuration diagnostics')
@@ -602,6 +626,8 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             [CompletionResult]::new('set', 'set', [CompletionResultType]::ParameterValue, 'Change one setting')
             [CompletionResult]::new('unset', 'unset', [CompletionResultType]::ParameterValue, 'Reset one setting to its default')
             [CompletionResult]::new('path', 'path', [CompletionResultType]::ParameterValue, 'Print the path of the configuration file')
+            [CompletionResult]::new('check', 'check', [CompletionResultType]::ParameterValue, 'Check the configuration file for damage and for settings someone else may have changed; exits with an error when it is damaged')
+            [CompletionResult]::new('repair', 'repair', [CompletionResultType]::ParameterValue, 'Repair a damaged configuration file: what can be read is kept, a copy of the old file is saved next to it')
             break
         }
         'ferry;help;config;list' {
@@ -617,6 +643,12 @@ Register-ArgumentCompleter -Native -CommandName 'ferry' -ScriptBlock {
             break
         }
         'ferry;help;config;path' {
+            break
+        }
+        'ferry;help;config;check' {
+            break
+        }
+        'ferry;help;config;repair' {
             break
         }
         'ferry;help;backup' {

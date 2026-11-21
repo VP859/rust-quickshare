@@ -162,7 +162,8 @@ pub enum Commands {
         #[command(subcommand)]
         command: PeerCommands,
     },
-    /// Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`).
+    /// Show or change settings (`ferry config list`, `get`, `set`, `unset`,
+    /// `path`), or check and repair the configuration file (`check`, `repair`).
     Config {
         /// Config subcommand (default: `list`).
         #[command(subcommand)]
@@ -238,6 +239,8 @@ pub enum SettingKey {
     KeepWindowLoaded,
     /// Desktop app on Linux: with the window closed, run only a small background process – tray icon, questions in notifications (`true`/`false`).
     MinimalBackground,
+    /// Sign config.toml with a key in the system keyring (desktop Linux, Windows), so `ferry config check` finds changes made outside Ferry (`true`/`false`).
+    SignConfig,
     /// Relays of the `relay` and `relay-only` network modes, separated by commas (`https://relay.example.org`).
     RelayUrls,
     /// Keep a history of transfers (`true`/`false`).
@@ -272,6 +275,16 @@ pub enum ConfigCommands {
     },
     /// Print the path of the configuration file.
     Path,
+    /// Check the configuration file for damage and for settings someone else
+    /// may have changed; exits with an error when it is damaged.
+    Check,
+    /// Repair a damaged configuration file: what can be read is kept, a copy
+    /// of the old file is saved next to it.
+    Repair {
+        /// Repair without asking.
+        #[arg(long, short)]
+        yes: bool,
+    },
 }
 
 /// Subcommands of `ferry identity`.

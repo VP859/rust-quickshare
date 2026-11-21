@@ -165,6 +165,8 @@ pub fn run() {
             clear_history,
             get_speed_limit,
             get_key_storage,
+            get_config_signing,
+            set_config_signing,
             set_key_storage,
             set_speed_limit,
             safety_number,

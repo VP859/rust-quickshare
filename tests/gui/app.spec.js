@@ -1166,3 +1166,23 @@ test.describe('with findings a repair would not change', () => {
     await expect(app.locator('#btn-config-repair')).toBeHidden();
   });
 });
+
+test('signing the settings file is turned on in the privacy settings', async ({ app }) => {
+  await app.locator('#btn-settings').click();
+  const toggle = app.locator('#privacy-signing');
+  await expect(app.locator('#signing-toggle')).toBeVisible();
+  await expect(toggle).not.toBeChecked();
+  await app.locator('label.switch:has(#privacy-signing)').click();
+  await expect(toggle).toBeChecked();
+  expect(await calls(app)).toContainEqual(['set_config_signing', { on: true }]);
+  await expect(app.locator('#toast')).toContainText('now signed');
+});
+
+test.describe('without a system keyring', () => {
+  test.use({ responses: { get_config_signing: { on: false, supported: false } } });
+
+  test('signing is not offered', async ({ app }) => {
+    await app.locator('#btn-settings').click();
+    await expect(app.locator('#signing-toggle')).toBeHidden();
+  });
+});

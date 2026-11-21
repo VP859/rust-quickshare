@@ -145,6 +145,11 @@ pub struct Config {
     /// authenticated.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub localsend: bool,
+    /// Ferry signs `config.toml` with a key kept in the system's secret store
+    /// whenever it saves it, so the check ([`super::check`]) finds changes
+    /// made outside Ferry ([`super::signature`]). Desktop Linux and Windows.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sign_config: bool,
 }
 
 impl Config {
@@ -243,6 +248,7 @@ impl Config {
             .and_then(|mut file| std::io::Write::write_all(&mut file, content.as_bytes()))
             .with_context(|| t!("config.write"))?;
         std::fs::rename(&tmp, &path).with_context(|| t!("config.write"))?;
+        super::signature::after_write(&path, content.as_bytes(), self.sign_config);
         Ok(())
     }
 
