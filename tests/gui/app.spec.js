@@ -1079,3 +1079,28 @@ test('the top bar says only whether the node is online; the Node ID is in the to
   if (isMobile) expect(width).toBeLessThan(20);
   else expect(width).toBeGreaterThan(40);
 });
+
+test('settings that are read normally show no warning', async ({ app }) => {
+  await expect(app.locator('#peers')).toContainText('Laptop');
+  await expect(app.locator('#config-problem')).toBeHidden();
+});
+
+test.describe('with a config.toml that could not be read', () => {
+  const problem = 'Ferry could not read its settings in /home/u/.config/ferry/config.toml (Could not parse config.toml)';
+  test.use({ responses: { config_problem: problem } });
+
+  test('warns at the top of the window until a backup is restored', async ({ app }) => {
+    const warning = app.locator('#config-problem');
+    await expect(warning).toBeVisible();
+    await expect(warning).toHaveText(problem);
+    await expect(warning).toHaveAttribute('role', 'alert');
+
+    await app.evaluate(() => window.__respond('plugin:dialog|open', '/home/me/old-phone.ferry-backup'));
+    await app.locator('#btn-settings').click();
+    await app.locator('#btn-backup-restore').click();
+    await app.locator('#backup-password').fill('a good password');
+    await app.locator('#backup-password').press('Enter');
+    await expect(app.locator('#toast')).toContainText('2 paired device(s) added');
+    await expect(warning).toBeHidden();
+  });
+});

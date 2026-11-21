@@ -45,6 +45,7 @@ const RESPONSES = {
   send_to_localsend: null,
   get_close_action: { action: 'tray', minimal_supported: true },
   resume_ui: { transfers: [], texts: [] },
+  config_problem: null,
   start_web_share: { url: 'http://192.168.1.10:47835/0123456789abcdef0123456789abcdef/', urls: ['http://192.168.1.10:47835/0123456789abcdef0123456789abcdef/', 'http://10.5.0.2:47835/0123456789abcdef0123456789abcdef/'], qr_svg: '<svg xmlns="http://www.w3.org/2000/svg"/>', expires_in: 1800, files: 0 },
   stop_web_share: null,
   web_share_status: { running: true, owner: null, refused: [] },

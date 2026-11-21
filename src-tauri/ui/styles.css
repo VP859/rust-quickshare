@@ -181,6 +181,8 @@ select {
 .safety-number { display: grid; grid-template-columns: repeat(4, auto); justify-content: space-between; gap: 6px 10px; padding: 14px; font: 600 17px var(--mono); letter-spacing: .06em; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); -webkit-user-select: text; user-select: text; }
 .tag.verified { color: var(--ok); }
 .row .sub .tag.unverified { color: var(--warn); }
+/* Text the user may copy (e.g. the path of a file to fix). */
+.selectable { -webkit-user-select: text; user-select: text; }
 .risk-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--bad); border-radius: var(--radius); background: var(--bad-soft); color: var(--bad); font-size: 13px; font-weight: 500; }
 .compat-warning { margin: 0; padding: 10px 12px; border: 1px solid var(--warn); border-radius: var(--radius); color: var(--warn); font-size: 13px; font-weight: 500; }
 .relay-field { display: grid; gap: 6px; margin-top: 8px; }

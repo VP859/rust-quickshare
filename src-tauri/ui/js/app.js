@@ -13,7 +13,7 @@
 //   web.js        sessions with a web browser (link and QR code)
 //   history.js    the history of finished transfers
 //   state.js      state shared by them
-import { fail, toast } from './dom.js';
+import { $, fail, toast } from './dom.js';
 import './backup.js';
 import './history.js';
 import { applyStaticText, t } from './i18n.js';
@@ -73,6 +73,15 @@ window.addEventListener('ferry-lan-permission', async () => {
 });
 
 // ---------- Startup ----------
+/** Shows why the settings could not be read, until a backup restores them. */
+async function showConfigProblem() {
+  let problem = null;
+  try { problem = await invoke('config_problem'); } catch {}
+  const box = $('config-problem');
+  box.textContent = problem ?? '';
+  box.hidden = !problem;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   applyStaticText();
   renderNodeStatus();
@@ -84,6 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNodeStatus();
   renderNoTransfers();
   loadAppInfo();
+  showConfigProblem();
   await listenTransfers();
   await listen('node-error', ({ payload }) => fail(payload));
   await listenTexts();

@@ -62,6 +62,8 @@ async function create(password) {
 async function restore(password) {
   const result = await invoke('restore_backup', { path: mode.path, password });
   close('modal-backup');
+  // Settings that could not be read at start are complete again.
+  $('config-problem').hidden = true;
   toast(t('backup_restored', { n: result.peers_added }));
   if (result.key_changed) askRestart('backup');
 }

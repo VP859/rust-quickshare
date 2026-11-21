@@ -54,6 +54,9 @@ config.serialize:
 config.write:
   en: "Could not save the configuration file"
   pl: "Nie udało się zapisać pliku konfiguracji"
+config.save_blocked:
+  en: "Not saved: %{path} could not be read when Ferry started, and saving would replace your settings and trusted devices with the defaults. Fix the file and start Ferry again, or restore a backup."
+  pl: "Nie zapisano: przy starcie Ferry nie udało się odczytać pliku %{path}, a zapis zastąpiłby Twoje ustawienia i zaufane urządzenia domyślnymi. Popraw plik i uruchom Ferry ponownie albo przywróć kopię zapasową."
 config.bad_node_id:
   en: "Invalid Node ID (expected 64 hexadecimal characters) or TICKET"
   pl: "Nieprawidłowy Node ID (oczekiwano 64 znaków szesnastkowych) ani TICKET"
@@ -1175,6 +1178,9 @@ gui.notify_pair_title:
 gui.notify_pair:
   en: "%{name} – code %{code}"
   pl: "%{name} – kod %{code}"
+gui.config_unreadable:
+  en: "Ferry could not read its settings in %{path} (%{error}) and runs with the defaults. Until the file is fixed and Ferry started again, or a backup is restored, nothing is saved and no device can connect. A copy of the file is in config.toml.broken."
+  pl: "Ferry nie mógł odczytać ustawień z %{path} (%{error}) i działa na domyślnych. Dopóki plik nie zostanie poprawiony i Ferry uruchomiony ponownie albo nie przywrócisz kopii zapasowej, nic nie zostanie zapisane i żadne urządzenie nie może się połączyć. Kopia pliku jest w config.toml.broken."
 gui.background_pair:
   en: "%{name} wants to pair. Open Ferry and pair again – the code has to be compared in the window."
   pl: "%{name} chce się sparować. Otwórz Ferry i sparuj ponownie – kod trzeba porównać w oknie."

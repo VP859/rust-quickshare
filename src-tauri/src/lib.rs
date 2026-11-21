@@ -176,6 +176,7 @@ pub fn run() {
             get_close_action,
             set_close_action,
             resume_ui,
+            config_problem,
             get_privacy,
             set_privacy,
             set_pairing_open,

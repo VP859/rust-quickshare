@@ -224,19 +224,34 @@ pub fn open_repository() -> CmdResult<()> {
     ferry::system::open_url(env!("CARGO_PKG_REPOSITORY")).map_err(err)
 }
 
+/// Why the configuration file could not be read when Ferry started, shown
+/// to the user; `None` when it was read (or a backup has been restored since).
+#[tauri::command]
+pub fn config_problem(state: State<'_, AppState>) -> Option<String> {
+    state.config_problem.lock().ok().and_then(|p| p.clone())
+}
+
 /// Loads the configuration into the state and activates the saved language.
 ///
 /// Called after the platform directories are set.
 pub fn load_config(app: &AppHandle) {
     let state = app.state::<AppState>();
-    let config = Config::load().unwrap_or_else(|e| {
-        tracing::warn!("Could not load the configuration: {e:#}");
-        state
-            .config_unreadable
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-        Config::default()
-    });
+    let (config, error) = Config::load_or_defaults();
     i18n::init(None, config.language.as_deref());
+    if let Some(e) = error {
+        tracing::warn!("Could not load the configuration: {e:#}");
+        let path = Config::file_path()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        let problem = t!(
+            "gui.config_unreadable",
+            path = &path,
+            error = format!("{e:#}")
+        );
+        if let Ok(mut slot) = state.config_problem.lock() {
+            *slot = Some(problem.into_owned());
+        }
+    }
     state
         .quit_on_close
         .store(config.quit_on_close, std::sync::atomic::Ordering::Relaxed);

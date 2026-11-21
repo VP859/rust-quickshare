@@ -11,6 +11,10 @@ use std::str::FromStr;
 
 use crate::node::{NetworkMode, NodeTicket};
 
+/// Set by [`Config::load_or_defaults`] when the file could not be read: the
+/// defaults the app then holds must not replace the user's file.
+static SAVING_BLOCKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// A trusted device stored in the configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfo {
@@ -167,13 +171,65 @@ impl Config {
         toml::from_str(&content).with_context(|| t!("config.parse"))
     }
 
+    /// Loads the configuration for an app that keeps it in memory and saves
+    /// it back (the GUI). When the file cannot be read, the defaults are
+    /// returned with the error, a copy of the file is kept next to it
+    /// (`config.toml.broken`), and [`Config::save`] refuses to write until
+    /// [`Config::save_over_unreadable`]: one edit of a setting must not replace the
+    /// user's settings and trusted devices with the defaults.
+    pub fn load_or_defaults() -> (Self, Option<anyhow::Error>) {
+        match Self::load() {
+            Ok(config) => (config, None),
+            Err(e) => {
+                if let Ok(path) = Self::file_path() {
+                    let copy = path.with_extension("toml.broken");
+                    if let Err(e) = std::fs::copy(&path, &copy) {
+                        tracing::warn!(
+                            "Could not copy {} to {}: {e}",
+                            path.display(),
+                            copy.display()
+                        );
+                    }
+                }
+                SAVING_BLOCKED.store(true, std::sync::atomic::Ordering::Relaxed);
+                (Self::default(), Some(e))
+            }
+        }
+    }
+
     /// Saves the configuration atomically (temporary file + rename), so an
     /// interruption never leaves a corrupted file behind.
     ///
     /// # Errors
     ///
-    /// Fails on serialization or I/O errors.
+    /// Fails on serialization or I/O errors, and while saving is blocked
+    /// because the file could not be read ([`Config::load_or_defaults`]).
     pub fn save(&self) -> Result<()> {
+        if SAVING_BLOCKED.load(std::sync::atomic::Ordering::Relaxed) {
+            anyhow::bail!(t!(
+                "config.save_blocked",
+                path = Self::file_path()?.display()
+            ));
+        }
+        self.write()
+    }
+
+    /// Saves a configuration that is complete again (a backup was restored
+    /// into it) although the file could not be read at start, and lets
+    /// [`Config::save`] write again; the unreadable file stays in
+    /// `config.toml.broken`.
+    ///
+    /// # Errors
+    ///
+    /// Fails on serialization or I/O errors (saving then stays blocked).
+    pub fn save_over_unreadable(&self) -> Result<()> {
+        self.write()?;
+        SAVING_BLOCKED.store(false, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
+    }
+
+    /// Writes the file atomically; see [`Config::save`].
+    fn write(&self) -> Result<()> {
         let path = Self::file_path()?;
         let content = toml::to_string_pretty(self).with_context(|| t!("config.serialize"))?;
         let tmp = path.with_extension("toml.tmp");

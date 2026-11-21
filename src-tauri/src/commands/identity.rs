@@ -89,7 +89,9 @@ pub async fn restore_backup(
     let mut next = config.clone();
     let restored = tauri::async_runtime::spawn_blocking(move || {
         let restored = ferry::node::backup::restore(&contents, &mut next)?;
-        next.save()?;
+        // The configuration is complete again even if the file could not be
+        // read at start: saving it replaces the unreadable file.
+        next.save_over_unreadable()?;
         anyhow::Ok((restored, next))
     })
     .await
@@ -98,6 +100,9 @@ pub async fn restore_backup(
     let (restored, next) = restored;
     *config = next;
     drop(config);
+    if let Ok(mut problem) = state.config_problem.lock() {
+        *problem = None;
+    }
     let _ = app.emit("peers-changed", ());
     Ok(RestoredBackup {
         node_id: restored.node_id,
