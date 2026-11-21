@@ -25,6 +25,7 @@ const RESPONSES = {
   get_privacy: { hidden: false, auto_accept_texts: false, auto_accept_executables: false, localsend: false, keep_history: true, paired_only: false, pairing_open: false, announce_platform: false, random_port: false, strip_metadata: false },
   get_speed_limit: null,
   get_key_storage: { system: false, supported: true },
+  get_config_signing: { on: false, supported: true },
   set_key_storage: null,
   set_speed_limit: 2097152,
   get_history: [
@@ -45,6 +46,8 @@ const RESPONSES = {
   send_to_localsend: null,
   get_close_action: { action: 'tray', minimal_supported: true },
   resume_ui: { transfers: [], texts: [] },
+  config_problem: null,
+  check_config: { problems: [], repairable: false },
   start_web_share: { url: 'http://192.168.1.10:47835/0123456789abcdef0123456789abcdef/', urls: ['http://192.168.1.10:47835/0123456789abcdef0123456789abcdef/', 'http://10.5.0.2:47835/0123456789abcdef0123456789abcdef/'], qr_svg: '<svg xmlns="http://www.w3.org/2000/svg"/>', expires_in: 1800, files: 0 },
   stop_web_share: null,
   web_share_status: { running: true, owner: null, refused: [] },

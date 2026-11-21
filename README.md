@@ -118,6 +118,7 @@ ferry web photo.jpg                     # link + QR code for a browser: download
 ferry receive <TICKET> ~/Downloads      # download a shared file
 ferry config                            # all settings (also: get, set, unset, path)
 ferry config set hidden true            # hide this device from unpaired devices
+ferry config check                      # damage, or settings someone else may have changed; `repair` fixes it
 ferry backup create phone.ferry-backup  # key and paired devices, encrypted with a password
 ferry backup restore phone.ferry-backup # also a backup made in the desktop app or on Android
 ferry doctor                            # network and discovery diagnostics
@@ -146,6 +147,7 @@ ferry completions zsh > ~/.zfunc/_ferry # Tab completion (packages install it al
 | Speed limit (per second, sending and receiving separately) | `speed-limit 2M` | `off` |
 | Keep a history of transfers | `history false` | `true` |
 | Device key in the system keyring (KWallet, GNOME Keyring, Windows Credential Manager) | `ferry identity storage system` | a file (`ferry identity storage file`) |
+| Sign `config.toml` with a key in the system keyring, so `ferry config check` finds changes made outside Ferry | `sign-config true` | `false` |
 
 Settings are stored in `~/.config/ferry/config.toml` (Linux), `%APPDATA%\ferry\config.toml`
 (Windows) or the app's private storage (Android). Environment variables:

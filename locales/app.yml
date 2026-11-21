@@ -54,6 +54,111 @@ config.serialize:
 config.write:
   en: "Could not save the configuration file"
   pl: "Nie udało się zapisać pliku konfiguracji"
+config.save_blocked:
+  en: "Not saved: %{path} could not be read when Ferry started, and saving would replace your settings and trusted devices with the defaults. Fix the file and start Ferry again, or restore a backup."
+  pl: "Nie zapisano: przy starcie Ferry nie udało się odczytać pliku %{path}, a zapis zastąpiłby Twoje ustawienia i zaufane urządzenia domyślnymi. Popraw plik i uruchom Ferry ponownie albo przywróć kopię zapasową."
+check.too_large:
+  en: "The file is too large to be a configuration (%{size} bytes); it is not repaired"
+  pl: "Plik jest za duży na konfigurację (%{size} bajtów); nie zostanie naprawiony"
+check.not_text:
+  en: "The file contains bytes that are not text (damaged or overwritten by another program); they are left out"
+  pl: "Plik zawiera bajty, które nie są tekstem (uszkodzenie albo nadpisanie przez inny program); zostaną pominięte"
+check.line:
+  en: "Line %{line} cannot be read (%{error}); it is left out"
+  pl: "Nie da się odczytać linii %{line} (%{error}); zostanie pominięta"
+check.section:
+  en: "Line %{line}: the section %{section} cannot be read (%{error}); it is left out with its settings"
+  pl: "Linia %{line}: nie da się odczytać sekcji %{section} (%{error}); zostanie pominięta razem z jej ustawieniami"
+check.unknown_key:
+  en: "%{key}: unknown setting (a typo, or added by another program); it is removed"
+  pl: "%{key}: nieznane ustawienie (literówka albo dopisane przez inny program); zostanie usunięte"
+check.bad_value:
+  en: "%{key}: invalid value (%{error}); the default is used"
+  pl: "%{key}: nieprawidłowa wartość (%{error}); zostanie użyta domyślna"
+check.paired_only:
+  en: "“Only trusted devices” could not be read: it is turned on, the safer choice; you can change it in the privacy settings"
+  pl: "Nie da się odczytać ustawienia „Tylko zaufane urządzenia”: zostanie włączone, bo to bezpieczniejszy wybór; możesz to zmienić w ustawieniach prywatności"
+check.key_storage:
+  en: "Where the device key is kept could not be read: set to “%{value}”, where the key is found, so the Node ID stays the same"
+  pl: "Nie da się odczytać, gdzie jest przechowywany klucz urządzenia: ustawiono „%{value}”, gdzie klucz się znajduje, więc Node ID się nie zmieni"
+check.peers_not_table:
+  en: "The list of trusted devices cannot be read; it is left out (pair the devices again)"
+  pl: "Nie da się odczytać listy zaufanych urządzeń; zostanie pominięta (sparuj urządzenia ponownie)"
+check.peer_bad_id:
+  en: "Trusted device %{id}: invalid Node ID; it is left out"
+  pl: "Zaufane urządzenie %{id}: nieprawidłowy Node ID; zostanie pominięte"
+check.peer_unreadable:
+  en: "Trusted device %{name} cannot be read; it is left out"
+  pl: "Nie da się odczytać zaufanego urządzenia %{name}; zostanie pominięte"
+check.peer_alias:
+  en: "Trusted device %{id}: the name is missing or invalid; it is named %{alias}"
+  pl: "Zaufane urządzenie %{id}: brak nazwy albo jest nieprawidłowa; otrzyma nazwę %{alias}"
+check.peer_auto_accept:
+  en: "Trusted device %{name}: Auto-Accept is missing or invalid; it is turned off"
+  pl: "Zaufane urządzenie %{name}: brak ustawienia Auto-Accept albo jest nieprawidłowe; zostanie wyłączone"
+check.peer_added_at:
+  en: "Trusted device %{name}: the pairing date is invalid; it is set to now"
+  pl: "Zaufane urządzenie %{name}: nieprawidłowa data sparowania; zostanie ustawiona na teraz"
+check.peer_field:
+  en: "Trusted device %{name}: %{field} is invalid; it is removed"
+  pl: "Zaufane urządzenie %{name}: nieprawidłowe pole %{field}; zostanie usunięte"
+check.unrepairable:
+  en: "What could be read does not form a configuration (%{error})"
+  pl: "To, co da się odczytać, nie tworzy poprawnej konfiguracji (%{error})"
+check.executables:
+  en: "Programs and scripts from Auto-Accept devices are received without asking; check that you turned this on"
+  pl: "Programy i skrypty od urządzeń z Auto-Accept są odbierane bez pytania; sprawdź, czy to Ty to włączyłeś"
+check.download_dir:
+  en: "Received files are saved in %{path}, a folder from which programs start or a system folder; check that you chose it"
+  pl: "Odebrane pliki trafiają do %{path}, folderu, z którego uruchamiają się programy, albo folderu systemowego; sprawdź, czy to Ty go wybrałeś"
+check.auto_accept:
+  en: "Devices that send files without asking: %{names}; check that you know all of them"
+  pl: "Urządzenia wysyłające pliki bez pytania: %{names}; sprawdź, czy znasz wszystkie"
+check.permissions:
+  en: "Other users of this computer can read the file (permissions %{mode}); a repair limits it to you"
+  pl: "Inni użytkownicy tego komputera mogą odczytać plik (uprawnienia %{mode}); naprawa ograniczy dostęp tylko do Ciebie"
+check.signature_ok:
+  en: "The file is as Ferry last saved it (checked with the key in the system keyring)"
+  pl: "Plik jest taki, jak Ferry go ostatnio zapisał (sprawdzone kluczem z systemowego pęku kluczy)"
+check.signature_changed:
+  en: "The file was changed outside Ferry since Ferry last saved it: by you in an editor, or by another program or person. Look through the findings; saving any setting in Ferry signs the file again"
+  pl: "Plik został zmieniony poza Ferry od ostatniego zapisu przez Ferry: przez Ciebie w edytorze albo przez inny program lub osobę. Przejrzyj wyniki; zapisanie dowolnego ustawienia w Ferry podpisze plik ponownie"
+check.signature_missing:
+  en: "The file has no signature: it was removed, or Ferry saved the file without access to the system keyring (e.g. the daemon without a desktop session)"
+  pl: "Plik nie ma podpisu: został usunięty albo Ferry zapisał plik bez dostępu do systemowego pęku kluczy (np. demon bez sesji pulpitu)"
+check.signature_no_key:
+  en: "The signing key is no longer in the system keyring, so the file cannot be checked; the next save in Ferry creates a new key"
+  pl: "W systemowym pęku kluczy nie ma już klucza podpisu, więc pliku nie da się sprawdzić; następny zapis w Ferry utworzy nowy klucz"
+check.signature_unavailable:
+  en: "The signature cannot be checked: %{error}"
+  pl: "Nie da się sprawdzić podpisu: %{error}"
+settings.signing_on:
+  en: "config.toml is now signed with a key in the system keyring; `ferry config check` finds changes made outside Ferry"
+  pl: "config.toml jest teraz podpisywany kluczem z systemowego pęku kluczy; `ferry config check` wykryje zmiany wprowadzone poza Ferry"
+settings.signing_unsupported:
+  en: "Signing config.toml needs the system keyring, which this platform does not have"
+  pl: "Podpisywanie config.toml wymaga systemowego pęku kluczy, którego ta platforma nie ma"
+check.cli_none:
+  en: "No problems found."
+  pl: "Nie znaleziono problemów."
+check.cli_ask:
+  en: "Repair the file? What can be read is kept, the rest is left out as listed above; a copy of the current file is saved as %{copy}. [y/N] "
+  pl: "Naprawić plik? To, co da się odczytać, zostanie zachowane, reszta pominięta zgodnie z listą powyżej; kopia obecnego pliku zostanie zapisana jako %{copy}. [t/N] "
+check.cli_repaired:
+  en: "Repaired. A running Ferry (daemon, app) uses the repaired settings after a restart."
+  pl: "Naprawiono. Uruchomione Ferry (demon, aplikacja) użyje naprawionych ustawień po ponownym uruchomieniu."
+check.cli_not_repaired:
+  en: "Not repaired."
+  pl: "Nie naprawiono."
+check.cli_cannot_repair:
+  en: "The file cannot be repaired automatically. Fix it by hand, or restore a backup (`ferry backup restore`)."
+  pl: "Tego pliku nie da się naprawić automatycznie. Popraw go ręcznie albo przywróć kopię zapasową (`ferry backup restore`)."
+check.cli_hint_repair:
+  en: "Run `ferry config repair` to repair it."
+  pl: "Uruchom `ferry config repair`, aby go naprawić."
+check.nothing_to_repair:
+  en: "There is nothing to repair in the configuration file"
+  pl: "W pliku konfiguracji nie ma czego naprawiać"
 config.bad_node_id:
   en: "Invalid Node ID (expected 64 hexadecimal characters) or TICKET"
   pl: "Nieprawidłowy Node ID (oczekiwano 64 znaków szesnastkowych) ani TICKET"
@@ -1175,6 +1280,9 @@ gui.notify_pair_title:
 gui.notify_pair:
   en: "%{name} – code %{code}"
   pl: "%{name} – kod %{code}"
+gui.config_unreadable:
+  en: "Ferry could not read its settings in %{path} (%{error}) and runs with the defaults. Until the file is fixed and Ferry started again, or a backup is restored, nothing is saved and no device can connect. A copy of the file is in config.toml.broken."
+  pl: "Ferry nie mógł odczytać ustawień z %{path} (%{error}) i działa na domyślnych. Dopóki plik nie zostanie poprawiony i Ferry uruchomiony ponownie albo nie przywrócisz kopii zapasowej, nic nie zostanie zapisane i żadne urządzenie nie może się połączyć. Kopia pliku jest w config.toml.broken."
 gui.background_pair:
   en: "%{name} wants to pair. Open Ferry and pair again – the code has to be compared in the window."
   pl: "%{name} chce się sparować. Otwórz Ferry i sparuj ponownie – kod trzeba porównać w oknie."

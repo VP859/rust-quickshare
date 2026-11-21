@@ -39,7 +39,7 @@ set edit:completion:arg-completer[ferry] = {|@words|
             cand language 'Show or change the interface language (`en`, `pl`)'
             cand network 'Show or change the network mode: `local` (no external servers, default), `internet` (also through the free public iroh relays, for devices in different networks), `relay` (also through your own relays) or `relay-only` (only through your own relays, never directly)'
             cand peer 'Manage trusted devices'
-            cand config 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)'
+            cand config 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`), or check and repair the configuration file (`check`, `repair`)'
             cand backup 'Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app'
             cand identity 'Show, back up or restore this device''s identity (its Node ID key)'
             cand doctor 'Network and configuration diagnostics'
@@ -267,6 +267,8 @@ set edit:completion:arg-completer[ferry] = {|@words|
             cand set 'Change one setting'
             cand unset 'Reset one setting to its default'
             cand path 'Print the path of the configuration file'
+            cand check 'Check the configuration file for damage and for settings someone else may have changed; exits with an error when it is damaged'
+            cand repair 'Repair a damaged configuration file: what can be read is kept, a copy of the old file is saved next to it'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'ferry;config;list'= {
@@ -294,12 +296,26 @@ set edit:completion:arg-completer[ferry] = {|@words|
             cand -h 'Print help'
             cand --help 'Print help'
         }
+        &'ferry;config;check'= {
+            cand --lang 'Interface language for this run (`en`, `pl`); overrides the saved setting'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'ferry;config;repair'= {
+            cand --lang 'Interface language for this run (`en`, `pl`); overrides the saved setting'
+            cand -y 'Repair without asking'
+            cand --yes 'Repair without asking'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
         &'ferry;config;help'= {
             cand list 'Show every setting'
             cand get 'Show one setting'
             cand set 'Change one setting'
             cand unset 'Reset one setting to its default'
             cand path 'Print the path of the configuration file'
+            cand check 'Check the configuration file for damage and for settings someone else may have changed; exits with an error when it is damaged'
+            cand repair 'Repair a damaged configuration file: what can be read is kept, a copy of the old file is saved next to it'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'ferry;config;help;list'= {
@@ -311,6 +327,10 @@ set edit:completion:arg-completer[ferry] = {|@words|
         &'ferry;config;help;unset'= {
         }
         &'ferry;config;help;path'= {
+        }
+        &'ferry;config;help;check'= {
+        }
+        &'ferry;config;help;repair'= {
         }
         &'ferry;config;help;help'= {
         }
@@ -425,7 +445,7 @@ set edit:completion:arg-completer[ferry] = {|@words|
             cand language 'Show or change the interface language (`en`, `pl`)'
             cand network 'Show or change the network mode: `local` (no external servers, default), `internet` (also through the free public iroh relays, for devices in different networks), `relay` (also through your own relays) or `relay-only` (only through your own relays, never directly)'
             cand peer 'Manage trusted devices'
-            cand config 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`)'
+            cand config 'Show or change settings (`ferry config list`, `get`, `set`, `unset`, `path`), or check and repair the configuration file (`check`, `repair`)'
             cand backup 'Back up this device (its key and paired devices, encrypted with a password) or restore such a backup – the same file as in the desktop and Android app'
             cand identity 'Show, back up or restore this device''s identity (its Node ID key)'
             cand doctor 'Network and configuration diagnostics'
@@ -499,6 +519,8 @@ set edit:completion:arg-completer[ferry] = {|@words|
             cand set 'Change one setting'
             cand unset 'Reset one setting to its default'
             cand path 'Print the path of the configuration file'
+            cand check 'Check the configuration file for damage and for settings someone else may have changed; exits with an error when it is damaged'
+            cand repair 'Repair a damaged configuration file: what can be read is kept, a copy of the old file is saved next to it'
         }
         &'ferry;help;config;list'= {
         }
@@ -509,6 +531,10 @@ set edit:completion:arg-completer[ferry] = {|@words|
         &'ferry;help;config;unset'= {
         }
         &'ferry;help;config;path'= {
+        }
+        &'ferry;help;config;check'= {
+        }
+        &'ferry;help;config;repair'= {
         }
         &'ferry;help;backup'= {
             cand create 'Write a backup of the key, the name and the paired devices, encrypted with a password (asked for; from standard input when it is not a terminal)'

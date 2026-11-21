@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use crate::cli::args::{ConfigCommands, SettingKey};
 use ferry::config::Config;
+use ferry::config::check::{self, Report, Severity};
 use ferry::i18n::{self, Language};
 use ferry::node::NetworkMode;
 use ferry::pairing::clean_device_name;
@@ -113,7 +114,7 @@ pub fn run_network(mode: Option<&str>, relays: &[String]) -> Result<()> {
 }
 
 /// Every key of `ferry config`, in display order.
-const SETTING_KEYS: [SettingKey; 18] = [
+const SETTING_KEYS: [SettingKey; 19] = [
     SettingKey::DeviceName,
     SettingKey::Language,
     SettingKey::NetworkMode,
@@ -129,6 +130,7 @@ const SETTING_KEYS: [SettingKey; 18] = [
     SettingKey::QuitOnClose,
     SettingKey::KeepWindowLoaded,
     SettingKey::MinimalBackground,
+    SettingKey::SignConfig,
     SettingKey::Localsend,
     SettingKey::History,
     SettingKey::SpeedLimit,
@@ -168,6 +170,7 @@ fn get_setting(config: &Config, key: SettingKey) -> String {
         SettingKey::QuitOnClose => config.quit_on_close.to_string(),
         SettingKey::KeepWindowLoaded => config.keep_window_loaded.to_string(),
         SettingKey::MinimalBackground => config.minimal_background.to_string(),
+        SettingKey::SignConfig => config.sign_config.to_string(),
         SettingKey::Localsend => config.localsend.to_string(),
     }
 }
@@ -221,6 +224,21 @@ fn set_setting(config: &mut Config, key: SettingKey, value: &str) -> Result<()> 
         SettingKey::QuitOnClose => config.quit_on_close = parse_bool(value)?,
         SettingKey::KeepWindowLoaded => config.keep_window_loaded = parse_bool(value)?,
         SettingKey::MinimalBackground => config.minimal_background = parse_bool(value)?,
+        SettingKey::SignConfig => {
+            let on = parse_bool(value)?;
+            if on {
+                if !ferry::node::keystore::KeyStorage::system_supported() {
+                    anyhow::bail!(t!("settings.signing_unsupported"));
+                }
+                // The key is made now, so a secret store that cannot be
+                // reached is an error here rather than an unsigned file later.
+                ferry::config::signature::prepare()?;
+                println!("{}", t!("settings.signing_on"));
+            } else {
+                forget_signing_key();
+            }
+            config.sign_config = on;
+        }
         SettingKey::Localsend => config.localsend = parse_bool(value)?,
     }
     Ok(())
@@ -252,6 +270,10 @@ fn unset_setting(config: &mut Config, key: SettingKey) {
         SettingKey::QuitOnClose => config.quit_on_close = false,
         SettingKey::KeepWindowLoaded => config.keep_window_loaded = false,
         SettingKey::MinimalBackground => config.minimal_background = false,
+        SettingKey::SignConfig => {
+            config.sign_config = false;
+            forget_signing_key();
+        }
         SettingKey::Localsend => config.localsend = false,
     }
 }
@@ -265,6 +287,12 @@ fn unset_setting(config: &mut Config, key: SettingKey) {
 ///
 /// Fails when a value is invalid or the configuration cannot be loaded or saved.
 pub fn run_config(command: Option<ConfigCommands>) -> Result<()> {
+    // These work on a file that cannot be loaded.
+    match command {
+        Some(ConfigCommands::Check) => return run_check(),
+        Some(ConfigCommands::Repair { yes }) => return run_repair(yes),
+        _ => {}
+    }
     let mut config = Config::load()?;
     match command.unwrap_or(ConfigCommands::List) {
         ConfigCommands::List => {
@@ -286,8 +314,104 @@ pub fn run_config(command: Option<ConfigCommands>) -> Result<()> {
             println!("{}", t!("settings.restart_running"));
         }
         ConfigCommands::Path => println!("{}", Config::file_path()?.display()),
+        ConfigCommands::Check | ConfigCommands::Repair { .. } => unreachable!("handled above"),
     }
     Ok(())
+}
+
+/// Removes the key that signed `config.toml` from the secret store; a store
+/// that cannot be reached only leaves it there.
+fn forget_signing_key() {
+    if ferry::node::keystore::KeyStorage::system_supported()
+        && let Err(e) = ferry::config::signature::forget()
+    {
+        tracing::warn!("The signing key stays in the secret store: {e:#}");
+    }
+}
+
+/// Prints the findings of a check, one per line, marked by how serious they are.
+fn print_findings(report: &Report) {
+    if report.problems.is_empty() {
+        println!("{}", t!("check.cli_none"));
+    }
+    for problem in &report.problems {
+        let mark = match problem.severity {
+            Severity::Error => "✗",
+            Severity::Warning => "!",
+            Severity::Info => "·",
+        };
+        println!("{mark} {}", problem.message);
+    }
+}
+
+/// Whether the file has damage (not only settings worth a look).
+fn damaged(report: &Report) -> bool {
+    report
+        .problems
+        .iter()
+        .any(|p| p.severity == Severity::Error)
+}
+
+/// `ferry config check`: lists what was found; an error when the file is damaged.
+///
+/// # Errors
+///
+/// When the file cannot be read at all, or is damaged.
+fn run_check() -> Result<()> {
+    println!("{}", Config::file_path()?.display());
+    let report = check::inspect_file()?;
+    print_findings(&report);
+    if !damaged(&report) {
+        return Ok(());
+    }
+    if report.repairable() {
+        anyhow::bail!(t!("check.cli_hint_repair"));
+    }
+    anyhow::bail!(t!("check.cli_cannot_repair"))
+}
+
+/// `ferry config repair [--yes]`: shows what a repair changes, asks, repairs.
+///
+/// # Errors
+///
+/// When the file cannot be read or repaired, or saving fails.
+fn run_repair(yes: bool) -> Result<()> {
+    let path = Config::file_path()?;
+    println!("{}", path.display());
+    let report = check::inspect_file()?;
+    print_findings(&report);
+    if !report.repairable() {
+        if damaged(&report) {
+            anyhow::bail!(t!("check.cli_cannot_repair"));
+        }
+        println!("{}", t!("check.nothing_to_repair"));
+        return Ok(());
+    }
+    if !yes
+        && !confirm(&t!(
+            "check.cli_ask",
+            copy = path.with_extension(check::BEFORE_REPAIR).display()
+        ))?
+    {
+        println!("{}", t!("check.cli_not_repaired"));
+        return Ok(());
+    }
+    check::repair()?;
+    println!("{}", t!("check.cli_repaired"));
+    Ok(())
+}
+
+/// Asks a yes/no question in the terminal; no unless answered yes.
+fn confirm(question: &str) -> Result<bool> {
+    use std::io::Write;
+    print!("\n{question}");
+    std::io::stdout().flush()?;
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    Ok(matches!(
+        answer.trim().to_lowercase().as_str(),
+        "y" | "yes" | "t" | "tak"
+    ))
 }
 
 #[cfg(test)]

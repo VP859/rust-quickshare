@@ -1,0 +1,16 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH ferry-config-check 1  Ferry "Ferry Manual"
+.SH NAME
+ferry\-config\-check \- Check the configuration file for damage and for settings someone else may have changed; exits with an error when it is damaged
+.SH SYNOPSIS
+\fBferry config check\fR [\fB\-\-lang\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Check the configuration file for damage and for settings someone else may have changed; exits with an error when it is damaged
+.SH OPTIONS
+.TP
+\fB\-\-lang\fR \fI<CODE>\fR
+Interface language for this run (`en`, `pl`); overrides the saved setting
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

@@ -79,7 +79,7 @@ impl TransferHandler for DaemonHandler {
     /// Reloads the configuration, so `ferry config` and `ferry pairing` apply
     /// without a restart.
     async fn admits(&self, peer: EndpointId, pairing: bool) -> bool {
-        Config::load().map_or(true, |c| c.admits(&peer.to_string(), pairing))
+        Config::admits_now(&peer.to_string(), pairing)
     }
 
     /// The other device removed this one: remove it here too.

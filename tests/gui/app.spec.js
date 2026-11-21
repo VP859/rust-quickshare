@@ -1079,3 +1079,110 @@ test('the top bar says only whether the node is online; the Node ID is in the to
   if (isMobile) expect(width).toBeLessThan(20);
   else expect(width).toBeGreaterThan(40);
 });
+
+test('settings that are read normally show no warning, and a check from the settings finds nothing', async ({ app }) => {
+  await expect(app.locator('#peers')).toContainText('Laptop');
+  await expect(app.locator('#config-problem')).toBeHidden();
+  await expect(app.locator('#modal-config')).not.toHaveClass(/active/);
+
+  await app.locator('#btn-settings').click();
+  await app.locator('#btn-config-check').click();
+  const dialog = app.locator('#modal-config');
+  await expect(dialog).toHaveClass(/active/);
+  await expect(app.locator('#config-report')).toContainText('No problems found');
+  await expect(app.locator('#btn-config-repair')).toBeHidden();
+  await app.locator('#btn-config-close').click();
+  await expect(dialog).not.toHaveClass(/active/);
+});
+
+test.describe('with a config.toml that could not be read', () => {
+  const problem = 'Ferry could not read its settings in /home/u/.config/ferry/config.toml (Could not parse config.toml)';
+  const findings = {
+    problems: [
+      { severity: 'error', line: 2, message: 'Line 2 cannot be read (invalid boolean); it is left out', repaired: true },
+      { severity: 'error', line: null, message: '“Only trusted devices” could not be read: it is turned on', repaired: true },
+      { severity: 'info', line: null, message: 'Devices that send files without asking: Laptop', repaired: false },
+    ],
+    repairable: true,
+  };
+  test.use({ responses: { config_problem: problem, check_config: findings } });
+
+  test('asks at start, and "Go to the app" leaves the warning above the app', async ({ app }) => {
+    const dialog = app.locator('#modal-config');
+    await expect(dialog).toHaveClass(/active/);
+    await expect(app.locator('#config-title')).toHaveText('The settings file is damaged');
+    await expect(app.locator('#config-modal-text')).toHaveText(problem);
+    await app.getByRole('button', { name: 'Go to the app' }).click();
+    await expect(dialog).not.toHaveClass(/active/);
+    const warning = app.locator('#config-problem');
+    await expect(warning).toBeVisible();
+    await expect(app.locator('#config-problem-text')).toHaveText(problem);
+    await expect(warning).toHaveAttribute('role', 'alert');
+    expect((await calls(app)).some(([cmd]) => cmd === 'check_config')).toBe(false);
+  });
+
+  test('verifying lists the findings and asks to repair; the repair asks for a restart', async ({ app }) => {
+    await app.locator('#modal-config').getByRole('button', { name: 'Verify the file' }).click();
+    const report = app.locator('#config-report li');
+    await expect(report).toHaveCount(3);
+    await expect(report.first()).toHaveClass('error');
+    await expect(report.first()).toContainText('Line 2');
+    await expect(app.locator('#config-repair-ask')).toContainText('Repair the file?');
+    await expect(app.locator('#btn-config-close')).toHaveText('Not now');
+    await app.getByRole('button', { name: 'Repair', exact: true }).click();
+    expect((await calls(app)).map(([cmd]) => cmd)).toContain('repair_config');
+    await expect(app.locator('#modal-config')).not.toHaveClass(/active/);
+    await expect(app.locator('#config-problem')).toBeHidden();
+    await expect(app.locator('#toast')).toContainText('repaired');
+    await expect(app.locator('#modal-restart')).toHaveClass(/active/);
+    await expect(app.locator('#restart-text')).toContainText('repaired settings');
+  });
+
+  test('the warning reopens the check, and a restored backup removes it', async ({ app }) => {
+    await app.getByRole('button', { name: 'Go to the app' }).click();
+    await app.locator('#btn-config-problem-check').click();
+    await expect(app.locator('#modal-config')).toHaveClass(/active/);
+    await expect(app.locator('#config-report li')).toHaveCount(3);
+    await app.locator('#btn-config-close').click();
+
+    await app.evaluate(() => window.__respond('plugin:dialog|open', '/home/me/old-phone.ferry-backup'));
+    await app.locator('#btn-settings').click();
+    await app.locator('#btn-backup-restore').click();
+    await app.locator('#backup-password').fill('a good password');
+    await app.locator('#backup-password').press('Enter');
+    await expect(app.locator('#toast')).toContainText('2 paired device(s) added');
+    await expect(app.locator('#config-problem')).toBeHidden();
+  });
+});
+
+test.describe('with findings a repair would not change', () => {
+  test.use({ responses: { check_config: { problems: [{ severity: 'warning', line: null, message: 'Programs and scripts from Auto-Accept devices are received without asking', repaired: false }], repairable: false } } });
+
+  test('the check only reports them', async ({ app }) => {
+    await app.locator('#btn-settings').click();
+    await app.locator('#btn-config-check').click();
+    await expect(app.locator('#config-report li.warning')).toContainText('Programs and scripts');
+    await expect(app.locator('#config-repair-ask')).toContainText('Nothing needs repairing');
+    await expect(app.locator('#btn-config-repair')).toBeHidden();
+  });
+});
+
+test('signing the settings file is turned on in the privacy settings', async ({ app }) => {
+  await app.locator('#btn-settings').click();
+  const toggle = app.locator('#privacy-signing');
+  await expect(app.locator('#signing-toggle')).toBeVisible();
+  await expect(toggle).not.toBeChecked();
+  await app.locator('label.switch:has(#privacy-signing)').click();
+  await expect(toggle).toBeChecked();
+  expect(await calls(app)).toContainEqual(['set_config_signing', { on: true }]);
+  await expect(app.locator('#toast')).toContainText('now signed');
+});
+
+test.describe('without a system keyring', () => {
+  test.use({ responses: { get_config_signing: { on: false, supported: false } } });
+
+  test('signing is not offered', async ({ app }) => {
+    await app.locator('#btn-settings').click();
+    await expect(app.locator('#signing-toggle')).toBeHidden();
+  });
+});

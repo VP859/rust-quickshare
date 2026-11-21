@@ -224,16 +224,82 @@ pub fn open_repository() -> CmdResult<()> {
     ferry::system::open_url(env!("CARGO_PKG_REPOSITORY")).map_err(err)
 }
 
+/// Why the configuration file could not be read when Ferry started, shown
+/// to the user; `None` when it was read (or a backup has been restored since).
+#[tauri::command]
+pub fn config_problem(state: State<'_, AppState>) -> Option<String> {
+    state.config_problem.lock().ok().and_then(|p| p.clone())
+}
+
+/// Result of checking `config.toml` ([`check_config`]).
+#[derive(Serialize)]
+pub struct ConfigCheck {
+    /// What was found, in the user's language.
+    problems: Vec<ferry::config::check::Problem>,
+    /// Whether a repair ([`repair_config`]) would change something.
+    repairable: bool,
+}
+
+/// Checks `config.toml` for damage and for settings worth a look.
+///
+/// # Errors
+///
+/// When the file cannot be read at all.
+#[tauri::command]
+pub async fn check_config() -> CmdResult<ConfigCheck> {
+    let report = tauri::async_runtime::spawn_blocking(ferry::config::check::inspect_file)
+        .await
+        .map_err(err)?
+        .map_err(|e| format!("{e:#}"))?;
+    Ok(ConfigCheck {
+        repairable: report.repairable(),
+        problems: report.problems,
+    })
+}
+
+/// Repairs `config.toml` (a copy of the old file is kept next to it) and
+/// takes the repaired configuration into use; settings that apply when the
+/// node starts need a restart, which the window offers.
+///
+/// # Errors
+///
+/// When there is nothing to repair or saving fails.
+#[tauri::command]
+pub async fn repair_config(state: State<'_, AppState>) -> CmdResult<()> {
+    let mut config = state.config.lock().await;
+    let repaired = tauri::async_runtime::spawn_blocking(ferry::config::check::repair)
+        .await
+        .map_err(err)?
+        .map_err(|e| format!("{e:#}"))?;
+    *config = repaired;
+    drop(config);
+    if let Ok(mut problem) = state.config_problem.lock() {
+        *problem = None;
+    }
+    Ok(())
+}
+
 /// Loads the configuration into the state and activates the saved language.
 ///
 /// Called after the platform directories are set.
 pub fn load_config(app: &AppHandle) {
-    let config = Config::load().unwrap_or_else(|e| {
-        tracing::warn!("Could not load the configuration: {e:#}");
-        Config::default()
-    });
-    i18n::init(None, config.language.as_deref());
     let state = app.state::<AppState>();
+    let (config, error) = Config::load_or_defaults();
+    i18n::init(None, config.language.as_deref());
+    if let Some(e) = error {
+        tracing::warn!("Could not load the configuration: {e:#}");
+        let path = Config::file_path()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        let problem = t!(
+            "gui.config_unreadable",
+            path = &path,
+            error = format!("{e:#}")
+        );
+        if let Ok(mut slot) = state.config_problem.lock() {
+            *slot = Some(problem.into_owned());
+        }
+    }
     state
         .quit_on_close
         .store(config.quit_on_close, std::sync::atomic::Ordering::Relaxed);

@@ -89,7 +89,9 @@ pub async fn restore_backup(
     let mut next = config.clone();
     let restored = tauri::async_runtime::spawn_blocking(move || {
         let restored = ferry::node::backup::restore(&contents, &mut next)?;
-        next.save()?;
+        // The configuration is complete again even if the file could not be
+        // read at start: saving it replaces the unreadable file.
+        next.save_over_unreadable()?;
         anyhow::Ok((restored, next))
     })
     .await
@@ -98,6 +100,9 @@ pub async fn restore_backup(
     let (restored, next) = restored;
     *config = next;
     drop(config);
+    if let Ok(mut problem) = state.config_problem.lock() {
+        *problem = None;
+    }
     let _ = app.emit("peers-changed", ());
     Ok(RestoredBackup {
         node_id: restored.node_id,
@@ -154,5 +159,58 @@ pub async fn set_key_storage(system: bool, state: State<'_, AppState>) -> CmdRes
         .map_err(|e| format!("{e:#}"))?;
     // Keep the in-memory copy in step, or the next save would undo the switch.
     config.key_storage = target;
+    Ok(())
+}
+
+/// Whether `config.toml` is signed ([`ferry::config::signature`]), and whether
+/// this platform can (it needs the system's secret store).
+#[derive(Serialize)]
+pub struct ConfigSigningInfo {
+    /// Ferry signs the file whenever it saves it.
+    on: bool,
+    /// This platform has a secret store for the key (not Android).
+    supported: bool,
+}
+
+/// Whether `config.toml` is signed.
+///
+/// # Errors
+///
+/// Never fails; Tauri requires async commands that borrow the state to return a `Result`.
+#[tauri::command]
+pub async fn get_config_signing(state: State<'_, AppState>) -> CmdResult<ConfigSigningInfo> {
+    Ok(ConfigSigningInfo {
+        on: state.config.lock().await.sign_config,
+        supported: ferry::node::keystore::KeyStorage::system_supported(),
+    })
+}
+
+/// Turns signing `config.toml` on (the key is made in the system's secret
+/// store first) or off (the signature is removed with the next save, now).
+///
+/// # Errors
+///
+/// When the secret store cannot be used, or saving fails; nothing changes then.
+#[tauri::command]
+pub async fn set_config_signing(on: bool, state: State<'_, AppState>) -> CmdResult<()> {
+    let mut config = state.config.lock().await;
+    if on {
+        // Talks to D-Bus or the Credential Manager: off the async threads.
+        tauri::async_runtime::spawn_blocking(ferry::config::signature::prepare)
+            .await
+            .map_err(err)?
+            .map_err(|e| format!("{e:#}"))?;
+    }
+    let mut next = config.clone();
+    next.sign_config = on;
+    next.save().map_err(err)?;
+    *config = next;
+    if !on {
+        let forgotten =
+            tauri::async_runtime::spawn_blocking(ferry::config::signature::forget).await;
+        if let Ok(Err(e)) = forgotten {
+            tracing::warn!("The signing key stays in the secret store: {e:#}");
+        }
+    }
     Ok(())
 }

@@ -210,9 +210,12 @@ impl HistoryEntry {
 
 /// Records a text sent or received ([`HistoryEntry::text`]) when recording is on.
 pub fn record_text(entry: HistoryEntry) {
-    if let Some(path) = target().clone() {
-        record_entry(&path, entry);
-    }
+    // `let … else` drops the lock before the file is written; `if let` would
+    // hold it while the configuration is read and the entry appended.
+    let Some(path) = target().clone() else {
+        return;
+    };
+    record_entry(&path, entry);
 }
 
 /// Fills in the name of a trusted device and appends `entry`.
@@ -281,10 +284,9 @@ pub fn append(path: &Path, entry: &HistoryEntry) -> Result<()> {
 /// from it – keyed by the peer as recorded (the Node ID for Ferry devices).
 /// Empty while the history is turned off: then nothing is kept to look at.
 pub fn last_used() -> std::collections::HashMap<String, Timestamp> {
-    target()
-        .clone()
-        .map(|path| last_used_in(&path))
-        .unwrap_or_default()
+    // The lock is released before the file is read.
+    let path = target().clone();
+    path.map(|path| last_used_in(&path)).unwrap_or_default()
 }
 
 /// [`last_used`] from the history file `path`.

@@ -84,6 +84,11 @@
 </div>
 
 <main>
+  <!-- config.toml could not be read: Ferry runs with the defaults and saves nothing (app.js). -->
+  <div class="risk-warning" id="config-problem" role="alert" hidden>
+    <span class="selectable" id="config-problem-text"></span>
+    <button class="link inline" id="btn-config-problem-check" data-i18n="config_verify"></button>
+  </div>
   <section class="dropzone" id="dropzone">
     <div class="badge-icon"><svg class="i lg"><use href="#i-upload"/></svg></div>
     <h2 class="desktop-only" data-i18n="drop_here"></h2>
@@ -462,12 +467,23 @@
           <div><div class="label" id="privacy-keyring-label" data-i18n="privacy_keyring"></div><div class="desc" data-i18n="privacy_keyring_hint"></div></div>
           <label class="switch"><input type="checkbox" id="privacy-keyring" aria-labelledby="privacy-keyring-label"><span></span></label>
         </div>
+        <div class="toggle" id="signing-toggle" hidden>
+          <div><div class="label" id="privacy-signing-label" data-i18n="privacy_signing"></div><div class="desc" data-i18n="privacy_signing_hint"></div></div>
+          <label class="switch"><input type="checkbox" id="privacy-signing" aria-labelledby="privacy-signing-label"><span></span></label>
+        </div>
         <div class="backup-block">
           <div class="label" data-i18n="backup_title"></div>
           <div class="desc" data-i18n="backup_hint"></div>
           <div class="backup-actions">
             <button id="btn-backup-create" data-i18n="backup_create"></button>
             <button id="btn-backup-restore" data-i18n="backup_restore"></button>
+          </div>
+        </div>
+        <div class="backup-block">
+          <div class="label" data-i18n="config_check_title"></div>
+          <div class="desc" data-i18n="config_check_hint"></div>
+          <div class="backup-actions">
+            <button id="btn-config-check" data-i18n="config_verify"></button>
           </div>
         </div>
         <div class="toggle">
@@ -536,6 +552,23 @@
         <button type="submit" class="primary" id="btn-backup-go"></button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- config.toml: could not be read at start, or checked from the settings (config.js). -->
+<div class="modal-overlay" id="modal-config" role="alertdialog" aria-modal="true" aria-labelledby="config-title" aria-describedby="config-modal-text">
+  <div class="modal">
+    <div class="modal-head"><h3 id="config-title"></h3></div>
+    <div class="modal-body">
+      <p class="selectable" id="config-modal-text"></p>
+      <ul class="config-report selectable" id="config-report" hidden></ul>
+      <p id="config-repair-ask" data-i18n="config_repair_ask" hidden></p>
+      <div class="modal-actions">
+        <button id="btn-config-close"></button>
+        <button class="primary" id="btn-config-verify" data-i18n="config_verify"></button>
+        <button class="primary" id="btn-config-repair" data-i18n="config_repair" hidden></button>
+      </div>
+    </div>
   </div>
 </div>
 

@@ -81,6 +81,12 @@ pub struct AppState {
     pub hand_over_when_idle: std::sync::atomic::AtomicBool,
     /// The user was already told this session that Ferry keeps running in the tray.
     pub tray_hint_shown: std::sync::atomic::AtomicBool,
+    /// Why the configuration file could not be read at start, while
+    /// [`AppState::config`] holds the defaults instead (until a backup is
+    /// restored). Saving is blocked then ([`Config::load_or_defaults`]), and
+    /// who may connect is decided by the file on disk ([`Config::admits_now`]),
+    /// which lets nobody in while it stays unreadable.
+    pub config_problem: std::sync::Mutex<Option<String>>,
     /// What a window opened again needs to show the state of this session:
     /// waiting questions, transfers, texts; see [`AppState::snapshot`].
     session: std::sync::Mutex<Session>,
@@ -110,6 +116,7 @@ impl AppState {
             minimal_background: std::sync::atomic::AtomicBool::new(false),
             hand_over_when_idle: std::sync::atomic::AtomicBool::new(false),
             tray_hint_shown: std::sync::atomic::AtomicBool::new(false),
+            config_problem: std::sync::Mutex::new(None),
             session: std::sync::Mutex::new(Session::default()),
             active_transfers: std::sync::Mutex::new(HashSet::new()),
             localsend: Mutex::new(None),
@@ -132,6 +139,12 @@ impl AppState {
             Some(tx) => tx.send(answer).is_ok(),
             None => false,
         }
+    }
+
+    /// Whether the configuration file could not be read at start (see
+    /// [`AppState::config_problem`]).
+    pub fn config_unreadable(&self) -> bool {
+        self.config_problem.lock().map_or(true, |p| p.is_some())
     }
 
     /// Whether a transfer is running or a question waits for an answer: the
@@ -548,6 +561,9 @@ impl TransferHandler for GuiHandler {
     }
 
     async fn admits(&self, peer: EndpointId, pairing: bool) -> bool {
+        if self.state().config_unreadable() {
+            return Config::admits_now(&peer.to_string(), pairing);
+        }
         self.state()
             .config
             .lock()

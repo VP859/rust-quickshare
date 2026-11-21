@@ -152,7 +152,21 @@ async function loadKeyStorage() {
     $('keyring-toggle').hidden = !info.supported;
     $('privacy-keyring').checked = info.system;
   } catch (e) { console.warn('Key storage:', e); }
+  try {
+    const signing = await invoke('get_config_signing');
+    $('signing-toggle').hidden = !signing.supported;
+    $('privacy-signing').checked = signing.on;
+  } catch (e) { console.warn('Signing:', e); }
 }
+$('privacy-signing').onchange = async (e) => {
+  const on = e.target.checked;
+  e.target.disabled = true;
+  try {
+    await invoke('set_config_signing', { on });
+    toast(t(on ? 'signing_on' : 'signing_off'));
+  } catch (err) { e.target.checked = !on; fail(err); }
+  e.target.disabled = false;
+};
 $('privacy-keyring').onchange = async (e) => {
   const system = e.target.checked;
   e.target.disabled = true;

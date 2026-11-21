@@ -11,6 +11,10 @@ use std::str::FromStr;
 
 use crate::node::{NetworkMode, NodeTicket};
 
+/// Set by [`Config::load_or_defaults`] when the file could not be read: the
+/// defaults the app then holds must not replace the user's file.
+static SAVING_BLOCKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// A trusted device stored in the configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfo {
@@ -141,6 +145,11 @@ pub struct Config {
     /// authenticated.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub localsend: bool,
+    /// Ferry signs `config.toml` with a key kept in the system's secret store
+    /// whenever it saves it, so the check ([`super::check`]) finds changes
+    /// made outside Ferry ([`super::signature`]). Desktop Linux and Windows.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sign_config: bool,
 }
 
 impl Config {
@@ -167,13 +176,65 @@ impl Config {
         toml::from_str(&content).with_context(|| t!("config.parse"))
     }
 
+    /// Loads the configuration for an app that keeps it in memory and saves
+    /// it back (the GUI). When the file cannot be read, the defaults are
+    /// returned with the error, a copy of the file is kept next to it
+    /// (`config.toml.broken`), and [`Config::save`] refuses to write until
+    /// [`Config::save_over_unreadable`]: one edit of a setting must not replace the
+    /// user's settings and trusted devices with the defaults.
+    pub fn load_or_defaults() -> (Self, Option<anyhow::Error>) {
+        match Self::load() {
+            Ok(config) => (config, None),
+            Err(e) => {
+                if let Ok(path) = Self::file_path() {
+                    let copy = path.with_extension("toml.broken");
+                    if let Err(e) = std::fs::copy(&path, &copy) {
+                        tracing::warn!(
+                            "Could not copy {} to {}: {e}",
+                            path.display(),
+                            copy.display()
+                        );
+                    }
+                }
+                SAVING_BLOCKED.store(true, std::sync::atomic::Ordering::Relaxed);
+                (Self::default(), Some(e))
+            }
+        }
+    }
+
     /// Saves the configuration atomically (temporary file + rename), so an
     /// interruption never leaves a corrupted file behind.
     ///
     /// # Errors
     ///
-    /// Fails on serialization or I/O errors.
+    /// Fails on serialization or I/O errors, and while saving is blocked
+    /// because the file could not be read ([`Config::load_or_defaults`]).
     pub fn save(&self) -> Result<()> {
+        if SAVING_BLOCKED.load(std::sync::atomic::Ordering::Relaxed) {
+            anyhow::bail!(t!(
+                "config.save_blocked",
+                path = Self::file_path()?.display()
+            ));
+        }
+        self.write()
+    }
+
+    /// Saves a configuration that is complete again (a backup was restored
+    /// into it) although the file could not be read at start, and lets
+    /// [`Config::save`] write again; the unreadable file stays in
+    /// `config.toml.broken`.
+    ///
+    /// # Errors
+    ///
+    /// Fails on serialization or I/O errors (saving then stays blocked).
+    pub fn save_over_unreadable(&self) -> Result<()> {
+        self.write()?;
+        SAVING_BLOCKED.store(false, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
+    }
+
+    /// Writes the file atomically; see [`Config::save`].
+    fn write(&self) -> Result<()> {
         let path = Self::file_path()?;
         let content = toml::to_string_pretty(self).with_context(|| t!("config.serialize"))?;
         let tmp = path.with_extension("toml.tmp");
@@ -187,6 +248,7 @@ impl Config {
             .and_then(|mut file| std::io::Write::write_all(&mut file, content.as_bytes()))
             .with_context(|| t!("config.write"))?;
         std::fs::rename(&tmp, &path).with_context(|| t!("config.write"))?;
+        super::signature::after_write(&path, content.as_bytes(), self.sign_config);
         Ok(())
     }
 
@@ -411,6 +473,24 @@ impl Config {
         !self.paired_only || self.peers.contains_key(node_id) || (pairing && self.pairing_open())
     }
 
+    /// [`Config::admits`] with the configuration read from disk now, for
+    /// interfaces that read it for every connection (so `ferry config` applies
+    /// without a restart). When it cannot be read (e.g. a mistake made while
+    /// editing the file by hand) nobody is let through: the defaults would let
+    /// anyone in although the user may have turned on [`Config::paired_only`].
+    pub fn admits_now(node_id: &str, pairing: bool) -> bool {
+        Self::admits_loaded(Self::load(), node_id, pairing)
+    }
+
+    /// [`Config::admits_now`] with the configuration as loaded.
+    fn admits_loaded(loaded: Result<Self>, node_id: &str, pairing: bool) -> bool {
+        loaded
+            .inspect_err(|e| {
+                tracing::warn!("Refused {node_id}: the configuration cannot be read: {e:#}");
+            })
+            .is_ok_and(|config| config.admits(node_id, pairing))
+    }
+
     /// Like [`Config::auto_accepts_file`] for a batch announced with these (at
     /// most the first 20) `names`. Files of an accepted batch that are risky
     /// are asked about one by one anyway.
@@ -486,7 +566,7 @@ impl Config {
 }
 
 /// Alias for a device without a name: `Device <first 8 characters of the Node ID>`.
-fn fallback_alias(node_id: &str) -> String {
+pub(super) fn fallback_alias(node_id: &str) -> String {
     t!(
         "config.fallback_alias",
         id = &node_id[..8.min(node_id.len())]
@@ -553,6 +633,27 @@ mod tests {
         again.add_paired(id, "Friend", None, false, Some([0xCD; 32]))?;
         assert_eq!(again.discovery_keys().get(&id), Some(&[0xCD; 32]));
         Ok(())
+    }
+
+    /// A configuration that cannot be read (here: a typo made by hand) lets
+    /// nobody in, not even with the defaults' "everyone may ask".
+    #[test]
+    fn an_unreadable_configuration_lets_nobody_in() {
+        let stranger = iroh::SecretKey::generate().public().to_string();
+        let broken = toml::from_str::<Config>("paired_only = tru").map_err(anyhow::Error::from);
+        assert!(broken.is_err(), "the typo must not parse");
+        assert!(!Config::admits_loaded(broken, &stranger, false));
+        assert!(!Config::admits_loaded(
+            Err(anyhow::anyhow!("permission denied")),
+            &stranger,
+            true
+        ));
+        // A readable one decides as before.
+        assert!(Config::admits_loaded(
+            Ok(Config::default()),
+            &stranger,
+            false
+        ));
     }
 
     #[test]

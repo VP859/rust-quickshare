@@ -15,6 +15,7 @@
 //   state.js      state shared by them
 import { fail, toast } from './dom.js';
 import './backup.js';
+import { showConfigProblem } from './config.js';
 import './history.js';
 import { applyStaticText, t } from './i18n.js';
 import { ensureDeviceName, listenNearbyAndPairing, pairRequests, renderNearby, setNearby, showNextPairRequest, updateDiscoveryHint } from './nearby.js';
@@ -84,6 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderNodeStatus();
   renderNoTransfers();
   loadAppInfo();
+  showConfigProblem();
   await listenTransfers();
   await listen('node-error', ({ payload }) => fail(payload));
   await listenTexts();
