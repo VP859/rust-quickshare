@@ -36,7 +36,7 @@ tauri = { version = "2.12.5", features = [] }
 tauri-plugin-dialog = "2.8.3"
 tauri-plugin-notification = "2"
 tauri-plugin-clipboard-manager = "2"
-qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
+qrcode = { version = "0.15.0", default-features = false, features = ["svg"] }
 serde = { workspace = true }
 # Questions kept for a window opened again (`resume_ui`); on Android also the
 # background limits reported by PowerHelper.kt.
