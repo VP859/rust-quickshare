@@ -69,7 +69,7 @@ webkit2gtk = { version = "2.0.2", features = ["v2_34"] }
 # questions in notifications over D-Bus, the clipboard without GTK. All three
 # are already used (zbus by the notification plugin and the key store,
 # arboard by the clipboard plugin).
-zbus = "5.19.0"
+zbus = "6.5.0"
 futures-util = { version = "0.3.34", default-features = false, features = ["alloc"] }
 arboard = "3.7.0"
 
